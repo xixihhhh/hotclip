@@ -19,3 +19,5 @@ models/
 # env
 .env
 .env.*
+dist/
+build/icon-b64.txt
