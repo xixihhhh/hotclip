@@ -10,6 +10,15 @@ import { resolveSelection, type RawSelection } from "./match";
 const MIN_CLIP_SEC = 5;
 const MAX_CLIP_SEC = 75;
 
+/**
+ * Pollinations' keyless tier serves a reasoning model with a small output
+ * budget — without reasoning_effort:"low" it spends every token thinking and
+ * returns empty content. Scoped to that host; real OpenAI rejects the param.
+ */
+export function extraParams(baseUrl: string): Record<string, unknown> {
+  return /pollinations\.ai/i.test(baseUrl) ? { reasoning_effort: "low" } : {};
+}
+
 /** Call an OpenAI-compatible chat endpoint. Throws with an actionable message. */
 export async function chatComplete(llm: LlmConfig, system: string, user: string, signal?: AbortSignal): Promise<string> {
   const url = `${llm.baseUrl.replace(/\/+$/, "")}/chat/completions`;
@@ -29,6 +38,7 @@ export async function chatComplete(llm: LlmConfig, system: string, user: string,
         ],
         temperature: 0.6,
         max_tokens: 4000,
+        ...extraParams(llm.baseUrl),
       }),
       signal,
     });
