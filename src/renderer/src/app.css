@@ -1,0 +1,135 @@
+@import "tailwindcss";
+
+/* ---- HotClip design tokens (CapCut-caliber dark editor aesthetic) ---- */
+@theme {
+  /* surfaces */
+  --color-ink: #0b0c10; /* app background */
+  --color-panel: #131419; /* raised surface */
+  --color-panel-2: #1a1c23; /* higher surface / hover */
+  --color-line: #262933; /* hairline borders */
+
+  /* text */
+  --color-fg: #f2f3f7;
+  --color-mut: #8b91a0;
+
+  /* brand: the "hot" gradient */
+  --color-flame: #ff4d2e;
+  --color-ember: #ff8a00;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "HarmonyOS Sans SC",
+    "Microsoft YaHei", sans-serif;
+}
+
+/* base */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* subtle ambient glow behind the hero, CapCut-style stage lighting */
+.stage-glow {
+  background:
+    radial-gradient(600px 320px at 50% -8%, rgba(255, 77, 46, 0.13), transparent 70%),
+    radial-gradient(900px 500px at 50% 110%, rgba(255, 138, 0, 0.05), transparent 70%);
+}
+
+/* brand gradient utilities */
+.flame-gradient {
+  background: linear-gradient(135deg, var(--color-flame), var(--color-ember));
+}
+
+.flame-text {
+  background: linear-gradient(135deg, #ff6a3d, #ffb356);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* primary button glow */
+.btn-flame {
+  background: linear-gradient(135deg, var(--color-flame), var(--color-ember));
+  box-shadow:
+    0 8px 28px -8px rgba(255, 77, 46, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
+}
+
+.btn-flame:hover:not(:disabled) {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow:
+    0 12px 34px -8px rgba(255, 77, 46, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.btn-flame:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* drop-zone dashed ring */
+.drop-ring {
+  border: 1.5px dashed rgba(139, 145, 160, 0.35);
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.drop-ring:hover,
+.drop-ring[data-dragging="true"] {
+  border-color: rgba(255, 77, 46, 0.6);
+  background-color: rgba(255, 77, 46, 0.04);
+}
+
+/* card entrance animation */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rise-in {
+  animation: rise-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* shimmering progress text while probing */
+@keyframes shimmer {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.shimmer {
+  animation: shimmer 1.2s ease-in-out infinite;
+}
+
+/* native-feel scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2c303b;
+  border-radius: 8px;
+  border: 2px solid var(--color-ink);
+}

@@ -1,0 +1,21 @@
+# dependencies
+node_modules/
+
+# build output
+out/
+dist/
+release/
+
+# local data / models (downloaded on first run, never committed)
+models/
+*.log
+
+# editor / OS noise
+.DS_Store
+.idea/
+.vscode/
+*.local
+
+# env
+.env
+.env.*

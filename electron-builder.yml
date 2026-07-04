@@ -1,0 +1,31 @@
+appId: com.hotclip.app
+productName: HotClip
+directories:
+  buildResources: build
+files:
+  - out/**/*
+  - "!**/*.map"
+# ffmpeg/ffprobe must run from the real filesystem, not inside asar
+asarUnpack:
+  - "**/node_modules/ffmpeg-static/**"
+  - "**/node_modules/@ffprobe-installer/**"
+win:
+  target:
+    - nsis
+    - zip # 绿色版 portable zip for Chinese users
+  artifactName: HotClip-${version}-win-${arch}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+mac:
+  target:
+    - dmg
+  artifactName: HotClip-${version}-mac-${arch}.${ext}
+  category: public.app-category.video
+linux:
+  target:
+    - AppImage
+  artifactName: HotClip-${version}-linux-${arch}.${ext}
+  category: Video
+npmRebuild: false
