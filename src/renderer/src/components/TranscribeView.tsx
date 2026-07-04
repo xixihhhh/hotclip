@@ -4,7 +4,7 @@
  * with byte counter → decoding → per-fraction transcribing) then the list.
  */
 import { useEffect, useRef, useState } from "react";
-import { LuAudioLines, LuArrowLeft, LuCircleCheck, LuDownload } from "react-icons/lu";
+import { LuAudioLines, LuArrowLeft, LuCircleCheck, LuDownload, LuFlame } from "react-icons/lu";
 import { useT } from "../i18n/store";
 import { getApi } from "../api/provider";
 import type { Transcript, TranscribeProgressEvent } from "../../../shared/api-types";
@@ -31,20 +31,25 @@ export function TranscribeView({
   filePath,
   onBack,
   onDone,
+  onFindHighlights,
+  cached,
 }: {
   filePath: string;
   onBack: () => void;
   onDone?: (t: Transcript) => void;
+  onFindHighlights?: () => void;
+  /** Already-produced transcript (returning from a later phase) — skip work. */
+  cached?: Transcript | null;
 }): React.JSX.Element {
   const t = useT("transcribe");
   const [progress, setProgress] = useState<TranscribeProgressEvent>({ fraction: 0, stage: "preparing" });
-  const [transcript, setTranscript] = useState<Transcript | null>(null);
+  const [transcript, setTranscript] = useState<Transcript | null>(cached ?? null);
   const [error, setError] = useState<string | null>(null);
   const started = useRef(false);
 
   useEffect(() => {
     // StrictMode double-mount guard: one transcription per view instance
-    if (started.current) return;
+    if (started.current || cached) return;
     started.current = true;
     const api = getApi();
     const unsubscribe = api.onTranscribeProgress(setProgress);
@@ -120,14 +125,26 @@ export function TranscribeView({
                 {t("engineLocal")}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={onBack}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3.5 py-2 text-xs text-mut transition-colors hover:border-mut hover:text-fg"
-            >
-              <LuArrowLeft className="h-3.5 w-3.5" />
-              {t("back")}
-            </button>
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={onBack}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3.5 py-2 text-xs text-mut transition-colors hover:border-mut hover:text-fg"
+              >
+                <LuArrowLeft className="h-3.5 w-3.5" />
+                {t("back")}
+              </button>
+              {onFindHighlights && (
+                <button
+                  type="button"
+                  onClick={onFindHighlights}
+                  className="btn-flame inline-flex items-center gap-1.5 rounded-lg px-5 py-2 text-[13px] font-bold text-white"
+                >
+                  <LuFlame className="h-4 w-4" />
+                  {t("findHighlights")}
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="card mt-5 max-h-[46vh] overflow-y-auto rounded-2xl p-2">

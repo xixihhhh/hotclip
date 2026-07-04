@@ -24,6 +24,8 @@ import { getApi } from "./api/provider";
 import type { MediaInfo } from "../../shared/api-types";
 import { LogoMark, LogoWordmark } from "./components/Logo";
 import { TranscribeView } from "./components/TranscribeView";
+import { HighlightsView } from "./components/HighlightsView";
+import type { Transcript } from "../../shared/api-types";
 import "./app.css";
 
 interface ProbedFile extends MediaInfo {
@@ -58,6 +60,9 @@ export default function App(): React.JSX.Element {
   const [file, setFile] = useState<ProbedFile | null>(null);
   /** 0 = import, 1 = transcribe & pick highlights, 2 = export (later). */
   const [step, setStep] = useState(0);
+  const [transcript, setTranscript] = useState<Transcript | null>(null);
+  /** Within step 1: transcript view first, highlights after the CTA. */
+  const [phase, setPhase] = useState<"transcribe" | "highlights">("transcribe");
 
   const probePath = useCallback(
     async (path: string): Promise<void> => {
@@ -149,8 +154,20 @@ export default function App(): React.JSX.Element {
 
       {/* ---- stage ---- */}
       <main className="stage flex flex-1 flex-col items-center overflow-y-auto px-6 pt-[8vh] pb-12">
-        {step === 1 && file && (
-          <TranscribeView filePath={file.path} onBack={() => setStep(0)} />
+        {step === 1 && file && phase === "transcribe" && (
+          <TranscribeView
+            filePath={file.path}
+            cached={transcript}
+            onBack={() => {
+              setTranscript(null);
+              setStep(0);
+            }}
+            onDone={setTranscript}
+            onFindHighlights={transcript ? () => setPhase("highlights") : undefined}
+          />
+        )}
+        {step === 1 && transcript && phase === "highlights" && (
+          <HighlightsView transcript={transcript} onBack={() => setPhase("transcribe")} />
         )}
 
         {step === 0 && (

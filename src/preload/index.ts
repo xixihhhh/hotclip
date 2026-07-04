@@ -14,6 +14,7 @@ const api: HotClipApi = {
     ipcRenderer.on("hotclip:transcribe-progress", listener);
     return () => ipcRenderer.removeListener("hotclip:transcribe-progress", listener);
   },
+  detectHighlights: (transcript, llm) => ipcRenderer.invoke("hotclip:detect-highlights", transcript, llm),
 };
 
 contextBridge.exposeInMainWorld("hotclip", api);

@@ -57,6 +57,32 @@ export interface TranscribeProgressEvent {
   totalBytes?: number;
 }
 
+/** LLM connection settings (OpenAI-compatible endpoint; Atlas Cloud preset default). */
+export interface LlmConfig {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+}
+
+/** One AI-nominated clip candidate with frame-accurate boundaries. */
+export interface HighlightCandidate {
+  id: number;
+  startSec: number;
+  endSec: number;
+  /** Verbatim transcript text covered by the clip. */
+  text: string;
+  /** Suggested post title (transcript language). */
+  title: string;
+  /** The opening hook line the clip leads with. */
+  hook: string;
+  /** Virality ranking score 0-100 — a RANKER, not a truth claim. */
+  score: number;
+  /** One-line reason ("why this clip") — the evidence chain seed. */
+  reason: string;
+  /** How boundaries were located (match quality signal for the UI). */
+  boundary: "exact" | "anchored" | "segment";
+}
+
 export interface HotClipApi {
   /** Open a file picker; resolves to a path/handle or null when cancelled. */
   selectMedia: () => Promise<string | null>;
@@ -66,4 +92,6 @@ export interface HotClipApi {
   transcribeMedia: (filePath: string) => Promise<Transcript>;
   /** Subscribe to transcription progress; returns an unsubscribe function. */
   onTranscribeProgress: (cb: (p: TranscribeProgressEvent) => void) => () => void;
+  /** Detect highlight candidates from a finished transcript via the configured LLM. */
+  detectHighlights: (transcript: Transcript, llm: LlmConfig) => Promise<HighlightCandidate[]>;
 }

@@ -7,6 +7,8 @@ import { app, shell, BrowserWindow, ipcMain, dialog } from "electron";
 import { join } from "path";
 import { probeMedia } from "@core/probe";
 import { SenseVoiceEngine } from "@core/transcribe/sensevoice";
+import { detectHighlights } from "@core/highlight/detect";
+import type { Transcript, LlmConfig } from "../shared/api-types";
 
 const VIDEO_EXTENSIONS = ["mp4", "mkv", "mov", "flv", "ts", "webm", "avi", "m4v"];
 const AUDIO_EXTENSIONS = ["mp3", "m4a", "wav", "aac", "flac"];
@@ -87,6 +89,18 @@ ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown) => {
   } finally {
     transcribing = false;
   }
+});
+
+// ---- IPC: highlight detection (wizard step 2, after transcription) ----
+// The LLM key comes from the renderer's settings; it is used for this one
+// call and never persisted in the main process.
+
+ipcMain.handle("hotclip:detect-highlights", async (_event, transcript: unknown, llm: unknown) => {
+  const t = transcript as Transcript;
+  const config = llm as LlmConfig;
+  if (!t || !Array.isArray(t.segments)) throw new Error("detect-highlights requires a transcript");
+  if (!config?.baseUrl || !config?.model) throw new Error("请先在设置里配置 LLM(baseUrl/model)");
+  return detectHighlights(t, config);
 });
 
 app.whenReady().then(() => {

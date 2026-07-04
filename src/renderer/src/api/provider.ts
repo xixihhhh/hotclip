@@ -5,7 +5,13 @@
  * - In a plain browser (design preview today, web platform later) we fall back
  *   to a mock so the full UI stays renderable and testable without Electron.
  */
-import type { HotClipApi, MediaInfo, Transcript, TranscribeProgressEvent } from "../../../shared/api-types";
+import type {
+  HotClipApi,
+  MediaInfo,
+  Transcript,
+  TranscribeProgressEvent,
+  HighlightCandidate,
+} from "../../../shared/api-types";
 
 const MOCK_MEDIA: MediaInfo = {
   durationSec: 5427.4, // 1:30:27 — a typical podcast episode
@@ -78,6 +84,25 @@ const browserMock: HotClipApi = {
   onTranscribeProgress(cb) {
     progressListeners.add(cb);
     return () => progressListeners.delete(cb);
+  },
+  async detectHighlights(transcript): Promise<HighlightCandidate[]> {
+    await sleep(1500);
+    const segs = transcript.segments;
+    const pick = (from: number, to: number, id: number, title: string, hook: string, score: number, reason: string): HighlightCandidate => ({
+      id,
+      startSec: segs[from].startSec,
+      endSec: segs[to].endSec,
+      text: segs.slice(from, to + 1).map((s) => s.text).join(" "),
+      title,
+      hook,
+      score,
+      reason,
+      boundary: id === 2 ? "anchored" : "exact",
+    });
+    return [
+      pick(3, 4, 1, "半杯水都不渗?实测给你看", "你看这个吸水速度,直接倒半杯水都不带渗的", 92, "强演示钩子+价格反差,完播率高"),
+      pick(1, 2, 2, "十几块和两块多的纸巾差在哪", "很多朋友问我,这个和超市里十几块的有什么区别", 81, "悬念提问开场,击中比价心理"),
+    ];
   },
 };
 
