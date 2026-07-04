@@ -14,16 +14,23 @@
 
 ## 🚧 项目状态 / Status
 
-**开发中(Work in Progress)**——桌面客户端骨架已就绪,切片管线按里程碑推进,先 Watch/Star 蹲首个可用版本:
+**核心管线已闭环(WIP)**——「导入 → AI 找爆点 → 竖屏+逐字字幕成片」三步全流程已经能跑,安装包发布前先 Watch/Star:
 
 | 里程碑 Milestone | 状态 Status |
 |---|---|
-| 桌面客户端骨架(Electron,中英双语,导入+媒体探测) | ✅ 已完成 |
-| M2 本地转写(whisper.cpp;中文走 SenseVoice/Paraformer 更准) | 🔨 进行中 |
-| M3 AI 找爆点(LLM 逐字选段,不让 LLM 猜时间戳 → 切点更准) | ⏳ 排队 |
-| M4 竖屏重构(人脸追踪)+ 逐字卡拉OK字幕 | ⏳ 排队 |
-| M5 平台规格导出 + 剪映草稿导出 + 安装包发布 | ⏳ 排队 |
-| Web 平台版 · 更多界面语言 | 🗺️ 规划中 |
+| 桌面客户端(Electron,中英双语,导入+媒体探测) | ✅ 已完成 |
+| M2 本地转写(SenseVoice,中/英/日/韩/粤,逐字时间戳,模型首启自动下载·国内镜像优先) | ✅ 已完成 |
+| M3 AI 找爆点(LLM 只引原文不猜时间戳,逐字反向对齐 → 切点精确到词) | ✅ 已完成 |
+| M4 出片(帧精确切割 + 竖屏 9:16 重构 + 卡拉OK逐字字幕烧录) | ✅ 已完成 |
+| 人脸追踪智能取景(现为居中裁剪) | 🔨 进行中 |
+| M5 安装包发布(Windows exe + 绿色版 zip + macOS dmg) | ⏳ 排队 |
+| 平台规格预设 · 剪映草稿导出 · Web 平台版 · 更多界面语言 | 🗺️ 规划中 |
+
+## 三步出片 / How It Works
+
+1. **导入**:把播客、直播回放、课程、Vlog 丢进来(MP4 / MKV / MOV / FLV / TS,也支持纯音频)
+2. **挑爆点**:本地逐字转写 → AI 通读全文挑出金句/冲突/高能片段,每条附爆款分、开场钩子和推荐理由,切点精确到词;看不顺眼的取消勾选即可
+3. **出片**:一键切出竖屏 9:16 成片,卡拉OK逐字点亮字幕直接烧进画面,文件落在「影片/HotClip」里,打开就能发
 
 ## 为什么做 HotClip / Why
 
@@ -35,19 +42,27 @@ HotClip 的答案:
 - 🔒 **本地优先**:转写、找爆点、切片全在你电脑上跑,素材不上传
 - 🆓 **真免费**:开源 AGPL-3.0,无积分制、无水印、不限视频时长
 - 🎯 **切点准**:LLM 只负责«挑哪段»,时间戳由逐字转写反向对齐——不让 AI 猜时间
-- 🇨🇳 **中文原生**:中文语音识别走专门引擎(比通用模型准一倍),界面中英双语,导出直通国内平台规格 + 剪映草稿
+- 🇨🇳 **中文原生**:中文语音识别走专门引擎(SenseVoice,兼顾粤语),界面中英双语,爆点判断的提示词也按内容语言分流——不是英文产品硬翻
 - 🤖 **模型自带干粮也行**:默认本地免费模型;要更强的爆点判断,可一键接 [Atlas Cloud](https://www.atlascloud.ai)(一个 Key 用齐中外主流大模型)、fal.ai 或任意 OpenAI 兼容接口
 
 Every commercial clipper meters your source minutes, forces cloud uploads, or botches clip boundaries; every open-source one is CLI/Docker-only. HotClip is the missing piece: an installable, local-first, bilingual desktop clipper with accurate text-aligned cuts — bring your own AI provider (Atlas Cloud recommended, fal.ai and any OpenAI-compatible endpoint supported).
 
-## 功能规划 / Planned Features
+## 已实现 / Shipped
 
-- **AI 找爆点**:病毒度打分(钩子/情绪峰值/金句/实用价值),每条切片附推荐理由与建议标题
-- **竖屏重构**:16:9 → 9:16 人脸追踪居中,无人脸场景智能裁切
-- **逐字动态字幕**:卡拉OK逐字高亮 / 大字关键词 / 极简白字,3 种预设
-- **直播回放友好**:数小时 FLV/TS 录像直接进,切片工作室不用再一帧帧拖进度条
-- **平台规格导出**:1080×1920 H.264,抖音/快手/B站/视频号/小红书/TikTok 安全区适配
-- **剪映草稿导出**:切完直接进剪映精修,工作流无断层
+- **本地逐字转写**:SenseVoice 引擎(sherpa-onnx),中/英/日/韩/粤五语种,逐字时间戳;模型约 170MB 首次自动下载(国内镜像优先),此后完全离线
+- **AI 找爆点**:LLM 只负责«挑哪段»并引用原文,时间戳由逐字转写反向对齐(逐字精确/首尾锚定/按句对齐三级降级,UI 明示切点质量)——不让 AI 猜时间
+- **证据链卡片**:每条候选附爆款分、开场钩子、推荐理由、精确时间边界,可勾选取舍
+- **竖屏 9:16 重构**:居中裁剪 → 1080×1920,适配抖音/视频号/TikTok(人脸追踪取景开发中)
+- **卡拉OK逐字字幕**:词级时间戳驱动的逐字点亮字幕(ASS/libass),直接烧录进成片,可开关
+- **帧精确切割**:快速定位 + 重编码,爆点第一秒不糊不偏;直播回放数小时 FLV/TS 直接进
+- **中英双语界面**,新增语言只需一个语言文件
+
+## 规划中 / Planned
+
+- **人脸追踪智能取景**:16:9 → 9:16 人脸居中跟随,无人脸场景智能裁切
+- **字幕样式预设**:大字关键词 / 极简白字等多套模板
+- **平台规格预设与剪映草稿导出**:切完直接进剪映精修,工作流无断层
+- **画面信号融合**:场景切换/响度/人脸/音频事件参与爆点判断(纯文本之外的证据)
 - **合规内建**:AIGC 标识(显式+隐式,对齐 2025-09 生效的国家标识办法);仅面向**自有内容与已授权切片**,不做搬运工具
 
 ## 快速开始 / Quick Start
@@ -64,7 +79,7 @@ pnpm test       # 跑单元测试
 
 ## 技术栈 / Tech Stack
 
-Electron + React + TypeScript + Tailwind · ffmpeg(打包内置,无需自装)· whisper.cpp / sherpa-onnx 本地转写 · ONNX 人脸追踪 · libass 逐字字幕 · LLM 爆点检测(本地 Ollama 或云端 BYO Key)
+Electron + React + TypeScript + Tailwind · ffmpeg(打包内置,无需自装)· sherpa-onnx + SenseVoice 本地转写 · libass 卡拉OK逐字字幕 · LLM 爆点检测(Atlas Cloud / 本地 Ollama / 任意 OpenAI 兼容接口,BYO Key)
 
 ## 常见问题 / FAQ
 
@@ -78,7 +93,7 @@ Electron + React + TypeScript + Tailwind · ffmpeg(打包内置,无需自装)· 
 中文是一等公民:中文识别走 SenseVoice/Paraformer 类专用引擎,准确率显著高于通用模型;界面、字幕、导出规格均为中文原生。Chinese is first-class, with a dedicated zh ASR engine.
 
 **需要显卡吗?/ Do I need a GPU?**
-不强制。低配机器自动换小模型并给出真实耗时预估;也可一键切云端转写。No — weaker machines auto-downshift models with honest ETA, or offload to cloud.
+不需要。本地转写用的是 int8 量化的 SenseVoice 小模型,普通 CPU 就能跑;找爆点的大模型在云端(或你本机的 Ollama)。No GPU needed — the local ASR model is int8-quantized and runs fine on CPU; the LLM runs in the cloud (or your local Ollama).
 
 ## 授权与边界 / License & Boundaries
 

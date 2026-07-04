@@ -26,7 +26,7 @@ import { LogoMark, LogoWordmark } from "./components/Logo";
 import { TranscribeView } from "./components/TranscribeView";
 import { HighlightsView } from "./components/HighlightsView";
 import { ExportView } from "./components/ExportView";
-import type { Transcript, HighlightCandidate } from "../../shared/api-types";
+import type { Transcript, HighlightCandidate, ExportOptions } from "../../shared/api-types";
 import "./app.css";
 
 interface ProbedFile extends MediaInfo {
@@ -64,8 +64,11 @@ export default function App(): React.JSX.Element {
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   /** Within step 1: transcript view first, highlights after the CTA. */
   const [phase, setPhase] = useState<"transcribe" | "highlights">("transcribe");
-  /** Clips chosen for export (moves the wizard to step 2). */
-  const [exporting, setExporting] = useState<HighlightCandidate[] | null>(null);
+  /** Clips + render toggles chosen for export (moves the wizard to step 2). */
+  const [exporting, setExporting] = useState<{
+    clips: HighlightCandidate[];
+    options: Pick<ExportOptions, "vertical" | "karaoke">;
+  } | null>(null);
 
   const restart = (): void => {
     setFile(null);
@@ -181,16 +184,18 @@ export default function App(): React.JSX.Element {
           <HighlightsView
             transcript={transcript}
             onBack={() => setPhase("transcribe")}
-            onExport={(clips) => {
-              setExporting(clips);
+            onExport={(clips, options) => {
+              setExporting({ clips, options });
               setStep(2);
             }}
           />
         )}
-        {step === 2 && file && exporting && (
+        {step === 2 && file && exporting && transcript && (
           <ExportView
             filePath={file.path}
-            clips={exporting}
+            clips={exporting.clips}
+            options={exporting.options}
+            transcript={transcript}
             onBack={() => {
               setExporting(null);
               setStep(1);

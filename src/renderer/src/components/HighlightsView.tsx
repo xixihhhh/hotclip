@@ -14,11 +14,13 @@ import {
   LuExternalLink,
   LuCheck,
   LuScissors,
+  LuSmartphone,
+  LuCaptions,
 } from "react-icons/lu";
 import { useT } from "../i18n/store";
 import { getApi, isElectron } from "../api/provider";
 import { useLlmStore, isLlmReady, LLM_PRESETS } from "../stores/llm-store";
-import type { Transcript, HighlightCandidate } from "../../../shared/api-types";
+import type { Transcript, HighlightCandidate, ExportOptions } from "../../../shared/api-types";
 
 function formatClock(totalSeconds: number): string {
   const s = Math.floor(totalSeconds);
@@ -42,7 +44,7 @@ export function HighlightsView({
 }: {
   transcript: Transcript;
   onBack: () => void;
-  onExport?: (clips: HighlightCandidate[]) => void;
+  onExport?: (clips: HighlightCandidate[], options: Pick<ExportOptions, "vertical" | "karaoke">) => void;
 }): React.JSX.Element {
   const t = useT("highlights");
   const { config, setConfig } = useLlmStore();
@@ -53,6 +55,9 @@ export function HighlightsView({
   const [error, setError] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<HighlightCandidate[] | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  // Both ON by default — the point of the product is publish-ready vertical clips.
+  const [vertical, setVertical] = useState(true);
+  const [karaoke, setKaraoke] = useState(true);
   const startedRef = useRef(false);
 
   const run = useCallback(async (): Promise<void> => {
@@ -273,12 +278,33 @@ export function HighlightsView({
           </div>
 
           {onExport && candidates.length > 0 && (
-            <div className="card sticky bottom-4 mt-6 flex items-center justify-between rounded-2xl px-5 py-3.5 shadow-2xl backdrop-blur-xl">
+            <div className="card sticky bottom-4 mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl px-5 py-3.5 shadow-2xl backdrop-blur-xl">
               <span className="text-[13px] font-semibold text-mut">{t("selectedCount", { n: selected.size })}</span>
+              <div className="flex items-center gap-2">
+                {(
+                  [
+                    { on: vertical, set: setVertical, Icon: LuSmartphone, label: t("optVertical"), hint: t("optVerticalHint") },
+                    { on: karaoke, set: setKaraoke, Icon: LuCaptions, label: t("optKaraoke"), hint: t("optKaraokeHint") },
+                  ] as const
+                ).map(({ on, set, Icon, label, hint }) => (
+                  <button
+                    key={label}
+                    type="button"
+                    title={hint}
+                    onClick={() => set(!on)}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                      on ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
+                    }`}
+                  >
+                    <Icon className={`h-3.5 w-3.5 ${on ? "text-ember" : ""}`} />
+                    {label}
+                  </button>
+                ))}
+              </div>
               <button
                 type="button"
                 disabled={selected.size === 0}
-                onClick={() => onExport(candidates.filter((c) => selected.has(c.id)))}
+                onClick={() => onExport(candidates.filter((c) => selected.has(c.id)), { vertical, karaoke })}
                 className="btn-flame inline-flex items-center gap-1.5 rounded-lg px-6 py-2.5 text-[14px] font-bold text-white disabled:opacity-40"
               >
                 <LuScissors className="h-4 w-4" />

@@ -7,7 +7,13 @@ import { useEffect, useRef, useState } from "react";
 import { LuScissors, LuCircleCheck, LuFolderOpen, LuArrowLeft, LuRotateCcw, LuFilm } from "react-icons/lu";
 import { useT } from "../i18n/store";
 import { getApi, isElectron } from "../api/provider";
-import type { HighlightCandidate, ExportedClip, ExportProgressEvent } from "../../../shared/api-types";
+import type {
+  HighlightCandidate,
+  ExportedClip,
+  ExportProgressEvent,
+  ExportOptions,
+  Transcript,
+} from "../../../shared/api-types";
 
 function formatSize(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -17,11 +23,15 @@ function formatSize(bytes: number): string {
 export function ExportView({
   filePath,
   clips,
+  options,
+  transcript,
   onBack,
   onRestart,
 }: {
   filePath: string;
   clips: HighlightCandidate[];
+  options: Pick<ExportOptions, "vertical" | "karaoke">;
+  transcript: Transcript;
   onBack: () => void;
   onRestart: () => void;
 }): React.JSX.Element {
@@ -37,7 +47,8 @@ export function ExportView({
     const api = getApi();
     const unsubscribe = api.onExportProgress(setProgress);
     api
-      .exportClips(filePath, clips)
+      // the transcript ships along only when karaoke needs word timestamps
+      .exportClips(filePath, clips, { ...options, transcript: options.karaoke ? transcript : undefined })
       .then(setResults)
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(unsubscribe);

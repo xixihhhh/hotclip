@@ -15,7 +15,7 @@ const api: HotClipApi = {
     return () => ipcRenderer.removeListener("hotclip:transcribe-progress", listener);
   },
   detectHighlights: (transcript, llm) => ipcRenderer.invoke("hotclip:detect-highlights", transcript, llm),
-  exportClips: (filePath, clips) => ipcRenderer.invoke("hotclip:export-clips", filePath, clips),
+  exportClips: (filePath, clips, options) => ipcRenderer.invoke("hotclip:export-clips", filePath, clips, options),
   onExportProgress: (cb) => {
     const listener = (_e: IpcRendererEvent, p: ExportProgressEvent): void => cb(p);
     ipcRenderer.on("hotclip:export-progress", listener);

@@ -83,6 +83,16 @@ export interface HighlightCandidate {
   boundary: "exact" | "anchored" | "segment";
 }
 
+/** Render options for the export step (UI toggles on the highlight list). */
+export interface ExportOptions {
+  /** Center-crop reframe to 9:16 vertical (1080×1920) — short-video ready. */
+  vertical: boolean;
+  /** Burn karaoke word-by-word captions into the picture. */
+  karaoke: boolean;
+  /** Needed when karaoke is on: source of word-level timestamps. */
+  transcript?: Transcript;
+}
+
 /** One exported clip file on disk. */
 export interface ExportedClip {
   id: number;
@@ -112,7 +122,7 @@ export interface HotClipApi {
   /** Detect highlight candidates from a finished transcript via the configured LLM. */
   detectHighlights: (transcript: Transcript, llm: LlmConfig) => Promise<HighlightCandidate[]>;
   /** Cut the selected highlights into mp4 files; resolves with the file list. */
-  exportClips: (filePath: string, clips: HighlightCandidate[]) => Promise<ExportedClip[]>;
+  exportClips: (filePath: string, clips: HighlightCandidate[], options?: ExportOptions) => Promise<ExportedClip[]>;
   /** Subscribe to per-clip export progress; returns an unsubscribe function. */
   onExportProgress: (cb: (p: ExportProgressEvent) => void) => () => void;
   /** Reveal an exported file in Finder / Explorer. */

@@ -77,6 +77,10 @@ export const en = {
     llmStart: "Save & find highlights",
     selectedCount: "{n} selected",
     exportSelected: "Export clips",
+    optVertical: "Vertical 9:16",
+    optVerticalHint: "Center-crop to 1080×1920 — ready for TikTok / Shorts / Reels",
+    optKaraoke: "Karaoke captions",
+    optKaraokeHint: "Word-by-word highlighted captions, burned into the video",
   },
   exportPage: {
     title: "Exporting clips",

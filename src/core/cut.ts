@@ -24,6 +24,31 @@ export interface CutOptions {
   crf?: number;
   /** x264 preset for accurate mode; default "veryfast". */
   preset?: string;
+  /** Reframe to 9:16 vertical (center crop → 1080×1920). Requires re-encode. */
+  vertical?: boolean;
+  /** Burn an .ass karaoke subtitle file via libass. Requires re-encode. */
+  subtitlePath?: string;
+}
+
+/**
+ * ffmpeg filter-graph path escaping for the subtitles filter: forward slashes
+ * everywhere, escape the Windows drive colon, guard stray quotes.
+ */
+export function escapeFilterPath(p: string): string {
+  return p.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "\\'");
+}
+
+/** Compose the -vf chain for reframing + caption burn-in. Empty = no filter. */
+export function buildVideoFilters(options: CutOptions): string[] {
+  const filters: string[] = [];
+  if (options.vertical) {
+    // Center crop to exactly 9:16 (whichever axis binds), then normalize size.
+    filters.push("crop=w='min(iw,ih*9/16)':h='min(ih,iw*16/9)'", "scale=1080:1920:flags=lanczos", "setsar=1");
+  }
+  if (options.subtitlePath) {
+    filters.push(`subtitles=filename='${escapeFilterPath(options.subtitlePath)}'`);
+  }
+  return filters;
 }
 
 /** Build the ffmpeg argument list for one cut. Pure — no I/O. */
@@ -37,12 +62,16 @@ export function buildCutArgs(
   if (!(endSec > startSec)) {
     throw new Error(`invalid cut range: start=${startSec} end=${endSec}`);
   }
-  const mode = options.mode ?? "accurate";
+  const filters = buildVideoFilters(options);
+  // Any video filter forces a re-encode — silently upgrade copy → accurate.
+  const mode = filters.length > 0 ? "accurate" : (options.mode ?? "accurate");
   const start = Math.max(0, startSec);
   const duration = endSec - start;
 
   // Fast seek: -ss BEFORE -i jumps by keyframe index (instant even at hour 3
-  // of a VOD); the decoder then trims precisely inside the segment.
+  // of a VOD); the decoder then trims precisely inside the segment. Input
+  // seeking also resets PTS to ~0, which is exactly what the clip-relative
+  // ASS karaoke timestamps assume.
   const common = ["-hide_banner", "-y", "-ss", toFfmpegTime(start), "-i", inputPath, "-t", toFfmpegTime(duration)];
 
   if (mode === "copy") {
@@ -53,6 +82,7 @@ export function buildCutArgs(
   const preset = options.preset ?? "veryfast";
   return [
     ...common,
+    ...(filters.length > 0 ? ["-vf", filters.join(",")] : []),
     "-c:v", "libx264",
     "-preset", preset,
     "-crf", crf,

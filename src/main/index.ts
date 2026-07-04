@@ -10,7 +10,8 @@ import { probeMedia } from "@core/probe";
 import { SenseVoiceEngine } from "@core/transcribe/sensevoice";
 import { detectHighlights } from "@core/highlight/detect";
 import { exportClips, sanitizeFilename } from "@core/export";
-import type { Transcript, LlmConfig, HighlightCandidate } from "../shared/api-types";
+import { sliceWords } from "@core/subtitle";
+import type { Transcript, LlmConfig, HighlightCandidate, ExportOptions } from "../shared/api-types";
 
 const VIDEO_EXTENSIONS = ["mp4", "mkv", "mov", "flv", "ts", "webm", "avi", "m4v"];
 const AUDIO_EXTENSIONS = ["mp3", "m4a", "wav", "aac", "flac"];
@@ -108,16 +109,25 @@ ipcMain.handle("hotclip:detect-highlights", async (_event, transcript: unknown, 
 // ---- IPC: export selected clips (wizard step 3) ----
 // Output goes to ~/Movies/HotClip/<source-name>/ — a place beginners can find.
 
-ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: unknown) => {
+ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: unknown, options: unknown) => {
   if (typeof filePath !== "string" || !filePath.trim()) throw new Error("export requires a file path");
   const list = clips as HighlightCandidate[];
   if (!Array.isArray(list) || list.length === 0) throw new Error("no clips selected");
+  const opts = (options ?? {}) as ExportOptions;
+  const karaoke = Boolean(opts.karaoke && opts.transcript);
   const sourceName = sanitizeFilename(basename(filePath, extname(filePath)), "video");
   const outDir = join(app.getPath("videos"), "HotClip", sourceName);
   return exportClips(
     filePath,
-    list.map((c) => ({ id: c.id, title: c.title, startSec: c.startSec, endSec: c.endSec })),
+    list.map((c) => ({
+      id: c.id,
+      title: c.title,
+      startSec: c.startSec,
+      endSec: c.endSec,
+      words: karaoke ? sliceWords(opts.transcript!, c.startSec, c.endSec) : undefined,
+    })),
     outDir,
+    { vertical: Boolean(opts.vertical), karaoke },
     (p) => {
       if (!event.sender.isDestroyed()) event.sender.send("hotclip:export-progress", p);
     }
