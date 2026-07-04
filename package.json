@@ -38,6 +38,7 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-icons": "^5.7.0",
+    "sherpa-onnx-node": "^1.13.3",
     "tailwindcss": "^4.3.2",
     "zustand": "^5.0.14"
   },

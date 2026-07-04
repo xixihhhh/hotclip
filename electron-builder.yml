@@ -5,10 +5,11 @@ directories:
 files:
   - out/**/*
   - "!**/*.map"
-# ffmpeg/ffprobe must run from the real filesystem, not inside asar
+# ffmpeg/ffprobe/sherpa native addon must run from the real filesystem, not inside asar
 asarUnpack:
   - "**/node_modules/ffmpeg-static/**"
   - "**/node_modules/@ffprobe-installer/**"
+  - "**/node_modules/sherpa-onnx-*/**"
 win:
   target:
     - nsis
