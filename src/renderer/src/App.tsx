@@ -5,10 +5,24 @@
  * the latter is the design-preview path today and the web-platform seam later.
  */
 import { useCallback, useState } from "react";
+import {
+  LuFileVideo,
+  LuShieldCheck,
+  LuBadgeCheck,
+  LuSparkles,
+  LuLanguages,
+  LuClock3,
+  LuProportions,
+  LuGauge,
+  LuFileCode2,
+  LuCircleCheck,
+  LuAudioLines,
+} from "react-icons/lu";
 import { useT, useLocaleStore } from "./i18n/store";
 import { LOCALE_LIST, REGISTRY } from "./i18n/messages";
 import { getApi } from "./api/provider";
 import type { MediaInfo } from "../../shared/api-types";
+import { LogoMark, LogoWordmark } from "./components/Logo";
 import "./app.css";
 
 interface ProbedFile extends MediaInfo {
@@ -30,6 +44,8 @@ function displayName(path: string): string {
   const base = path.split(/[\\/]/).pop() ?? path;
   return base.replace(/\.[^.]+$/, "");
 }
+
+const FILE_CHIPS = ["MP4", "MKV", "MOV", "FLV", "MP3"];
 
 export default function App(): React.JSX.Element {
   const tc = useT("common");
@@ -76,31 +92,29 @@ export default function App(): React.JSX.Element {
 
   const nextLocale = LOCALE_LIST[(LOCALE_LIST.indexOf(locale) + 1) % LOCALE_LIST.length];
   const steps = [t("stepImport"), t("stepHighlights"), t("stepExport")];
-  const features: Array<[string, string, string]> = [
-    ["🔒", t("featLocalTitle"), t("featLocalDesc")],
-    ["🆓", t("featFreeTitle"), t("featFreeDesc")],
-    ["✨", t("featAiTitle"), t("featAiDesc")],
+  const features = [
+    { Icon: LuShieldCheck, title: t("featLocalTitle"), desc: t("featLocalDesc") },
+    { Icon: LuBadgeCheck, title: t("featFreeTitle"), desc: t("featFreeDesc") },
+    { Icon: LuSparkles, title: t("featAiTitle"), desc: t("featAiDesc") },
   ];
 
   return (
     <div className="flex h-full flex-col">
       {/* ---- top bar ---- */}
       <header
-        className="flex h-14 shrink-0 items-center justify-between border-b border-line/70 bg-panel/60 px-5 backdrop-blur-xl"
+        className="z-10 flex h-14 shrink-0 items-center justify-between border-b border-line/70 bg-panel/55 px-5 backdrop-blur-xl"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       >
         <div className="flex items-center gap-2.5">
-          <div className="flame-gradient flex h-8 w-8 items-center justify-center rounded-lg text-base shadow-lg">
-            🔥
-          </div>
-          <span className="text-[15px] font-bold tracking-tight">{tc("appName")}</span>
+          <LogoMark size={30} />
+          <LogoWordmark zh={locale === "zh"} />
         </div>
 
-        <nav className="flex items-center gap-1.5">
+        <nav className="flex items-center">
           {steps.map((label, i) => (
-            <div key={label} className="flex items-center gap-1.5">
+            <div key={label} className="flex items-center">
               <div
-                className={`flex h-7 items-center gap-1.5 rounded-full px-3.5 text-xs font-medium transition-colors ${
+                className={`flex h-7 items-center gap-1.5 rounded-full px-3.5 text-xs font-medium whitespace-nowrap transition-colors ${
                   i === 0 ? "flame-gradient text-white shadow-md" : "text-mut"
                 }`}
               >
@@ -113,7 +127,7 @@ export default function App(): React.JSX.Element {
                 </span>
                 {label}
               </div>
-              {i < steps.length - 1 && <div className="h-px w-5 bg-line" />}
+              {i < steps.length - 1 && <div className="mx-1 h-px w-6 bg-line" />}
             </div>
           ))}
         </nav>
@@ -122,23 +136,26 @@ export default function App(): React.JSX.Element {
           type="button"
           onClick={() => setLocale(nextLocale)}
           title={tc("language")}
-          className="rounded-md border border-line px-2.5 py-1 text-xs text-mut transition-colors hover:border-mut hover:text-fg"
+          className="flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs text-mut transition-colors hover:border-mut hover:text-fg"
           style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
         >
+          <LuLanguages className="h-3.5 w-3.5" />
           {REGISTRY[nextLocale].label}
         </button>
       </header>
 
       {/* ---- stage ---- */}
-      <main className="stage-glow flex flex-1 flex-col items-center overflow-y-auto px-6 pt-[9vh] pb-12">
-        <h1 className="text-center text-[34px] leading-tight font-extrabold tracking-tight">
+      <main className="stage flex flex-1 flex-col items-center overflow-y-auto px-6 pt-[8vh] pb-12">
+        <h1 className="rise-in text-center text-4xl leading-tight font-extrabold tracking-tight">
           {t("importTitle")}
         </h1>
-        <p className="mt-3 max-w-xl text-center text-[15px] text-mut">{t("importDesc")}</p>
+        <p className="rise-in rise-in-1 mt-3.5 max-w-xl text-center text-[15px] leading-relaxed text-mut">
+          {t("importDesc")}
+        </p>
 
         {/* drop zone */}
         <div
-          className="drop-ring mt-10 flex w-full max-w-2xl flex-col items-center rounded-2xl px-8 py-12"
+          className="drop-zone rise-in rise-in-2 mt-9 w-full max-w-2xl rounded-3xl p-3"
           data-dragging={dragging}
           onDragOver={(e) => {
             e.preventDefault();
@@ -147,32 +164,53 @@ export default function App(): React.JSX.Element {
           onDragLeave={() => setDragging(false)}
           onDrop={onDrop}
         >
-          <button
-            type="button"
-            onClick={pickFile}
-            disabled={busy}
-            className="btn-flame rounded-xl px-10 py-3.5 text-[16px] font-bold text-white disabled:opacity-50"
-          >
-            {busy ? <span className="shimmer">{t("probing")}</span> : t("importButton")}
-          </button>
-          <p className="mt-3 text-[13px] text-mut/80">{t("importDrop")}</p>
-          <p className="mt-6 flex items-center gap-1.5 text-xs text-mut">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            {t("importHint")}
-          </p>
+          <div className="drop-zone-inner flex flex-col items-center rounded-2xl px-8 py-11">
+            <div className="icon-tile float-y flex h-16 w-16 items-center justify-center rounded-2xl">
+              <LuFileVideo className="h-8 w-8" />
+            </div>
+
+            <button
+              type="button"
+              onClick={pickFile}
+              disabled={busy}
+              className="btn-flame mt-7 rounded-xl px-11 py-3.5 text-[15px] font-bold text-white disabled:opacity-50"
+            >
+              {busy ? <span className="shimmer">{t("probing")}</span> : t("importButton")}
+            </button>
+            <p className="mt-3 text-[13px] text-mut/80">{t("importDrop")}</p>
+
+            <div className="mt-6 flex items-center gap-1.5">
+              {FILE_CHIPS.map((chip) => (
+                <span key={chip} className="chip rounded-md px-2 py-0.5 text-[10px] font-semibold tracking-wide">
+                  {chip}
+                </span>
+              ))}
+            </div>
+
+            <p className="mt-5 flex items-center gap-1.5 text-xs text-mut">
+              <LuShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+              {t("importHint")}
+            </p>
+          </div>
         </div>
 
         {error && <p className="mt-5 text-sm text-red-400">{error}</p>}
 
         {/* probed file card */}
         {file && (
-          <section className="rise-in mt-8 w-full max-w-2xl rounded-2xl border border-line bg-panel p-6 shadow-2xl">
+          <section className="card rise-in mt-8 w-full max-w-2xl rounded-2xl p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <h2 className="truncate text-[17px] font-bold">{displayName(file.path)}</h2>
-                <p className="mt-1 truncate text-xs text-mut">{file.path}</p>
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="icon-tile flex h-11 w-11 shrink-0 items-center justify-center rounded-xl">
+                  {file.hasVideo ? <LuFileVideo className="h-5.5 w-5.5" /> : <LuAudioLines className="h-5.5 w-5.5" />}
+                </div>
+                <div className="min-w-0">
+                  <h2 className="truncate text-[17px] font-bold">{displayName(file.path)}</h2>
+                  <p className="mt-0.5 truncate text-xs text-mut">{file.path}</p>
+                </div>
               </div>
-              <span className="flame-gradient shrink-0 rounded-full px-3 py-1 text-xs font-bold text-white">
+              <span className="flame-gradient flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-bold text-white">
+                <LuClock3 className="h-3 w-3" />
                 {formatDuration(file.durationSec)}
               </span>
             </div>
@@ -180,38 +218,48 @@ export default function App(): React.JSX.Element {
             <dl className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
               {(
                 [
-                  [t("duration"), formatDuration(file.durationSec)],
+                  { Icon: LuClock3, label: t("duration"), value: formatDuration(file.durationSec) },
                   file.hasVideo
-                    ? [t("resolution"), `${file.width}×${file.height}`]
-                    : [t("codec"), t("audioOnly")],
-                  [t("framerate"), file.hasVideo && file.fps ? `${file.fps} fps` : "—"],
-                  [t("codec"), [file.videoCodec, file.audioCodec].filter(Boolean).join(" / ") || "—"],
-                ] as Array<[string, string]>
-              ).map(([label, value]) => (
+                    ? { Icon: LuProportions, label: t("resolution"), value: `${file.width}×${file.height}` }
+                    : { Icon: LuAudioLines, label: t("codec"), value: t("audioOnly") },
+                  { Icon: LuGauge, label: t("framerate"), value: file.hasVideo && file.fps ? `${file.fps} fps` : "—" },
+                  {
+                    Icon: LuFileCode2,
+                    label: t("codec"),
+                    value: [file.videoCodec, file.audioCodec].filter(Boolean).join(" / ") || "—",
+                  },
+                ] as Array<{ Icon: typeof LuClock3; label: string; value: string }>
+              ).map(({ Icon, label, value }) => (
                 <div key={label + value} className="rounded-xl bg-panel-2 px-3.5 py-3">
-                  <dt className="text-[11px] text-mut">{label}</dt>
-                  <dd className="mt-0.5 truncate text-[14px] font-semibold">{value}</dd>
+                  <dt className="flex items-center gap-1 text-[11px] text-mut">
+                    <Icon className="h-3 w-3" />
+                    {label}
+                  </dt>
+                  <dd className="mt-1 truncate text-[14px] font-semibold">{value}</dd>
                 </div>
               ))}
             </dl>
 
-            <p className="flame-text mt-5 border-t border-dashed border-line pt-4 text-[13px] font-semibold">
-              {t("comingSoon")}
+            <p className="mt-5 flex items-center gap-1.5 border-t border-dashed border-line pt-4 text-[13px] font-semibold">
+              <LuCircleCheck className="h-4 w-4 text-emerald-400" />
+              <span className="flame-text">{t("comingSoon")}</span>
             </p>
           </section>
         )}
 
         {/* feature cards */}
         {!file && (
-          <div className="mt-12 grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
-            {features.map(([icon, title, desc]) => (
+          <div className="mt-11 grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
+            {features.map(({ Icon, title, desc }, i) => (
               <div
                 key={title}
-                className="rounded-xl border border-line/60 bg-panel/50 px-4 py-4 text-left transition-colors hover:border-line hover:bg-panel"
+                className={`card card-hover rise-in rise-in-${i + 1} rounded-2xl px-4.5 py-4.5 text-left`}
               >
-                <div className="text-lg">{icon}</div>
-                <div className="mt-1.5 text-[13px] font-bold">{title}</div>
-                <div className="mt-0.5 text-xs leading-relaxed text-mut">{desc}</div>
+                <div className="icon-tile flex h-9 w-9 items-center justify-center rounded-lg">
+                  <Icon className="h-4.5 w-4.5" />
+                </div>
+                <div className="mt-2.5 text-[13.5px] font-bold">{title}</div>
+                <div className="mt-1 text-xs leading-relaxed text-mut">{desc}</div>
               </div>
             ))}
           </div>

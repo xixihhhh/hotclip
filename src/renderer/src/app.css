@@ -3,18 +3,18 @@
 /* ---- HotClip design tokens (CapCut-caliber dark editor aesthetic) ---- */
 @theme {
   /* surfaces */
-  --color-ink: #0b0c10; /* app background */
-  --color-panel: #131419; /* raised surface */
-  --color-panel-2: #1a1c23; /* higher surface / hover */
-  --color-line: #262933; /* hairline borders */
+  --color-ink: #0a0b0f; /* app background */
+  --color-panel: #12141a; /* raised surface */
+  --color-panel-2: #191c24; /* higher surface / hover */
+  --color-line: #262a35; /* hairline borders */
 
   /* text */
-  --color-fg: #f2f3f7;
-  --color-mut: #8b91a0;
+  --color-fg: #f3f4f8;
+  --color-mut: #8f95a3;
 
   /* brand: the "hot" gradient */
   --color-flame: #ff4d2e;
-  --color-ember: #ff8a00;
+  --color-ember: #ff9a3d;
 
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "HarmonyOS Sans SC",
     "Microsoft YaHei", sans-serif;
@@ -35,68 +35,137 @@ body {
   overflow: hidden;
 }
 
-/* subtle ambient glow behind the hero, CapCut-style stage lighting */
-.stage-glow {
+/* ---- stage backdrop: layered glow + faint dot grid, CapCut stage lighting ---- */
+.stage {
+  position: relative;
   background:
-    radial-gradient(600px 320px at 50% -8%, rgba(255, 77, 46, 0.13), transparent 70%),
-    radial-gradient(900px 500px at 50% 110%, rgba(255, 138, 0, 0.05), transparent 70%);
+    radial-gradient(720px 360px at 50% -10%, rgba(255, 77, 46, 0.14), transparent 70%),
+    radial-gradient(1000px 560px at 50% 115%, rgba(255, 154, 61, 0.055), transparent 70%);
 }
 
-/* brand gradient utilities */
+.stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 26px 26px;
+  mask-image: radial-gradient(720px 480px at 50% 30%, #000 0%, transparent 75%);
+  pointer-events: none;
+}
+
+/* ---- brand gradient utilities ---- */
 .flame-gradient {
   background: linear-gradient(135deg, var(--color-flame), var(--color-ember));
 }
 
 .flame-text {
-  background: linear-gradient(135deg, #ff6a3d, #ffb356);
+  background: linear-gradient(120deg, #ff5a35, #ffb050);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
-/* primary button glow */
+/* ---- primary button: gradient, glow, sheen sweep ---- */
 .btn-flame {
+  position: relative;
+  overflow: hidden;
   background: linear-gradient(135deg, var(--color-flame), var(--color-ember));
   box-shadow:
-    0 8px 28px -8px rgba(255, 77, 46, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    0 10px 30px -10px rgba(255, 77, 46, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
   transition:
     transform 0.15s ease,
     box-shadow 0.2s ease,
     filter 0.2s ease;
 }
 
+.btn-flame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.28) 50%, transparent 62%);
+  transform: translateX(-120%);
+  transition: transform 0.5s ease;
+}
+
 .btn-flame:hover:not(:disabled) {
-  filter: brightness(1.08);
+  filter: brightness(1.07);
   transform: translateY(-1px);
   box-shadow:
-    0 12px 34px -8px rgba(255, 77, 46, 0.65),
-    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    0 14px 36px -10px rgba(255, 77, 46, 0.72),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.btn-flame:hover:not(:disabled)::after {
+  transform: translateX(120%);
 }
 
 .btn-flame:active:not(:disabled) {
   transform: translateY(0);
 }
 
-/* drop-zone dashed ring */
-.drop-ring {
-  border: 1.5px dashed rgba(139, 145, 160, 0.35);
+/* ---- drop zone: dashed ring on a glassy panel ---- */
+.drop-zone {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.022), rgba(255, 255, 255, 0.008));
+  border: 1px solid var(--color-line);
   transition:
     border-color 0.2s ease,
-    background-color 0.2s ease;
+    box-shadow 0.25s ease,
+    background 0.2s ease;
 }
 
-.drop-ring:hover,
-.drop-ring[data-dragging="true"] {
-  border-color: rgba(255, 77, 46, 0.6);
-  background-color: rgba(255, 77, 46, 0.04);
+.drop-zone:hover,
+.drop-zone[data-dragging="true"] {
+  border-color: rgba(255, 90, 53, 0.45);
+  box-shadow:
+    0 0 0 1px rgba(255, 90, 53, 0.25),
+    0 20px 60px -30px rgba(255, 77, 46, 0.4);
 }
 
-/* card entrance animation */
+.drop-zone-inner {
+  border: 1.5px dashed rgba(143, 149, 163, 0.3);
+  transition: border-color 0.2s ease;
+}
+
+.drop-zone:hover .drop-zone-inner,
+.drop-zone[data-dragging="true"] .drop-zone-inner {
+  border-color: rgba(255, 90, 53, 0.5);
+}
+
+/* file-type chip */
+.chip {
+  border: 1px solid var(--color-line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--color-mut);
+}
+
+/* ---- cards ---- */
+.card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+  border: 1px solid var(--color-line);
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.25s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 122, 61, 0.35);
+  box-shadow: 0 16px 44px -24px rgba(255, 77, 46, 0.35);
+}
+
+.icon-tile {
+  background: linear-gradient(135deg, rgba(255, 77, 46, 0.16), rgba(255, 154, 61, 0.08));
+  border: 1px solid rgba(255, 122, 61, 0.25);
+  color: #ff8a4d;
+}
+
+/* ---- motion ---- */
 @keyframes rise-in {
   from {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(16px);
   }
   to {
     opacity: 1;
@@ -105,10 +174,19 @@ body {
 }
 
 .rise-in {
-  animation: rise-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: rise-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
-/* shimmering progress text while probing */
+.rise-in-1 {
+  animation-delay: 0.05s;
+}
+.rise-in-2 {
+  animation-delay: 0.12s;
+}
+.rise-in-3 {
+  animation-delay: 0.19s;
+}
+
 @keyframes shimmer {
   0%,
   100% {
@@ -123,7 +201,21 @@ body {
   animation: shimmer 1.2s ease-in-out infinite;
 }
 
-/* native-feel scrollbars */
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.float-y {
+  animation: float-y 2.8s ease-in-out infinite;
+}
+
+/* ---- scrollbars ---- */
 ::-webkit-scrollbar {
   width: 10px;
 }
