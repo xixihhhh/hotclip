@@ -69,6 +69,8 @@ export const zh = {
     boundaryExact: "切点:逐字精确",
     boundaryAnchored: "切点:首尾锚定",
     boundarySegment: "切点:按句对齐",
+    selectedCount: "已选 {n} 条",
+    exportSelected: "出片",
     // LLM 设置
     llmTitle: "连接 AI 模型",
     llmDesc: "找爆点需要一个大模型。推荐 Atlas Cloud——一个 Key 用齐中外主流模型;也可用本地 Ollama 或任意 OpenAI 兼容接口。",
@@ -79,5 +81,16 @@ export const zh = {
     llmModel: "模型",
     llmGetKey: "没有 Key?免费注册 →",
     llmStart: "保存并开始找爆点",
+  },
+  exportPage: {
+    title: "正在出片",
+    cuttingClip: "正在切第 {current}/{total} 条:{title}",
+    doneTitle: "出片完成",
+    doneDesc: "已导出 {n} 条切片,可直接发布",
+    reveal: "打开所在文件夹",
+    backToHighlights: "返回爆点列表",
+    makeAnother: "再切一个视频",
+    failed: "出片失败:{msg}",
+    retry: "重试",
   },
 } as const;

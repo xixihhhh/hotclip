@@ -83,6 +83,23 @@ export interface HighlightCandidate {
   boundary: "exact" | "anchored" | "segment";
 }
 
+/** One exported clip file on disk. */
+export interface ExportedClip {
+  id: number;
+  title: string;
+  path: string;
+  sizeBytes: number;
+  durationSec: number;
+}
+
+export interface ExportProgressEvent {
+  /** 1-based index of the clip currently being cut. */
+  current: number;
+  total: number;
+  clipId: number;
+  stage: "cutting" | "done";
+}
+
 export interface HotClipApi {
   /** Open a file picker; resolves to a path/handle or null when cancelled. */
   selectMedia: () => Promise<string | null>;
@@ -94,4 +111,10 @@ export interface HotClipApi {
   onTranscribeProgress: (cb: (p: TranscribeProgressEvent) => void) => () => void;
   /** Detect highlight candidates from a finished transcript via the configured LLM. */
   detectHighlights: (transcript: Transcript, llm: LlmConfig) => Promise<HighlightCandidate[]>;
+  /** Cut the selected highlights into mp4 files; resolves with the file list. */
+  exportClips: (filePath: string, clips: HighlightCandidate[]) => Promise<ExportedClip[]>;
+  /** Subscribe to per-clip export progress; returns an unsubscribe function. */
+  onExportProgress: (cb: (p: ExportProgressEvent) => void) => () => void;
+  /** Reveal an exported file in Finder / Explorer. */
+  revealClip: (path: string) => void;
 }

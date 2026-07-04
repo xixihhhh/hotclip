@@ -12,6 +12,8 @@ import {
   LuCrosshair,
   LuKeyRound,
   LuExternalLink,
+  LuCheck,
+  LuScissors,
 } from "react-icons/lu";
 import { useT } from "../i18n/store";
 import { getApi, isElectron } from "../api/provider";
@@ -36,9 +38,11 @@ const BOUNDARY_KEY: Record<HighlightCandidate["boundary"], string> = {
 export function HighlightsView({
   transcript,
   onBack,
+  onExport,
 }: {
   transcript: Transcript;
   onBack: () => void;
+  onExport?: (clips: HighlightCandidate[]) => void;
 }): React.JSX.Element {
   const t = useT("highlights");
   const { config, setConfig } = useLlmStore();
@@ -48,6 +52,7 @@ export function HighlightsView({
   const [detecting, setDetecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<HighlightCandidate[] | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
   const startedRef = useRef(false);
 
   const run = useCallback(async (): Promise<void> => {
@@ -56,12 +61,22 @@ export function HighlightsView({
     try {
       const result = await getApi().detectHighlights(transcript, config);
       setCandidates(result);
+      setSelected(new Set(result.map((c) => c.id))); // all selected by default
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setDetecting(false);
     }
   }, [transcript, config]);
+
+  const toggle = (id: number): void => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (!showGate && !startedRef.current) {
@@ -203,9 +218,24 @@ export function HighlightsView({
 
           <div className="mt-5 space-y-3.5">
             {candidates.map((c, i) => (
-              <article key={c.id} className={`card card-hover rise-in rise-in-${Math.min(i + 1, 3)} rounded-2xl p-5`}>
+              <article
+                key={c.id}
+                onClick={() => toggle(c.id)}
+                className={`card card-hover rise-in rise-in-${Math.min(i + 1, 3)} cursor-pointer rounded-2xl p-5 ${
+                  selected.has(c.id) ? "!border-ember/50" : "opacity-60"
+                }`}
+              >
                 <div className="flex items-start justify-between gap-4">
-                  <h3 className="text-[16px] leading-snug font-bold">{c.title}</h3>
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span
+                      className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${
+                        selected.has(c.id) ? "flame-gradient border-transparent text-white" : "border-line text-transparent"
+                      }`}
+                    >
+                      <LuCheck className="h-3.5 w-3.5" />
+                    </span>
+                    <h3 className="text-[16px] leading-snug font-bold">{c.title}</h3>
+                  </div>
                   <span className="flame-gradient flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-extrabold text-white">
                     <LuFlame className="h-3 w-3" />
                     {c.score}
@@ -241,6 +271,21 @@ export function HighlightsView({
               </article>
             ))}
           </div>
+
+          {onExport && candidates.length > 0 && (
+            <div className="card sticky bottom-4 mt-6 flex items-center justify-between rounded-2xl px-5 py-3.5 shadow-2xl backdrop-blur-xl">
+              <span className="text-[13px] font-semibold text-mut">{t("selectedCount", { n: selected.size })}</span>
+              <button
+                type="button"
+                disabled={selected.size === 0}
+                onClick={() => onExport(candidates.filter((c) => selected.has(c.id)))}
+                className="btn-flame inline-flex items-center gap-1.5 rounded-lg px-6 py-2.5 text-[14px] font-bold text-white disabled:opacity-40"
+              >
+                <LuScissors className="h-4 w-4" />
+                {t("exportSelected")}
+              </button>
+            </div>
+          )}
         </section>
       )}
     </div>

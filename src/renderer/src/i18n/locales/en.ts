@@ -75,5 +75,18 @@ export const en = {
     llmModel: "Model",
     llmGetKey: "No key? Sign up free →",
     llmStart: "Save & find highlights",
+    selectedCount: "{n} selected",
+    exportSelected: "Export clips",
+  },
+  exportPage: {
+    title: "Exporting clips",
+    cuttingClip: "Cutting {current}/{total}: {title}",
+    doneTitle: "Clips ready",
+    doneDesc: "{n} clips exported, ready to post",
+    reveal: "Show in folder",
+    backToHighlights: "Back to highlights",
+    makeAnother: "Clip another video",
+    failed: "Export failed: {msg}",
+    retry: "Retry",
   },
 } as const;

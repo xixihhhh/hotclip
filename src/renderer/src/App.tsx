@@ -25,7 +25,8 @@ import type { MediaInfo } from "../../shared/api-types";
 import { LogoMark, LogoWordmark } from "./components/Logo";
 import { TranscribeView } from "./components/TranscribeView";
 import { HighlightsView } from "./components/HighlightsView";
-import type { Transcript } from "../../shared/api-types";
+import { ExportView } from "./components/ExportView";
+import type { Transcript, HighlightCandidate } from "../../shared/api-types";
 import "./app.css";
 
 interface ProbedFile extends MediaInfo {
@@ -63,6 +64,16 @@ export default function App(): React.JSX.Element {
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   /** Within step 1: transcript view first, highlights after the CTA. */
   const [phase, setPhase] = useState<"transcribe" | "highlights">("transcribe");
+  /** Clips chosen for export (moves the wizard to step 2). */
+  const [exporting, setExporting] = useState<HighlightCandidate[] | null>(null);
+
+  const restart = (): void => {
+    setFile(null);
+    setTranscript(null);
+    setPhase("transcribe");
+    setExporting(null);
+    setStep(0);
+  };
 
   const probePath = useCallback(
     async (path: string): Promise<void> => {
@@ -167,7 +178,25 @@ export default function App(): React.JSX.Element {
           />
         )}
         {step === 1 && transcript && phase === "highlights" && (
-          <HighlightsView transcript={transcript} onBack={() => setPhase("transcribe")} />
+          <HighlightsView
+            transcript={transcript}
+            onBack={() => setPhase("transcribe")}
+            onExport={(clips) => {
+              setExporting(clips);
+              setStep(2);
+            }}
+          />
+        )}
+        {step === 2 && file && exporting && (
+          <ExportView
+            filePath={file.path}
+            clips={exporting}
+            onBack={() => {
+              setExporting(null);
+              setStep(1);
+            }}
+            onRestart={restart}
+          />
         )}
 
         {step === 0 && (

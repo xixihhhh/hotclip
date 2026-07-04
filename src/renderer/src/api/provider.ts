@@ -11,6 +11,7 @@ import type {
   Transcript,
   TranscribeProgressEvent,
   HighlightCandidate,
+  ExportProgressEvent,
 } from "../../../shared/api-types";
 
 const MOCK_MEDIA: MediaInfo = {
@@ -53,6 +54,9 @@ function mockTranscript(): Transcript {
 type ProgressCb = (p: TranscribeProgressEvent) => void;
 const progressListeners = new Set<ProgressCb>();
 const emit = (p: TranscribeProgressEvent): void => progressListeners.forEach((cb) => cb(p));
+type ExportCb = (p: ExportProgressEvent) => void;
+const exportListeners = new Set<ExportCb>();
+const emitExport = (p: ExportProgressEvent): void => exportListeners.forEach((cb) => cb(p));
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 /** Browser-mode mock: deterministic fake data with realistic staged latency. */
@@ -84,6 +88,29 @@ const browserMock: HotClipApi = {
   onTranscribeProgress(cb) {
     progressListeners.add(cb);
     return () => progressListeners.delete(cb);
+  },
+  async exportClips(_filePath, clips) {
+    const results = [];
+    for (let i = 0; i < clips.length; i++) {
+      emitExport({ current: i + 1, total: clips.length, clipId: clips[i].id, stage: "cutting" });
+      await sleep(1100);
+      emitExport({ current: i + 1, total: clips.length, clipId: clips[i].id, stage: "done" });
+      results.push({
+        id: clips[i].id,
+        title: clips[i].title,
+        path: `/Movies/HotClip/我的直播回放-2026-07-04/0${i + 1}-${clips[i].title}.mp4`,
+        sizeBytes: 8_400_000 + i * 1_700_000,
+        durationSec: clips[i].endSec - clips[i].startSec,
+      });
+    }
+    return results;
+  },
+  onExportProgress(cb) {
+    exportListeners.add(cb);
+    return () => exportListeners.delete(cb);
+  },
+  revealClip() {
+    /* browser mock: nothing to reveal */
   },
   async detectHighlights(transcript): Promise<HighlightCandidate[]> {
     await sleep(1500);

@@ -5,10 +5,12 @@
  */
 import { app, shell, BrowserWindow, ipcMain, dialog } from "electron";
 import { join } from "path";
+import { basename, extname } from "path";
 import { probeMedia } from "@core/probe";
 import { SenseVoiceEngine } from "@core/transcribe/sensevoice";
 import { detectHighlights } from "@core/highlight/detect";
-import type { Transcript, LlmConfig } from "../shared/api-types";
+import { exportClips, sanitizeFilename } from "@core/export";
+import type { Transcript, LlmConfig, HighlightCandidate } from "../shared/api-types";
 
 const VIDEO_EXTENSIONS = ["mp4", "mkv", "mov", "flv", "ts", "webm", "avi", "m4v"];
 const AUDIO_EXTENSIONS = ["mp3", "m4a", "wav", "aac", "flac"];
@@ -101,6 +103,29 @@ ipcMain.handle("hotclip:detect-highlights", async (_event, transcript: unknown, 
   if (!t || !Array.isArray(t.segments)) throw new Error("detect-highlights requires a transcript");
   if (!config?.baseUrl || !config?.model) throw new Error("请先在设置里配置 LLM(baseUrl/model)");
   return detectHighlights(t, config);
+});
+
+// ---- IPC: export selected clips (wizard step 3) ----
+// Output goes to ~/Movies/HotClip/<source-name>/ — a place beginners can find.
+
+ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: unknown) => {
+  if (typeof filePath !== "string" || !filePath.trim()) throw new Error("export requires a file path");
+  const list = clips as HighlightCandidate[];
+  if (!Array.isArray(list) || list.length === 0) throw new Error("no clips selected");
+  const sourceName = sanitizeFilename(basename(filePath, extname(filePath)), "video");
+  const outDir = join(app.getPath("videos"), "HotClip", sourceName);
+  return exportClips(
+    filePath,
+    list.map((c) => ({ id: c.id, title: c.title, startSec: c.startSec, endSec: c.endSec })),
+    outDir,
+    (p) => {
+      if (!event.sender.isDestroyed()) event.sender.send("hotclip:export-progress", p);
+    }
+  );
+});
+
+ipcMain.on("hotclip:reveal", (_event, path: unknown) => {
+  if (typeof path === "string" && path.trim()) shell.showItemInFolder(path);
 });
 
 app.whenReady().then(() => {
