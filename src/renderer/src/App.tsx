@@ -23,6 +23,7 @@ import { LOCALE_LIST, REGISTRY } from "./i18n/messages";
 import { getApi } from "./api/provider";
 import type { MediaInfo } from "../../shared/api-types";
 import { LogoMark, LogoWordmark } from "./components/Logo";
+import { TranscribeView } from "./components/TranscribeView";
 import "./app.css";
 
 interface ProbedFile extends MediaInfo {
@@ -55,6 +56,8 @@ export default function App(): React.JSX.Element {
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [file, setFile] = useState<ProbedFile | null>(null);
+  /** 0 = import, 1 = transcribe & pick highlights, 2 = export (later). */
+  const [step, setStep] = useState(0);
 
   const probePath = useCallback(
     async (path: string): Promise<void> => {
@@ -115,15 +118,15 @@ export default function App(): React.JSX.Element {
             <div key={label} className="flex items-center">
               <div
                 className={`flex h-7 items-center gap-1.5 rounded-full px-3.5 text-xs font-medium whitespace-nowrap transition-colors ${
-                  i === 0 ? "flame-gradient text-white shadow-md" : "text-mut"
+                  i === step ? "flame-gradient text-white shadow-md" : i < step ? "text-ember" : "text-mut"
                 }`}
               >
                 <span
                   className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${
-                    i === 0 ? "bg-white/25" : "bg-line"
+                    i === step ? "bg-white/25" : i < step ? "bg-ember/20" : "bg-line"
                   }`}
                 >
-                  {i + 1}
+                  {i < step ? "✓" : i + 1}
                 </span>
                 {label}
               </div>
@@ -146,6 +149,12 @@ export default function App(): React.JSX.Element {
 
       {/* ---- stage ---- */}
       <main className="stage flex flex-1 flex-col items-center overflow-y-auto px-6 pt-[8vh] pb-12">
+        {step === 1 && file && (
+          <TranscribeView filePath={file.path} onBack={() => setStep(0)} />
+        )}
+
+        {step === 0 && (
+        <>
         <h1 className="rise-in text-center text-4xl leading-tight font-extrabold tracking-tight">
           {t("importTitle")}
         </h1>
@@ -240,10 +249,19 @@ export default function App(): React.JSX.Element {
               ))}
             </dl>
 
-            <p className="mt-5 flex items-center gap-1.5 border-t border-dashed border-line pt-4 text-[13px] font-semibold">
-              <LuCircleCheck className="h-4 w-4 text-emerald-400" />
-              <span className="flame-text">{t("comingSoon")}</span>
-            </p>
+            <div className="mt-5 flex items-center justify-between border-t border-dashed border-line pt-4">
+              <p className="flex items-center gap-1.5 text-[13px] text-mut">
+                <LuCircleCheck className="h-4 w-4 text-emerald-400" />
+                {t("importHint")}
+              </p>
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="btn-flame rounded-lg px-6 py-2.5 text-[14px] font-bold text-white"
+              >
+                {t("startTranscribe")}
+              </button>
+            </div>
           </section>
         )}
 
@@ -263,6 +281,8 @@ export default function App(): React.JSX.Element {
               </div>
             ))}
           </div>
+        )}
+        </>
         )}
       </main>
     </div>

@@ -39,8 +39,19 @@ export function detectLocale(): Locale {
 }
 
 /** Resolve namespace.key in the given locale; falls back to zh, then the key itself. */
-export function translate(locale: Locale, namespace: string, key: string): string {
+export function translate(
+  locale: Locale,
+  namespace: string,
+  key: string,
+  params?: Record<string, string | number>
+): string {
   const dict = REGISTRY[locale].dict as Dict;
   const fallback = REGISTRY.zh.dict as Dict;
-  return dict[namespace]?.[key] ?? fallback[namespace]?.[key] ?? key;
+  let text = dict[namespace]?.[key] ?? fallback[namespace]?.[key] ?? key;
+  if (params) {
+    for (const [name, value] of Object.entries(params)) {
+      text = text.split(`{${name}}`).join(String(value));
+    }
+  }
+  return text;
 }

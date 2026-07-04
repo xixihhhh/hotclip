@@ -6,6 +6,7 @@
 import { app, shell, BrowserWindow, ipcMain, dialog } from "electron";
 import { join } from "path";
 import { probeMedia } from "@core/probe";
+import { SenseVoiceEngine } from "@core/transcribe/sensevoice";
 
 const VIDEO_EXTENSIONS = ["mp4", "mkv", "mov", "flv", "ts", "webm", "avi", "m4v"];
 const AUDIO_EXTENSIONS = ["mp3", "m4a", "wav", "aac", "flac"];
@@ -42,7 +43,7 @@ function createWindow(): void {
   }
 }
 
-// ---- IPC: file import + probing (step 1 of the wizard) ----
+// ---- IPC: file import + probing (wizard step 1) ----
 
 ipcMain.handle("hotclip:select-media", async () => {
   const result = await dialog.showOpenDialog({
@@ -61,6 +62,31 @@ ipcMain.handle("hotclip:probe-media", async (_event, filePath: unknown) => {
     throw new Error("probe-media requires a file path");
   }
   return probeMedia(filePath);
+});
+
+// ---- IPC: transcription (wizard step 2) ----
+// Engine instances are cheap; the model itself is downloaded once into userData.
+
+let transcribing = false;
+
+ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown) => {
+  if (typeof filePath !== "string" || !filePath.trim()) {
+    throw new Error("transcribe requires a file path");
+  }
+  if (transcribing) throw new Error("another transcription is already running");
+  transcribing = true;
+  try {
+    const modelsRoot = join(app.getPath("userData"), "models");
+    const engine = new SenseVoiceEngine(modelsRoot);
+    return await engine.transcribe(filePath, {
+      onProgress: (p) => {
+        // renderer may already be gone on quit — guard the send
+        if (!event.sender.isDestroyed()) event.sender.send("hotclip:transcribe-progress", p);
+      },
+    });
+  } finally {
+    transcribing = false;
+  }
 });
 
 app.whenReady().then(() => {

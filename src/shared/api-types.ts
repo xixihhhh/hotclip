@@ -22,9 +22,48 @@ export interface MediaInfo {
   audioCodec: string;
 }
 
+/** One timed token/word (zh engines emit per-character tokens — same shape). */
+export interface TranscriptWord {
+  text: string;
+  startSec: number;
+  endSec: number;
+}
+
+/** A sentence-ish unit built from words; the granularity shown in the editor. */
+export interface TranscriptSegment {
+  id: number;
+  startSec: number;
+  endSec: number;
+  text: string;
+  words: TranscriptWord[];
+}
+
+export interface Transcript {
+  /** Primary language detected/used, e.g. "zh", "en". */
+  language: string;
+  segments: TranscriptSegment[];
+  /** Engine id that produced this (e.g. "sensevoice-local"). */
+  engine: string;
+  durationSec: number;
+}
+
+export type TranscribeStage = "preparing" | "downloading-model" | "decoding" | "transcribing" | "finalizing";
+
+export interface TranscribeProgressEvent {
+  /** 0..1 fraction of the current stage's work. */
+  fraction: number;
+  stage: TranscribeStage;
+  downloadedBytes?: number;
+  totalBytes?: number;
+}
+
 export interface HotClipApi {
   /** Open a file picker; resolves to a path/handle or null when cancelled. */
   selectMedia: () => Promise<string | null>;
   /** Probe a media file (duration/streams/fps); throws on unreadable input. */
   probeMedia: (filePath: string) => Promise<MediaInfo>;
+  /** Transcribe a media file with the current engine (local SenseVoice for now). */
+  transcribeMedia: (filePath: string) => Promise<Transcript>;
+  /** Subscribe to transcription progress; returns an unsubscribe function. */
+  onTranscribeProgress: (cb: (p: TranscribeProgressEvent) => void) => () => void;
 }

@@ -21,8 +21,8 @@ export const useLocaleStore = create<LocaleState>((set) => ({
   },
 }));
 
-/** Returns a t(key) bound to one namespace and the current locale. */
-export function useT(namespace: string): (key: string) => string {
+/** Returns a t(key, params?) bound to one namespace and the current locale. */
+export function useT(namespace: string): (key: string, params?: Record<string, string | number>) => string {
   const locale = useLocaleStore((s) => s.locale);
-  return (key: string) => translate(locale, namespace, key);
+  return (key, params) => translate(locale, namespace, key, params);
 }
