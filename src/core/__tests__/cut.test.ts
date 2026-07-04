@@ -54,6 +54,11 @@ describe("buildCutArgs", () => {
     expect(vf[0]).toContain("crop=");
   });
 
+  it("fontsDir: rides along as the subtitles filter's fontsdir", () => {
+    const vf = buildVideoFilters({ subtitlePath: "/tmp/a.ass", fontsDir: "C:\\App\\fonts" });
+    expect(vf[0]).toBe("subtitles=filename='/tmp/a.ass':fontsdir='C\\:/App/fonts'");
+  });
+
   it("filters force accurate mode even when copy was requested", () => {
     const args = buildCutArgs("/v/in.mp4", "/v/out.mp4", 0, 5, { mode: "copy", vertical: true });
     expect(args).toContain("libx264");

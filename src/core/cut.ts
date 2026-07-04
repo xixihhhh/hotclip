@@ -28,6 +28,8 @@ export interface CutOptions {
   vertical?: boolean;
   /** Burn an .ass karaoke subtitle file via libass. Requires re-encode. */
   subtitlePath?: string;
+  /** Directory holding bundled fonts for libass (subtitles filter fontsdir). */
+  fontsDir?: string;
 }
 
 /**
@@ -46,7 +48,8 @@ export function buildVideoFilters(options: CutOptions): string[] {
     filters.push("crop=w='min(iw,ih*9/16)':h='min(ih,iw*16/9)'", "scale=1080:1920:flags=lanczos", "setsar=1");
   }
   if (options.subtitlePath) {
-    filters.push(`subtitles=filename='${escapeFilterPath(options.subtitlePath)}'`);
+    const fonts = options.fontsDir ? `:fontsdir='${escapeFilterPath(options.fontsDir)}'` : "";
+    filters.push(`subtitles=filename='${escapeFilterPath(options.subtitlePath)}'${fonts}`);
   }
   return filters;
 }

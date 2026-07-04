@@ -2,11 +2,11 @@
 
 > **把几个小时的长视频,筛成能上热门的短视频。** 播客 · 直播回放 · 课程 · Vlog → AI 自动找爆点(金句/冲突/高能瞬间) → 竖屏 9:16 重构 + 逐字动态字幕 → 直接发**抖音 / 快手 / B站 / 视频号 / 小红书 / TikTok / Reels / Shorts**。
 >
-> **本地运行 · 真免费 · 无水印 · 不限时长 · 素材不出你的电脑。** 提供 Windows / macOS 桌面客户端,不会代码也能用。
+> **无积分制 · 无水印 · 不上传 · 不限时长——因为它就跑在你自己的电脑上。** 提供 Windows / macOS 桌面客户端,不会代码也能用。AI 负责找爆点,最终哪条能发、切在哪里,由你定夺。
 
 > **Pan hours of long-form video for gold.** Podcasts · livestream replays · lectures · vlogs → AI highlight detection (quotables, conflict, peak moments) → 9:16 auto-reframe + word-level animated captions → ready to post on TikTok / Reels / Shorts / Douyin / Bilibili.
 >
-> **Local-first · actually free · no watermark · no length caps · your footage never leaves your machine.** Ships as a beginner-friendly Windows / macOS desktop app.
+> **No credits, no watermark, no uploads, no length caps — it runs on your machine.** Ships as a beginner-friendly Windows / macOS desktop app. Human-in-the-loop by design: AI nominates the highlights with evidence, you make the call.
 
 <p align="right"><strong>中文</strong> · English (bilingual README)</p>
 
@@ -46,6 +46,19 @@ HotClip 的答案:
 - 🤖 **模型自带干粮也行**:默认本地免费模型;要更强的爆点判断,可一键接 [Atlas Cloud](https://www.atlascloud.ai)(一个 Key 用齐中外主流大模型)、fal.ai 或任意 OpenAI 兼容接口
 
 Every commercial clipper meters your source minutes, forces cloud uploads, or botches clip boundaries; every open-source one is CLI/Docker-only. HotClip is the missing piece: an installable, local-first, bilingual desktop clipper with accurate text-aligned cuts — bring your own AI provider (Atlas Cloud recommended, fal.ai and any OpenAI-compatible endpoint supported).
+
+## 对比 / How it compares
+
+| | HotClip | OpusClip / Klap / Vizard 等 SaaS | 剪映/CapCut 智能切片 | FunClip / autoclip 等开源 |
+|---|---|---|---|---|
+| 价格 | **免费开源** | $29+/月,按源视频分钟扣积分,重生成再扣,退订积分作废 | 核心功能进会员/Pro | 免费 |
+| 素材去向 | **全程本地,不上传** | 必须上传云端 | 云端处理为主 | 本地 |
+| 水印/时长限制 | **无** | 免费档有水印、限时长 | 部分模板有限制 | 无 |
+| 小白可用 | **双击安装即用** | 网页版,易用 | 易用 | 命令行/Docker/自部署 |
+| 切点质量 | **逐字对齐,精确到词,附理由可否决** | 黑盒打分,常被抱怨断章取义 | 黑盒 | 按句切,无爆点排序 |
+| 竖屏字幕 | **9:16 重构 + 逐字点亮字幕内置** | 有(付费档) | 自动字幕已进付费 | 多数无竖屏重构 |
+
+> 一句话:SaaS 的积分制和黑盒是最大怨气来源;开源工具装不起来。HotClip 把两边的坑同时填上。
 
 ## 已实现 / Shipped
 

@@ -117,6 +117,10 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
   const karaoke = Boolean(opts.karaoke && opts.transcript);
   const sourceName = sanitizeFilename(basename(filePath, extname(filePath)), "video");
   const outDir = join(app.getPath("videos"), "HotClip", sourceName);
+  // bundled caption font: packaged → resources/fonts, dev → repo resources/fonts
+  const fontsDir = app.isPackaged
+    ? join(process.resourcesPath, "fonts")
+    : join(app.getAppPath(), "resources", "fonts");
   return exportClips(
     filePath,
     list.map((c) => ({
@@ -127,7 +131,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       words: karaoke ? sliceWords(opts.transcript!, c.startSec, c.endSec) : undefined,
     })),
     outDir,
-    { vertical: Boolean(opts.vertical), karaoke },
+    { vertical: Boolean(opts.vertical), karaoke, fontsDir },
     (p) => {
       if (!event.sender.isDestroyed()) event.sender.send("hotclip:export-progress", p);
     }

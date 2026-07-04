@@ -24,6 +24,8 @@ export interface ExportRenderOptions {
   vertical?: boolean;
   /** Burn karaoke word-by-word captions (clips must carry `words`). */
   karaoke?: boolean;
+  /** Bundled-font directory handed to libass so CJK renders identically everywhere. */
+  fontsDir?: string;
 }
 
 export interface ExportedClip {
@@ -88,6 +90,7 @@ export async function exportClips(
       await cutClip(inputPath, outPath, clip.startSec, clip.endSec, {
         vertical: options.vertical,
         subtitlePath,
+        fontsDir: subtitlePath ? options.fontsDir : undefined,
       });
       const s = await stat(outPath);
       results.push({

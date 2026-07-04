@@ -18,12 +18,16 @@ export interface AssLayout {
   maxLineUnits: number;
 }
 
-/** 9:16 output — captions sit above the bottom UI zone of short-video apps. */
+/**
+ * 9:16 output — caption baseline lands at ~71% of frame height, inside the
+ * 62-72% band that clears every major platform's UI overlays (Douyin/Kuaishou
+ * bottom bars, TikTok's taller action zone, Shorts' right rail).
+ */
 export const VERTICAL_LAYOUT: AssLayout = {
   playResX: 1080,
   playResY: 1920,
   fontSize: 78,
-  marginV: 420,
+  marginV: 560,
   marginH: 60,
   outline: 4,
   maxLineUnits: 22,
@@ -40,11 +44,18 @@ export const HORIZONTAL_LAYOUT: AssLayout = {
   maxLineUnits: 36,
 };
 
-/** CJK-capable system font per platform; libass falls back via fontconfig if absent. */
+/**
+ * The bundled caption font (resources/fonts/SourceHanSansSC-Bold.otf, OFL).
+ * Shipping our own font + passing fontsdir to the subtitles filter is the only
+ * way to get identical CJK rendering on every machine — fontconfig fallback is
+ * a lottery (missing zh fonts render as tofu boxes on bare Windows installs).
+ */
+export const BUNDLED_FONT_FAMILY = "Source Han Sans SC";
+
+/** Bundled font first; per-platform system font as a fontconfig fallback. */
 export function defaultFontName(platform: NodeJS.Platform = process.platform): string {
-  if (platform === "darwin") return "PingFang SC";
-  if (platform === "win32") return "Microsoft YaHei";
-  return "Noto Sans CJK SC";
+  void platform;
+  return BUNDLED_FONT_FAMILY;
 }
 
 const CJK_RE = /[぀-ヿ㐀-鿿豈-﫿가-힯]/;

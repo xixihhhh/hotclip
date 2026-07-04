@@ -5,11 +5,16 @@ directories:
 files:
   - out/**/*
   - "!**/*.map"
-# ffmpeg/ffprobe/sherpa native addon must run from the real filesystem, not inside asar
+# ffmpeg/ffprobe/sherpa/onnxruntime native addons must run from the real filesystem, not inside asar
 asarUnpack:
   - "**/node_modules/ffmpeg-static/**"
   - "**/node_modules/@ffprobe-installer/**"
   - "**/node_modules/sherpa-onnx-*/**"
+  - "**/node_modules/onnxruntime-node/**"
+# bundled caption font (OFL) — libass reads it via the subtitles filter's fontsdir
+extraResources:
+  - from: resources/fonts
+    to: fonts
 win:
   target:
     - nsis
