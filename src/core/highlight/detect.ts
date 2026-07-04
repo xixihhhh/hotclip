@@ -4,7 +4,7 @@
  */
 import type { Transcript } from "../transcribe/types";
 import type { HighlightCandidate, LlmConfig } from "../../shared/api-types";
-import { HIGHLIGHT_SYSTEM_PROMPT, buildHighlightPrompt, extractJson } from "./prompt";
+import { highlightSystemPrompt, buildHighlightPrompt, extractJson } from "./prompt";
 import { resolveSelection, type RawSelection } from "./match";
 
 const MIN_CLIP_SEC = 5;
@@ -44,20 +44,20 @@ export async function chatComplete(llm: LlmConfig, system: string, user: string,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(`无法连接 LLM 服务(${llm.baseUrl}): ${msg}`);
+    throw new Error(`无法连接 LLM 服务 / cannot reach LLM endpoint (${llm.baseUrl}): ${msg}`);
   }
   const text = await res.text();
   if (!res.ok) {
-    throw new Error(`LLM 请求失败(HTTP ${res.status}): ${text.slice(0, 300)}`);
+    throw new Error(`LLM 请求失败 / LLM request failed (HTTP ${res.status}): ${text.slice(0, 300)}`);
   }
   let data: { choices?: Array<{ message?: { content?: string } }> };
   try {
     data = JSON.parse(text);
   } catch {
-    throw new Error(`LLM 返回非 JSON 响应: ${text.slice(0, 200)}`);
+    throw new Error(`LLM 返回非 JSON 响应 / non-JSON response: ${text.slice(0, 200)}`);
   }
   const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error("LLM 未返回内容");
+  if (!content) throw new Error("LLM 未返回内容 / empty LLM response");
   return content;
 }
 
@@ -67,10 +67,10 @@ export function parseSelections(content: string): RawSelection[] {
   try {
     parsed = JSON.parse(extractJson(content));
   } catch {
-    throw new Error(`LLM 返回的内容不是合法 JSON: ${content.slice(0, 200)}`);
+    throw new Error(`LLM 返回的内容不是合法 JSON / invalid JSON: ${content.slice(0, 200)}`);
   }
   const clips = (parsed as { clips?: unknown[] })?.clips;
-  if (!Array.isArray(clips)) throw new Error("LLM 输出缺少 clips 数组");
+  if (!Array.isArray(clips)) throw new Error("LLM 输出缺少 clips 数组 / missing clips array");
   const out: RawSelection[] = [];
   for (const c of clips) {
     if (typeof c !== "object" || c === null) continue;
@@ -111,7 +111,7 @@ export async function detectHighlights(
   signal?: AbortSignal
 ): Promise<HighlightCandidate[]> {
   if (transcript.segments.length === 0) return [];
-  const content = await chatComplete(llm, HIGHLIGHT_SYSTEM_PROMPT, buildHighlightPrompt(transcript), signal);
+  const content = await chatComplete(llm, highlightSystemPrompt(transcript), buildHighlightPrompt(transcript), signal);
   const selections = parseSelections(content);
 
   const candidates: HighlightCandidate[] = [];

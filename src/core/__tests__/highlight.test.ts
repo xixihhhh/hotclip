@@ -1,7 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { normalizeText, buildTokenIndex, matchQuote, resolveSelection } from "../highlight/match";
 import { parseSelections, dropOverlaps } from "../highlight/detect";
-import { buildHighlightPrompt, renderTranscriptLines, extractJson } from "../highlight/prompt";
+import {
+  buildHighlightPrompt,
+  renderTranscriptLines,
+  extractJson,
+  isChineseTranscript,
+  highlightSystemPrompt,
+} from "../highlight/prompt";
 import type { Transcript, TranscriptWord } from "../transcribe/types";
 import type { HighlightCandidate } from "../../shared/api-types";
 
@@ -142,5 +148,47 @@ describe("prompt builders", () => {
   it("extractJson handles fences and prose-wrapped objects", () => {
     expect(extractJson('```json\n{"a":1}\n```')).toBe('{"a":1}');
     expect(extractJson('好的,结果如下 {"a":1} 请查收')).toBe('{"a":1}');
+  });
+});
+
+describe("prompt language routing（中英分流）", () => {
+  const zhTx = makeTranscript(["今天聊聊怎么把长视频切成爆款。", "关键就三个字。"]);
+  const enTx: Transcript = {
+    language: "en",
+    engine: "test",
+    durationSec: 10,
+    segments: [
+      {
+        id: 1,
+        startSec: 0,
+        endSec: 4,
+        text: "Today we talk about turning long videos into viral shorts.",
+        words: [{ text: "Today", startSec: 0, endSec: 0.4 }],
+      },
+    ],
+  };
+
+  it("zh transcript → Chinese system + user prompt", () => {
+    expect(isChineseTranscript(zhTx)).toBe(true);
+    expect(highlightSystemPrompt(zhTx)).toContain("切片操盘手");
+    expect(buildHighlightPrompt(zhTx)).toContain("逐句稿");
+  });
+
+  it("en transcript → English system + user prompt, no Chinese leakage", () => {
+    expect(isChineseTranscript(enTx)).toBe(false);
+    const sys = highlightSystemPrompt(enTx);
+    const user = buildHighlightPrompt(enTx);
+    expect(sys).toContain("clipping strategist");
+    expect(user).toContain("Transcript");
+    expect(/[一-鿿]/.test(sys)).toBe(false);
+    // user prompt carries only the transcript text itself, which here is English
+    expect(/[一-鿿]/.test(user)).toBe(false);
+  });
+
+  it("auto language falls back to CJK-dominance detection", () => {
+    const autoTx: Transcript = { ...zhTx, language: "auto" };
+    expect(isChineseTranscript(autoTx)).toBe(true);
+    const autoEn: Transcript = { ...enTx, language: "auto" };
+    expect(isChineseTranscript(autoEn)).toBe(false);
   });
 });
