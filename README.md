@@ -14,7 +14,7 @@
 
 ## 🚧 项目状态 / Status
 
-**核心管线已闭环(WIP)**——「导入 → AI 找爆点 → 竖屏+逐字字幕成片」三步全流程已经能跑,安装包发布前先 Watch/Star:
+**v0.1.0 已发布**——「导入 → AI 找爆点 → 竖屏+逐字字幕成片」三步全流程可下载可用,[去下载](https://github.com/xixihhhh/hotclip/releases/latest):
 
 | 里程碑 Milestone | 状态 Status |
 |---|---|
@@ -23,7 +23,7 @@
 | M3 AI 找爆点(LLM 只引原文不猜时间戳,逐字反向对齐 → 切点精确到词) | ✅ 已完成 |
 | M4 出片(帧精确切割 + 竖屏 9:16 重构 + 卡拉OK逐字字幕烧录) | ✅ 已完成 |
 | 人脸追踪智能取景(现为居中裁剪) | 🔨 进行中 |
-| M5 安装包发布(Windows exe + 绿色版 zip + macOS dmg) | ⏳ 排队 |
+| M5 安装包发布(Windows exe + 绿色版 zip + macOS dmg) | ✅ [v0.1.0 已发布](https://github.com/xixihhhh/hotclip/releases/latest) |
 | 平台规格预设 · 剪映草稿导出 · Web 平台版 · 更多界面语言 | 🗺️ 规划中 |
 
 ## 三步出片 / How It Works
@@ -65,9 +65,19 @@ Every commercial clipper meters your source minutes, forces cloud uploads, or bo
 - **画面信号融合**:场景切换/响度/人脸/音频事件参与爆点判断(纯文本之外的证据)
 - **合规内建**:AIGC 标识(显式+隐式,对齐 2025-09 生效的国家标识办法);仅面向**自有内容与已授权切片**,不做搬运工具
 
-## 快速开始 / Quick Start
+## 下载安装 / Download
 
-> 安装包随 M5 里程碑发布(Windows exe + 绿色版 zip + macOS dmg,国内提供网盘镜像)。开发者现在就可以跑:
+**[⬇️ 去 Releases 页下载最新版](https://github.com/xixihhhh/hotclip/releases/latest)**
+
+| 平台 Platform | 文件 File |
+|---|---|
+| Windows 安装版 | `HotClip-x.y.z-win-x64.exe` |
+| Windows 绿色版(免安装,解压即用)| `HotClip-x.y.z-win-x64.zip` |
+| macOS(Apple 芯片)| `HotClip-x.y.z-mac-arm64.dmg` |
+
+> ⚠️ 当前版本未做代码签名:Windows SmartScreen 提示时点「更多信息 → 仍要运行」;macOS 首次打开用右键 → 打开(或到「系统设置 → 隐私与安全性」允许)。Unsigned builds: on Windows choose "More info → Run anyway"; on macOS right-click → Open on first launch.
+
+## 快速开始 / Quick Start(开发者 dev)
 
 ```bash
 git clone https://github.com/xixihhhh/hotclip.git
