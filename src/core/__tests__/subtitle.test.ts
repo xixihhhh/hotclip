@@ -65,6 +65,39 @@ describe("groupWordsIntoLines", () => {
     expect(lines).toHaveLength(2);
     expect(lines[1][0].text).toBe("c");
   });
+
+  it("breaks after a clause-boundary comma once the line is substantial", () => {
+    // cap 12 → soft-break allowed at ≥6 units; "友，" ends a clause at 6 units
+    const words = Array.from("很多朋友").map((ch, i) => w(ch, i, i + 1));
+    words[3].text = "友，"; // punctuation attaches to the preceding word
+    const tail = Array.from("这个东西").map((ch, i) => w(ch, i + 4, i + 5));
+    const lines = groupWordsIntoLines([...words, ...tail], 12);
+    expect(lines[0].map((x) => x.text).join("")).toBe("很多朋友，");
+    expect(lines[1][0].text).toBe("这");
+  });
+
+  it("keeps a short clause on one line instead of fragmenting on an early comma", () => {
+    // "好，" reaches only 4 units < half of cap 12 → no soft break yet
+    const words = [w("你", 0, 1), { ...w("好，", 1, 2) }, w("世", 2, 3), w("界", 3, 4)];
+    const lines = groupWordsIntoLines(words, 12);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].map((x) => x.text).join("")).toBe("你好，世界");
+  });
+
+  it("backs a width overflow up to the nearest particle so phrases stay intact", () => {
+    // cap 10 → "十几块的" (8 units) fits; adding "到" overflows. Break after 的,
+    // carry "到" to the next line so "到底" is not split as "…到 / 底…".
+    const words = Array.from("十几块的到底").map((ch, i) => w(ch, i, i + 1));
+    const lines = groupWordsIntoLines(words, 10);
+    expect(lines[0].map((x) => x.text).join("")).toBe("十几块的");
+    expect(lines[1].map((x) => x.text).join("")).toBe("到底");
+  });
+
+  it("falls back to a width cut when the overflowing run has no particle", () => {
+    const words = Array.from("测一测").map((ch, i) => w(ch, i, i + 1));
+    const lines = groupWordsIntoLines(words, 4); // cap 4 → 2 chars/line, no particle
+    expect(lines.map((l) => l.map((x) => x.text).join(""))).toEqual(["测一", "测"]);
+  });
 });
 
 describe("toAssTime", () => {

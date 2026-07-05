@@ -81,11 +81,47 @@ export function sliceWords(transcript: Transcript, startSec: number, endSec: num
 }
 
 const HARD_PUNCT_END = /[。!?!?…]$/;
+/**
+ * Clause-boundary punctuation (comma / ideographic comma / semicolon / colon).
+ * The ASR punctuation model places these at real syntactic pauses, so breaking
+ * here is the keyless equivalent of an LLM-inserted semantic [br] — no extra
+ * model call, no cloud key, works on every clip. Only fires once the line is
+ * substantial (SOFT_BREAK_MIN_FRAC of the width cap) so short clauses still
+ * merge into one readable line instead of fragmenting on every comma.
+ */
+const SOFT_PUNCT_END = /[，,、；;：]$/;
+const SOFT_BREAK_MIN_FRAC = 0.5;
+/**
+ * Structural / aspectual / modal particles a Chinese line may safely end on.
+ * When a comma-free clause is longer than the width cap it would otherwise
+ * split mid-phrase; backing the break up to the nearest such particle keeps
+ * phrases intact ("…十几块的 / 到底…" not "…十几块的到 / 底…"). Keyless stand-in
+ * for an LLM semantic break on long clauses; falls back to a width cut when the
+ * run has no particle either.
+ */
+const BREAK_AFTER_PARTICLE = /(的|了|着|过|地|得|吧|呢|吗|啊|嘛|呀)$/;
+const LOOKBACK_MIN_FRAC = 0.35;
+
+/**
+ * On a width-overflow break, find the latest word inside `line` that ends on a
+ * particle boundary and still leaves a substantial head (≥ LOOKBACK_MIN_FRAC of
+ * the cap). Returns the break-after index, or -1 when no good boundary exists.
+ */
+function particleBreakIndex(line: TranscriptWord[], maxLineUnits: number): number {
+  const min = maxLineUnits * LOOKBACK_MIN_FRAC;
+  let prefix = 0;
+  const prefixUnits = line.map((wd) => (prefix += widthUnits(wd.text)));
+  for (let k = line.length - 2; k >= 0; k--) {
+    if (prefixUnits[k] >= min && BREAK_AFTER_PARTICLE.test(line[k].text)) return k;
+  }
+  return -1;
+}
 
 /**
  * Break the word stream into caption lines: width cap, silence-gap breaks,
- * sentence-final punctuation breaks, and forced breaks (e.g. jump-cut splice
- * points, where the silence that used to separate sentences no longer exists).
+ * sentence-final punctuation breaks, clause-boundary (soft-punctuation) breaks
+ * once a line is substantial, and forced breaks (e.g. jump-cut splice points,
+ * where the silence that used to separate sentences no longer exists).
  */
 export function groupWordsIntoLines(
   words: TranscriptWord[],
@@ -93,6 +129,7 @@ export function groupWordsIntoLines(
   forcedBreaks: number[] = []
 ): TranscriptWord[][] {
   const GAP_BREAK_SEC = 0.8;
+  const softBreakMin = maxLineUnits * SOFT_BREAK_MIN_FRAC;
   const lines: TranscriptWord[][] = [];
   let line: TranscriptWord[] = [];
   let units = 0;
@@ -111,10 +148,29 @@ export function groupWordsIntoLines(
     const wUnits = widthUnits(w.text);
     const prev = line[line.length - 1];
     const gapBreak = prev !== undefined && w.startSec - prev.endSec > GAP_BREAK_SEC;
-    if (line.length > 0 && (forced || units + wUnits > maxLineUnits || gapBreak)) flush();
+    const overflow = units + wUnits > maxLineUnits;
+    if (line.length > 0 && (forced || overflow || gapBreak)) {
+      // Width-only overflow backs the break up to the nearest particle boundary
+      // so a long comma-free clause doesn't split mid-phrase; the trailing words
+      // carry onto the next line with `w`. Forced (jump-cut) and silence-gap
+      // breaks are real boundaries — honor them exactly, no look-back.
+      let carry: TranscriptWord[] = [];
+      if (overflow && !forced && !gapBreak) {
+        const k = particleBreakIndex(line, maxLineUnits);
+        if (k >= 0 && k < line.length - 1) carry = line.splice(k + 1);
+      }
+      flush();
+      if (carry.length > 0) {
+        line = carry;
+        units = carry.reduce((s, c) => s + widthUnits(c.text), 0);
+      }
+    }
     line.push(w);
     units += wUnits;
+    // Hard sentence end always flushes; a clause boundary flushes only once the
+    // line already carries enough to stand on its own (avoids one-word lines).
     if (HARD_PUNCT_END.test(w.text)) flush();
+    else if (SOFT_PUNCT_END.test(w.text) && units >= softBreakMin) flush();
   }
   flush();
   return lines;
