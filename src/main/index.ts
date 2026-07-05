@@ -98,12 +98,33 @@ ipcMain.handle("hotclip:list-asr-engines", async () => {
 
 let transcribing = false;
 
+// Tier-0 signal collection is slow on long sources (full audio + downscaled
+// video scan), so it kicks off IN PARALLEL with transcription — by the time
+// the user reaches highlight detection the evidence is already there.
+const signalsCache = new Map<string, Promise<import("@core/signals").MediaSignals | undefined>>();
+
+function warmSignals(filePath: string): Promise<import("@core/signals").MediaSignals | undefined> {
+  let p = signalsCache.get(filePath);
+  if (!p) {
+    p = collectSignals(filePath).catch(() => undefined);
+    signalsCache.set(filePath, p);
+    // bound the cache — sources are large strings but promises are cheap;
+    // keep the last few files only
+    if (signalsCache.size > 4) {
+      const first = signalsCache.keys().next().value;
+      if (first !== undefined) signalsCache.delete(first);
+    }
+  }
+  return p;
+}
+
 ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: unknown) => {
   if (typeof filePath !== "string" || !filePath.trim()) {
     throw new Error("transcribe requires a file path");
   }
   if (transcribing) throw new Error("another transcription is already running");
   transcribing = true;
+  void warmSignals(filePath); // runs alongside transcription
   try {
     const key = (typeof engineId === "string" && engineId in ASR_ENGINES ? engineId : "sensevoice") as
       keyof typeof ASR_ENGINES;
@@ -132,8 +153,9 @@ ipcMain.handle("hotclip:detect-highlights", async (_event, transcript: unknown, 
   // pathological source can never stall detection; failures degrade to none.
   let signals;
   if (typeof filePath === "string" && filePath.trim()) {
+    // usually already resolved (warmed during transcription); cap the cold path
     signals = await Promise.race([
-      collectSignals(filePath),
+      warmSignals(filePath),
       new Promise<undefined>((r) => setTimeout(() => r(undefined), 120_000)),
     ]).catch(() => undefined);
   }

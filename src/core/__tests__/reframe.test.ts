@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { OneEuro, fillGaps, planCropTrack, renderSendcmd, type FaceSample } from "../reframe/track";
 import { mapToOutputTime } from "../reframe";
-import { decodeYunet, YUNET_INPUT } from "../reframe/yunet";
+import { decodeYunet, pickMainFace, YUNET_INPUT, type FaceBox } from "../reframe/yunet";
 
 function samplesOf(cxs: Array<number | null>, fps = 3): FaceSample[] {
   return cxs.map((cx, i) => ({ t: i / fps, cx }));
@@ -118,5 +118,26 @@ describe("decodeYunet", () => {
     expect(boxes[0].score).toBeCloseTo(0.9, 5);
     expect(boxes[0].w).toBeCloseTo(128, 3);
     expect(boxes[0].x).toBeCloseTo((8 + 0.5) * 32 - 64, 3);
+  });
+});
+
+describe("pickMainFace continuity", () => {
+  const box = (x: number, size: number): FaceBox => ({ x, y: 100, w: size, h: size, score: 0.9 });
+
+  it("sticks with the tracked face even when a bigger one appears", () => {
+    const prev = box(100, 100);
+    const picked = pickMainFace([box(105, 100), box(400, 130)], prev);
+    expect(picked!.x).toBe(105); // continuity beats area
+  });
+
+  it("switches to the biggest face when the track is lost", () => {
+    const prev = box(100, 100);
+    const picked = pickMainFace([box(400, 130), box(600, 90)], prev);
+    expect(picked!.x).toBe(400);
+  });
+
+  it("no previous → biggest face; empty → null", () => {
+    expect(pickMainFace([box(50, 80), box(300, 120)], null)!.x).toBe(300);
+    expect(pickMainFace([], null)).toBeNull();
   });
 });

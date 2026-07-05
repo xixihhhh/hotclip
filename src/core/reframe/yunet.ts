@@ -34,7 +34,7 @@ function loadOrt(): any {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-function iou(a: FaceBox, b: FaceBox): number {
+export function iou(a: FaceBox, b: FaceBox): number {
   const x1 = Math.max(a.x, b.x);
   const y1 = Math.max(a.y, b.y);
   const x2 = Math.min(a.x + a.w, b.x + b.w);
@@ -112,4 +112,19 @@ export class YunetDetector {
     const outputs = await this.session.run({ [this.session.inputNames[0]]: tensor });
     return decodeYunet(outputs);
   }
+}
+
+/**
+ * Main-face selection with track continuity: the face overlapping last
+ * frame's pick wins even when a bigger face appears elsewhere — prevents the
+ * crop from ping-ponging between people in two-person shots.
+ */
+export function pickMainFace(faces: FaceBox[], prev: FaceBox | null): FaceBox | null {
+  if (faces.length === 0) return null;
+  const byArea = [...faces].sort((a, b) => b.w * b.h - a.w * a.h);
+  if (prev) {
+    const cont = byArea.find((f) => iou(f, prev) > 0.3);
+    if (cont) return cont;
+  }
+  return byArea[0];
 }

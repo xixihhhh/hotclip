@@ -10,7 +10,7 @@ import { resolveFfmpegPath } from "../binaries";
 import { probeMedia } from "../probe";
 import { ensureModel, YUNET_MODEL } from "../models";
 import { parseShowinfoTimes } from "../signals";
-import { YunetDetector, YUNET_INPUT } from "./yunet";
+import { YunetDetector, YUNET_INPUT, pickMainFace, type FaceBox } from "./yunet";
 import { planCropTrack, renderSendcmd, renderCropXExpr, type FaceSample, type CropKeyframe } from "./track";
 
 const execFileAsync = promisify(execFile);
@@ -78,9 +78,11 @@ export async function generateCropPlan(
   );
   const frameBytes = YUNET_INPUT * YUNET_INPUT * 3;
   const samples: FaceSample[] = [];
+  let prevMain: FaceBox | null = null;
   for (let off = 0, idx = 0; off + frameBytes <= stdout.length; off += frameBytes, idx++) {
     const faces = await detector.detect(new Uint8Array(stdout.subarray(off, off + frameBytes)));
-    const main = faces.sort((a, b) => b.w * b.h - a.w * a.h)[0];
+    const main = pickMainFace(faces, prevMain);
+    prevMain = main;
     samples.push({
       t: idx / SAMPLE_FPS,
       cx: main ? Math.min(1, Math.max(0, (main.x + main.w / 2 - padX) / scaledW)) : null,
