@@ -89,6 +89,9 @@ export function parseSelections(content: string): RawSelection[] {
       endSegmentId: Number.isFinite(endSegmentId) ? endSegmentId : -1,
       quoteStart,
       quoteEnd,
+      keywords: Array.isArray(r.keywords)
+        ? r.keywords.map((k) => String(k).trim()).filter(Boolean).slice(0, 8)
+        : [],
     });
   }
   return out;
@@ -130,6 +133,9 @@ export async function detectHighlights(
       score: sel.score,
       reason: sel.reason,
       boundary: resolved.boundary,
+      // keep only keywords the clip actually contains — hallucinated ones
+      // would silently no-op in caption highlighting anyway
+      keywords: sel.keywords.filter((k) => resolved.text.toLowerCase().includes(k.toLowerCase())),
     });
   }
   return dropOverlaps(candidates);

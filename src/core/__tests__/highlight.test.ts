@@ -70,7 +70,7 @@ describe("resolveSelection", () => {
 
   it("resolves via quotes scoped to declared segments", () => {
     const r = resolveSelection(tx, {
-      title: "t", hook: "h", score: 90, reason: "r",
+      title: "t", hook: "h", score: 90, reason: "r", keywords: [],
       startSegmentId: 2, endSegmentId: 3,
       quoteStart: "但是接下来", quoteEnd: "那个观点。",
     });
@@ -83,7 +83,7 @@ describe("resolveSelection", () => {
 
   it("falls back to segment boundaries when quotes are hallucinated", () => {
     const r = resolveSelection(tx, {
-      title: "t", hook: "h", score: 50, reason: "r",
+      title: "t", hook: "h", score: 50, reason: "r", keywords: [],
       startSegmentId: 2, endSegmentId: 3,
       quoteStart: "LLM自己编的话", quoteEnd: "完全对不上",
     });
@@ -94,7 +94,7 @@ describe("resolveSelection", () => {
 
   it("returns null when nothing is locatable", () => {
     const r = resolveSelection(tx, {
-      title: "t", hook: "h", score: 50, reason: "r",
+      title: "t", hook: "h", score: 50, reason: "r", keywords: [],
       startSegmentId: 99, endSegmentId: 98,
       quoteStart: "不存在", quoteEnd: "也不存在",
     });
@@ -118,7 +118,7 @@ describe("parseSelections", () => {
 
 describe("dropOverlaps", () => {
   const c = (id: number, s: number, e: number, score: number): HighlightCandidate => ({
-    id, startSec: s, endSec: e, text: "", title: "", hook: "", score, reason: "", boundary: "exact",
+    id, startSec: s, endSec: e, text: "", title: "", hook: "", score, reason: "", boundary: "exact", keywords: [],
   });
 
   it("keeps higher-scored clip among overlaps, renumbers by time order", () => {

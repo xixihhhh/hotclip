@@ -94,15 +94,20 @@ export interface HighlightCandidate {
   reason: string;
   /** How boundaries were located (match quality signal for the UI). */
   boundary: "exact" | "anchored" | "segment";
+  /** Verbatim in-clip keywords (caption emphasis); may be empty. */
+  keywords: string[];
 }
+
+/** Burned-in caption style choices (none = no captions). */
+export type CaptionStyleChoice = "none" | "karaoke" | "keyword" | "pop";
 
 /** Render options for the export step (UI toggles on the highlight list). */
 export interface ExportOptions {
   /** Center-crop reframe to 9:16 vertical (1080×1920) — short-video ready. */
   vertical: boolean;
-  /** Burn karaoke word-by-word captions into the picture. */
-  karaoke: boolean;
-  /** Needed when karaoke is on: source of word-level timestamps. */
+  /** Caption style to burn into the picture. */
+  captionStyle: CaptionStyleChoice;
+  /** Needed when captions are on: source of word-level timestamps. */
   transcript?: Transcript;
 }
 

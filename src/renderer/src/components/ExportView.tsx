@@ -30,7 +30,7 @@ export function ExportView({
 }: {
   filePath: string;
   clips: HighlightCandidate[];
-  options: Pick<ExportOptions, "vertical" | "karaoke">;
+  options: Pick<ExportOptions, "vertical" | "captionStyle">;
   transcript: Transcript;
   onBack: () => void;
   onRestart: () => void;
@@ -47,8 +47,11 @@ export function ExportView({
     const api = getApi();
     const unsubscribe = api.onExportProgress(setProgress);
     api
-      // the transcript ships along only when karaoke needs word timestamps
-      .exportClips(filePath, clips, { ...options, transcript: options.karaoke ? transcript : undefined })
+      // the transcript ships along only when captions need word timestamps
+      .exportClips(filePath, clips, {
+        ...options,
+        transcript: options.captionStyle !== "none" ? transcript : undefined,
+      })
       .then(setResults)
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(unsubscribe);

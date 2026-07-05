@@ -133,6 +133,7 @@ const browserMock: HotClipApi = {
       score,
       reason,
       boundary: id === 2 ? "anchored" : "exact",
+      keywords: id === 2 ? ["十几块", "区别"] : ["吸水速度", "半杯水"],
     });
     return [
       pick(3, 4, 1, "半杯水都不渗?实测给你看", "你看这个吸水速度,直接倒半杯水都不带渗的", 92, "强演示钩子+价格反差,完播率高"),

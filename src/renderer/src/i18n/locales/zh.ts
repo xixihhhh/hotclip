@@ -88,8 +88,11 @@ export const zh = {
     exportSelected: "出片",
     optVertical: "竖屏 9:16",
     optVerticalHint: "居中裁剪成 1080×1920,适配抖音 / 视频号 / TikTok",
-    optKaraoke: "逐字字幕",
-    optKaraokeHint: "卡拉OK式逐字点亮字幕,直接烧录进画面",
+    captionStyleHint: "点击切换字幕样式,直接烧录进画面",
+    captionNone: "无字幕",
+    captionKaraoke: "字幕:逐字点亮",
+    captionKeyword: "字幕:智能划重点",
+    captionPop: "字幕:大字弹跳",
     // LLM 设置
     llmTitle: "连接 AI 模型",
     llmDesc: "找爆点需要一个大模型。推荐 Atlas Cloud——一个 Key 用齐中外主流模型;也可用本地 Ollama 或任意 OpenAI 兼容接口。",

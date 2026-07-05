@@ -93,8 +93,11 @@ export const en = {
     exportSelected: "Export clips",
     optVertical: "Vertical 9:16",
     optVerticalHint: "Center-crop to 1080×1920 — ready for TikTok / Shorts / Reels",
-    optKaraoke: "Karaoke captions",
-    optKaraokeHint: "Word-by-word highlighted captions, burned into the video",
+    captionStyleHint: "Click to cycle caption styles (burned into the video)",
+    captionNone: "No captions",
+    captionKaraoke: "Captions: karaoke",
+    captionKeyword: "Captions: keyword highlight",
+    captionPop: "Captions: word pop",
   },
   exportPage: {
     title: "Exporting clips",

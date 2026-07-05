@@ -7,7 +7,7 @@ import { mkdir, stat, writeFile, rm, mkdtemp } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { cutClip } from "./cut";
-import { buildKaraokeAss, VERTICAL_LAYOUT, HORIZONTAL_LAYOUT } from "./subtitle";
+import { buildCaptionAss, VERTICAL_LAYOUT, HORIZONTAL_LAYOUT, type CaptionStyle } from "./subtitle";
 import type { TranscriptWord } from "../shared/api-types";
 
 export interface ExportClipSpec {
@@ -15,15 +15,17 @@ export interface ExportClipSpec {
   title: string;
   startSec: number;
   endSec: number;
-  /** Words the clip covers (absolute source time) — needed for karaoke burn-in. */
+  /** Words the clip covers (absolute source time) — needed for caption burn-in. */
   words?: TranscriptWord[];
+  /** Verbatim keywords to emphasize (keyword caption style). */
+  keywords?: string[];
 }
 
 export interface ExportRenderOptions {
   /** Center-crop reframe to 9:16 (1080×1920). */
   vertical?: boolean;
-  /** Burn karaoke word-by-word captions (clips must carry `words`). */
-  karaoke?: boolean;
+  /** Caption style to burn in (clips must carry `words`); omit for none. */
+  captionStyle?: CaptionStyle;
   /** Bundled-font directory handed to libass so CJK renders identically everywhere. */
   fontsDir?: string;
 }
@@ -70,7 +72,7 @@ export async function exportClips(
 ): Promise<ExportedClip[]> {
   await mkdir(outDir, { recursive: true });
   // ASS files live in a throwaway temp dir for the duration of the run.
-  const assDir = options.karaoke ? await mkdtemp(join(tmpdir(), "hotclip-ass-")) : null;
+  const assDir = options.captionStyle ? await mkdtemp(join(tmpdir(), "hotclip-ass-")) : null;
   const layout = options.vertical ? VERTICAL_LAYOUT : HORIZONTAL_LAYOUT;
 
   try {
@@ -81,9 +83,12 @@ export async function exportClips(
       onProgress?.({ current: i + 1, total: clips.length, clipId: clip.id, stage: "cutting" });
 
       let subtitlePath: string | undefined;
-      if (assDir && clip.words && clip.words.length > 0) {
+      if (assDir && options.captionStyle && clip.words && clip.words.length > 0) {
         subtitlePath = join(assDir, `clip-${clip.id}.ass`);
-        await writeFile(subtitlePath, buildKaraokeAss(clip.words, clip.startSec, layout), "utf8");
+        const ass = buildCaptionAss(clip.words, clip.startSec, layout, options.captionStyle, {
+          keywords: clip.keywords,
+        });
+        await writeFile(subtitlePath, ass, "utf8");
       }
 
       const outPath = join(outDir, clipFilename(i + 1, clip.title));

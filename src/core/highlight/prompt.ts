@@ -80,7 +80,8 @@ const OUTPUT_SHAPE = `{
       "startSegmentId": 3,
       "endSegmentId": 6,
       "quoteStart": "...",
-      "quoteEnd": "..."
+      "quoteEnd": "...",
+      "keywords": ["...", "..."]
     }
   ]
 }`;
@@ -95,7 +96,7 @@ ${renderTranscriptLines(transcript)}
 【输出格式】严格输出 JSON,不要任何多余文字:
 ${OUTPUT_SHAPE}
 
-字段说明:title=适合发布的短标题(≤20字);hook=开头钩子句原文;score=0-100 相对排序分;reason=一句话为什么能爆;quoteStart/quoteEnd=片段首句开头/末句结尾的逐字原文。
+字段说明:title=适合发布的短标题(≤20字);hook=开头钩子句原文;score=0-100 相对排序分;reason=一句话为什么能爆;quoteStart/quoteEnd=片段首句开头/末句结尾的逐字原文;keywords=该片段里 3-5 个最有冲击力的词,必须逐字取自片段原文(用于字幕划重点)。
 要求:按 score 从高到低排;片段互不重叠。`;
   }
   return `Pick at most ${maxClips} clip candidates with the highest viral potential from the transcript below.
@@ -106,7 +107,7 @@ ${renderTranscriptLines(transcript)}
 【Output format】Respond with STRICT JSON only, no extra text:
 ${OUTPUT_SHAPE}
 
-Fields: title = a post-ready short title (≤ 12 words); hook = the verbatim opening hook line; score = 0-100 relative ranking; reason = one line on why it can go viral; quoteStart/quoteEnd = verbatim opening/closing words of the clip.
+Fields: title = a post-ready short title (≤ 12 words); hook = the verbatim opening hook line; score = 0-100 relative ranking; reason = one line on why it can go viral; quoteStart/quoteEnd = verbatim opening/closing words of the clip; keywords = the 3-5 punchiest words/phrases inside the clip, copied verbatim (used to emphasize caption keywords).
 Sort by score descending; clips must not overlap.`;
 }
 

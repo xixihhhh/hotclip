@@ -80,26 +80,73 @@ export function sliceWords(transcript: Transcript, startSec: number, endSec: num
   return out.sort((a, b) => a.startSec - b.startSec);
 }
 
-/** Break the word stream into caption lines: width cap + silence-gap breaks. */
+const HARD_PUNCT_END = /[。!?!?…]$/;
+
+/**
+ * Break the word stream into caption lines: width cap, silence-gap breaks,
+ * and sentence-final punctuation breaks (a new sentence starts a new line).
+ */
 export function groupWordsIntoLines(words: TranscriptWord[], maxLineUnits: number): TranscriptWord[][] {
   const GAP_BREAK_SEC = 0.8;
   const lines: TranscriptWord[][] = [];
   let line: TranscriptWord[] = [];
   let units = 0;
+  const flush = (): void => {
+    if (line.length > 0) lines.push(line);
+    line = [];
+    units = 0;
+  };
   for (const w of words) {
     const wUnits = widthUnits(w.text);
     const prev = line[line.length - 1];
     const gapBreak = prev !== undefined && w.startSec - prev.endSec > GAP_BREAK_SEC;
-    if (line.length > 0 && (units + wUnits > maxLineUnits || gapBreak)) {
-      lines.push(line);
-      line = [];
-      units = 0;
-    }
+    if (line.length > 0 && (units + wUnits > maxLineUnits || gapBreak)) flush();
     line.push(w);
     units += wUnits;
+    if (HARD_PUNCT_END.test(w.text)) flush();
   }
-  if (line.length > 0) lines.push(line);
+  flush();
   return lines;
+}
+
+/**
+ * Merge each run of words covered by a keyword into ONE word so line breaking
+ * can never split a keyword (which would silently kill its highlight).
+ */
+export function mergeKeywordWords(words: TranscriptWord[], keywords: string[]): TranscriptWord[] {
+  if (keywords.length === 0 || words.length === 0) return words;
+  const spans: Array<{ from: number; to: number }> = [];
+  let joined = "";
+  for (let i = 0; i < words.length; i++) {
+    const from = joined.length;
+    joined += words[i].text;
+    spans.push({ from, to: joined.length });
+    if (needsSpaceAfter(words[i].text, words[i + 1]?.text)) joined += " ";
+  }
+  const haystack = joined.toLowerCase();
+  const covered = new Array<boolean>(words.length).fill(false);
+  for (const kw of keywords) {
+    const needle = kw.trim().toLowerCase();
+    if (!needle) continue;
+    for (let at = haystack.indexOf(needle); at !== -1; at = haystack.indexOf(needle, at + 1)) {
+      const to = at + needle.length;
+      spans.forEach((s, i) => {
+        if (s.from < to && s.to > at) covered[i] = true;
+      });
+    }
+  }
+  const out: TranscriptWord[] = [];
+  for (let i = 0; i < words.length; i++) {
+    const prev = out[out.length - 1];
+    if (covered[i] && i > 0 && covered[i - 1] && prev) {
+      const space = needsSpaceAfter(prev.text, words[i].text) ? " " : "";
+      prev.text += space + words[i].text;
+      prev.endSec = words[i].endSec;
+    } else {
+      out.push({ ...words[i] });
+    }
+  }
+  return out;
 }
 
 /** ASS timestamp: H:MM:SS.CC (centiseconds). */
@@ -142,30 +189,32 @@ function karaokeText(line: TranscriptWord[]): string {
   return parts.join("");
 }
 
-/** ASS colors are &HAABBGGRR. Sung = flame orange, unsung = white. */
-const SUNG_COLOR = "&H000D6EFF"; // #FF6E0D
-const UNSUNG_COLOR = "&H00FFFFFF";
+/** ASS colors are &HAABBGGRR. Highlight = flame orange, base = white. */
+const EMBER_COLOR = "&H000D6EFF"; // #FF6E0D
+const WHITE_COLOR = "&H00FFFFFF";
 const OUTLINE_COLOR = "&H00201510";
+/** Inline override forms (no alpha byte). */
+const EMBER_INLINE = "&H0D6EFF&";
+const WHITE_INLINE = "&HFFFFFF&";
 
 /**
- * Build a complete ASS document for one clip. Word timestamps are absolute
- * (source-video time); `clipStartSec` shifts them to clip-relative time.
+ * Caption style presets (2026 short-video canon):
+ *  - karaoke: whole line visible, words light up as spoken
+ *  - keyword: whole line visible, LLM-picked keywords tinted & slightly larger
+ *  - pop: 2-4 character chunks appear one at a time with a bounce
  */
-export function buildKaraokeAss(
-  words: TranscriptWord[],
-  clipStartSec: number,
-  layout: AssLayout,
-  fontName: string = defaultFontName()
-): string {
-  const lines = groupWordsIntoLines(words, layout.maxLineUnits);
-  const events = lines
-    .filter((line) => line.length > 0)
-    .map((line) => {
-      const start = toAssTime(line[0].startSec - clipStartSec);
-      const end = toAssTime(line[line.length - 1].endSec - clipStartSec);
-      return `Dialogue: 0,${start},${end},Karaoke,,0,0,0,,${karaokeText(line)}`;
-    });
+export type CaptionStyle = "karaoke" | "keyword" | "pop";
 
+export interface CaptionOptions {
+  fontName?: string;
+  /** Verbatim keywords to emphasize (keyword style). */
+  keywords?: string[];
+}
+
+function assHeader(style: CaptionStyle, layout: AssLayout, fontName: string): string[] {
+  // karaoke: Primary = sung color, Secondary = not-yet-sung; others: plain white
+  const primary = style === "karaoke" ? EMBER_COLOR : WHITE_COLOR;
+  const fontSize = style === "pop" ? Math.round(layout.fontSize * 1.45) : layout.fontSize;
   return [
     "[Script Info]",
     "ScriptType: v4.00+",
@@ -176,11 +225,107 @@ export function buildKaraokeAss(
     "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    `Style: Karaoke,${fontName},${layout.fontSize},${SUNG_COLOR},${UNSUNG_COLOR},${OUTLINE_COLOR},&H7F000000,-1,0,0,0,100,100,0,0,1,${layout.outline},0,2,${layout.marginH},${layout.marginH},${layout.marginV},1`,
+    `Style: Caption,${fontName},${fontSize},${primary},${WHITE_COLOR},${OUTLINE_COLOR},&H7F000000,-1,0,0,0,100,100,0,0,1,${layout.outline},0,2,${layout.marginH},${layout.marginH},${layout.marginV},1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
-    ...events,
-    "",
-  ].join("\n");
+  ];
+}
+
+function dialogue(startSec: number, endSec: number, text: string): string {
+  return `Dialogue: 0,${toAssTime(startSec)},${toAssTime(endSec)},Caption,,0,0,0,,${text}`;
+}
+
+/**
+ * Keyword style: mark which words fall inside any keyword occurrence, then
+ * wrap those runs with a color+scale override. Matching runs on the joined
+ * line text (same spacing rules as display), case-insensitive.
+ */
+export function keywordText(line: TranscriptWord[], keywords: string[]): string {
+  // joined text + each word's [start,end) position inside it
+  const spans: Array<{ from: number; to: number }> = [];
+  let joined = "";
+  for (let i = 0; i < line.length; i++) {
+    const from = joined.length;
+    joined += line[i].text;
+    spans.push({ from, to: joined.length });
+    if (needsSpaceAfter(line[i].text, line[i + 1]?.text)) joined += " ";
+  }
+  const haystack = joined.toLowerCase();
+  const covered = new Array<boolean>(line.length).fill(false);
+  for (const kw of [...new Set(keywords)].sort((a, b) => b.length - a.length)) {
+    const needle = kw.trim().toLowerCase();
+    if (!needle) continue;
+    for (let at = haystack.indexOf(needle); at !== -1; at = haystack.indexOf(needle, at + 1)) {
+      const to = at + needle.length;
+      spans.forEach((s, i) => {
+        if (s.from < to && s.to > at) covered[i] = true;
+      });
+    }
+  }
+  const parts: string[] = [];
+  for (let i = 0; i < line.length; i++) {
+    if (covered[i] && (i === 0 || !covered[i - 1])) parts.push(`{\\c${EMBER_INLINE}\\fscx108\\fscy108}`);
+    if (!covered[i] && i > 0 && covered[i - 1]) parts.push(`{\\c${WHITE_INLINE}\\fscx100\\fscy100}`);
+    parts.push(escapeAssText(line[i].text));
+    if (needsSpaceAfter(line[i].text, line[i + 1]?.text)) parts.push(" ");
+  }
+  return parts.join("");
+}
+
+/** Pop bounce: start small, overshoot, settle — three-stage \t chain. */
+const POP_INTRO = "{\\fscx60\\fscy60\\t(0,90,\\fscx135\\fscy135)\\t(90,200,\\fscx100\\fscy100)}";
+
+/** Pop chunks: 2-4 CJK chars (or 1-2 latin words) shown one at a time. */
+const POP_MAX_UNITS = 8;
+
+/**
+ * Build a complete ASS document for one clip in the given style. Word
+ * timestamps are absolute (source time); `clipStartSec` shifts them.
+ */
+export function buildCaptionAss(
+  words: TranscriptWord[],
+  clipStartSec: number,
+  layout: AssLayout,
+  style: CaptionStyle = "karaoke",
+  options: CaptionOptions = {}
+): string {
+  const fontName = options.fontName ?? defaultFontName();
+  const events: string[] = [];
+
+  if (style === "pop") {
+    const units = groupWordsIntoLines(words, POP_MAX_UNITS);
+    for (let i = 0; i < units.length; i++) {
+      const unit = units[i];
+      const start = unit[0].startSec - clipStartSec;
+      const next = units[i + 1]?.[0].startSec;
+      const end = (next !== undefined ? next : unit[unit.length - 1].endSec + 0.2) - clipStartSec;
+      const text = unit
+        .map((w, j) => escapeAssText(w.text) + (needsSpaceAfter(w.text, unit[j + 1]?.text) ? " " : ""))
+        .join("");
+      events.push(dialogue(start, end, POP_INTRO + text));
+    }
+  } else {
+    // keyword style: fuse keyword runs first so line breaks can't split them
+    const lineWords = style === "keyword" ? mergeKeywordWords(words, options.keywords ?? []) : words;
+    const lines = groupWordsIntoLines(lineWords, layout.maxLineUnits).filter((l) => l.length > 0);
+    for (const line of lines) {
+      const start = line[0].startSec - clipStartSec;
+      const end = line[line.length - 1].endSec - clipStartSec;
+      const text = style === "karaoke" ? karaokeText(line) : keywordText(line, options.keywords ?? []);
+      events.push(dialogue(start, end, text));
+    }
+  }
+
+  return [...assHeader(style, layout, fontName), ...events, ""].join("\n");
+}
+
+/** Back-compat wrapper (karaoke style). */
+export function buildKaraokeAss(
+  words: TranscriptWord[],
+  clipStartSec: number,
+  layout: AssLayout,
+  fontName: string = defaultFontName()
+): string {
+  return buildCaptionAss(words, clipStartSec, layout, "karaoke", { fontName });
 }

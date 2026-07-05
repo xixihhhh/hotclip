@@ -127,6 +127,8 @@ export interface RawSelection {
   endSegmentId: number;
   quoteStart: string;
   quoteEnd: string;
+  /** Verbatim in-clip keywords for caption emphasis (may be empty). */
+  keywords: string[];
 }
 
 export interface ResolvedRange {

@@ -4,6 +4,9 @@ import {
   groupWordsIntoLines,
   toAssTime,
   buildKaraokeAss,
+  buildCaptionAss,
+  keywordText,
+  mergeKeywordWords,
   VERTICAL_LAYOUT,
   HORIZONTAL_LAYOUT,
 } from "../subtitle";
@@ -66,14 +69,14 @@ describe("buildKaraokeAss", () => {
     const ass = buildKaraokeAss(words, 10, VERTICAL_LAYOUT, "PingFang SC");
     expect(ass).toContain("PlayResX: 1080");
     expect(ass).toContain("PlayResY: 1920");
-    expect(ass).toContain("Style: Karaoke,PingFang SC,");
+    expect(ass).toContain("Style: Caption,PingFang SC,");
     expect(ass.match(/^Dialogue:/gm)).toHaveLength(1);
   });
 
   it("shifts timestamps to clip-relative and sweeps \\k through inter-word gaps", () => {
     const ass = buildKaraokeAss(words, 10, HORIZONTAL_LAYOUT, "Arial");
     // line spans 10..12.6 abs → 0:00:00.00..0:00:02.60 rel
-    expect(ass).toContain("Dialogue: 0,0:00:00.00,0:00:02.60,Karaoke");
+    expect(ass).toContain("Dialogue: 0,0:00:00.00,0:00:02.60,Caption");
     // "hello" sweeps until "world" STARTS (12) not until it ends itself (11.8) → 100cs
     expect(ass).toContain("{\\k100}hello ");
     // last word sweeps its own duration → 60cs, and latin↔latin got a space before it
@@ -84,5 +87,72 @@ describe("buildKaraokeAss", () => {
     const hostile = [w("你{好}", 0, 1), w("世\\界", 1, 2)];
     const ass = buildKaraokeAss(hostile, 0, HORIZONTAL_LAYOUT, "Arial");
     expect(ass).toContain("{\\k100}你好{\\k100}世界");
+  });
+});
+
+describe("keywordText", () => {
+  it("tints the words a keyword covers and restores base color after", () => {
+    const line = [w("倒", 0, 1), w("半", 1, 2), w("杯", 2, 3), w("水", 3, 4), w("了", 4, 5)];
+    const text = keywordText(line, ["半杯水"]);
+    expect(text).toBe("倒{\\c&H0D6EFF&\\fscx108\\fscy108}半杯水{\\c&HFFFFFF&\\fscx100\\fscy100}了");
+  });
+
+  it("matches latin keywords case-insensitively across spaced words", () => {
+    const line = [w("this", 0, 1), w("Amazing", 1, 2), w("deal", 2, 3)];
+    const text = keywordText(line, ["amazing deal"]);
+    expect(text).toContain("this {\\c&H0D6EFF&\\fscx108\\fscy108}Amazing deal");
+  });
+
+  it("no keywords → plain text", () => {
+    const line = [w("你", 0, 1), w("好", 1, 2)];
+    expect(keywordText(line, [])).toBe("你好");
+  });
+});
+
+describe("groupWordsIntoLines punctuation breaks", () => {
+  it("starts a new line after sentence-final punctuation", () => {
+    const words = [w("你好。", 0, 1), w("再", 1, 2), w("见", 2, 3)];
+    const lines = groupWordsIntoLines(words, 100);
+    expect(lines.map((l) => l.map((x) => x.text).join(""))).toEqual(["你好。", "再见"]);
+  });
+});
+
+describe("mergeKeywordWords", () => {
+  it("fuses a keyword run into one unbreakable word (timestamps preserved)", () => {
+    const words = ["超", "级", "好", "用", "的"].map((ch, i) => w(ch, i, i + 1));
+    const merged = mergeKeywordWords(words, ["超级好用"]);
+    expect(merged.map((x) => x.text)).toEqual(["超级好用", "的"]);
+    expect(merged[0].startSec).toBe(0);
+    expect(merged[0].endSec).toBe(4);
+  });
+
+  it("keyword can no longer be split across lines", () => {
+    const words = "一款超级好用的纸巾".split("").map((ch, i) => w(ch, i, i + 1));
+    const merged = mergeKeywordWords(words, ["超级好用"]);
+    // cap that would previously split inside 超级好用 (2 units per CJK char)
+    const lines = groupWordsIntoLines(merged, 6);
+    const joined = lines.map((l) => l.map((x) => x.text).join(""));
+    expect(joined.some((l) => l.includes("超级好用"))).toBe(true);
+  });
+});
+
+describe("buildCaptionAss styles", () => {
+  const words = "一二三四五六七八".split("").map((ch, i) => w(ch, i, i + 1));
+
+  it("keyword style: white primary, no \\k tags, keyword override present", () => {
+    const ass = buildCaptionAss(words, 0, VERTICAL_LAYOUT, "keyword", { keywords: ["三四"] });
+    expect(ass).toContain(",&H00FFFFFF,&H00FFFFFF,"); // primary=white
+    expect(ass).not.toContain("\\k");
+    expect(ass).toContain("{\\c&H0D6EFF&\\fscx108\\fscy108}三四");
+  });
+
+  it("pop style: one dialogue per 2-4 char chunk with a bounce intro, bigger font", () => {
+    const ass = buildCaptionAss(words, 0, VERTICAL_LAYOUT, "pop");
+    const dialogues = ass.match(/^Dialogue:/gm) ?? [];
+    expect(dialogues.length).toBe(2); // 8 CJK chars = 16 units → two 8-unit chunks
+    expect(ass).toContain("\\t(0,90,\\fscx135\\fscy135)");
+    expect(ass).toContain(`,${Math.round(VERTICAL_LAYOUT.fontSize * 1.45)},`);
+    // chunk 2 starts when its first word starts
+    expect(ass).toContain("Dialogue: 0,0:00:04.00,");
   });
 });
