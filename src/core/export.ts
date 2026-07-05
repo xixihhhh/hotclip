@@ -4,8 +4,13 @@
  * Optional render passes: 9:16 vertical reframe and burned-in karaoke captions.
  */
 import { mkdir, stat, writeFile, rm, mkdtemp } from "fs/promises";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import { tmpdir } from "os";
-import { join } from "path";
+import { join, basename } from "path";
+import { resolveFfmpegPath } from "./binaries";
+
+const execFileAsync = promisify(execFile);
 import { cutClip, cutJumpClip } from "./cut";
 import { computeJumpCut } from "./gaps";
 import { detectUiCrop, type UiCrop } from "./uicrop";
@@ -21,6 +26,15 @@ export interface ExportClipSpec {
   words?: TranscriptWord[];
   /** Verbatim keywords to emphasize (keyword caption style). */
   keywords?: string[];
+  /** Evidence-chain fields carried into clips.json for CMS/matrix pipelines. */
+  meta?: {
+    hook: string;
+    score: number;
+    reason: string;
+    text: string;
+    recommended: boolean;
+    reviewNote: string;
+  };
 }
 
 export interface ExportRenderOptions {
@@ -42,6 +56,8 @@ export interface ExportedClip {
   id: number;
   title: string;
   path: string;
+  /** Cover JPG next to the clip (frame from just after the hook). */
+  coverPath?: string;
   sizeBytes: number;
   durationSec: number;
 }
@@ -141,15 +157,55 @@ export async function exportClips(
         await cutClip(inputPath, outPath, range.startSec, range.endSec, cutOptions);
       }
       const s = await stat(outPath);
+
+      // Cover: a frame just after the hook lands, pulled from the FINISHED
+      // clip so captions/title plate are baked in — platform-upload ready.
+      const coverPath = outPath.replace(/\.mp4$/, ".jpg");
+      const coverAt = Math.min(0.8, Math.max(0, clipDuration - 0.1));
+      const coverOk = await execFileAsync(
+        resolveFfmpegPath(),
+        ["-hide_banner", "-v", "error", "-ss", coverAt.toFixed(2), "-i", outPath, "-frames:v", "1", "-q:v", "2", "-y", coverPath],
+        { maxBuffer: 8 * 1024 * 1024 }
+      ).then(() => true, () => false);
+
       results.push({
         id: clip.id,
         title: clip.title,
         path: outPath,
+        coverPath: coverOk ? coverPath : undefined,
         sizeBytes: s.size,
         durationSec: clipDuration,
       });
       onProgress?.({ current: i + 1, total: clips.length, clipId: clip.id, stage: "done" });
     }
+
+    // clips.json: machine-readable evidence chain for CMS / matrix pipelines.
+    const metadata = {
+      source: inputPath,
+      exportedAt: new Date().toISOString(),
+      options: {
+        vertical: Boolean(options.vertical),
+        captionStyle: options.captionStyle ?? "none",
+        jumpCut: Boolean(options.jumpCut),
+        trimUi: Boolean(options.trimUi),
+        titleCard: Boolean(options.titleCard),
+      },
+      clips: results.map((r) => {
+        const spec = clips.find((c) => c.id === r.id);
+        return {
+          file: basename(r.path),
+          cover: r.coverPath ? basename(r.coverPath) : null,
+          title: r.title,
+          durationSec: Number(r.durationSec.toFixed(3)),
+          sourceStartSec: spec?.startSec ?? null,
+          sourceEndSec: spec?.endSec ?? null,
+          keywords: spec?.keywords ?? [],
+          ...(spec?.meta ?? {}),
+        };
+      }),
+    };
+    await writeFile(join(outDir, "clips.json"), JSON.stringify(metadata, null, 2), "utf8").catch(() => {});
+
     return results;
   } finally {
     if (assDir) await rm(assDir, { recursive: true, force: true }).catch(() => {});

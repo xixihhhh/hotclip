@@ -113,6 +113,7 @@ export const en = {
     cuttingClip: "Cutting {current}/{total}: {title}",
     doneTitle: "Clips ready",
     doneDesc: "{n} clips exported, ready to post",
+    doneMeta: "Covers + clips.json metadata (title/hook/score/timecodes) are in the same folder — pipeline-ready",
     reveal: "Show in folder",
     backToHighlights: "Back to highlights",
     makeAnother: "Clip another video",

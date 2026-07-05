@@ -126,6 +126,8 @@ export interface ExportedClip {
   id: number;
   title: string;
   path: string;
+  /** Cover JPG exported next to the clip (may be absent on failure). */
+  coverPath?: string;
   sizeBytes: number;
   durationSec: number;
 }

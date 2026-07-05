@@ -118,6 +118,7 @@ export function ExportView({
             <LuCircleCheck className="mx-auto h-10 w-10 text-emerald-400" />
             <h1 className="mt-3 text-3xl font-extrabold tracking-tight">{t("doneTitle")}</h1>
             <p className="mt-2 text-[14px] text-mut">{t("doneDesc", { n: results.length })}</p>
+            <p className="mx-auto mt-1.5 max-w-md text-[12px] text-mut/80">{t("doneMeta")}</p>
           </div>
 
           <div className="card mt-7 rounded-2xl p-2">

@@ -118,6 +118,7 @@ export const zh = {
     cuttingClip: "正在切第 {current}/{total} 条:{title}",
     doneTitle: "出片完成",
     doneDesc: "已导出 {n} 条切片,可直接发布",
+    doneMeta: "同目录还有每条的封面图和 clips.json 元数据(标题/钩子/评分/时间码),可直接接矩阵工具",
     reveal: "打开所在文件夹",
     backToHighlights: "返回爆点列表",
     makeAnother: "再切一个视频",
