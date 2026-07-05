@@ -20,10 +20,13 @@ import {
   LuEraser,
   LuTriangleAlert,
   LuType,
+  LuChevronLeft,
+  LuChevronRight,
 } from "react-icons/lu";
 import { useT } from "../i18n/store";
 import { getApi, isElectron } from "../api/provider";
 import { useLlmStore, isLlmReady, LLM_PRESETS } from "../stores/llm-store";
+import { adjustClipBoundary } from "../../../shared/boundary";
 import type { Transcript, HighlightCandidate, ExportOptions, CaptionStyleChoice } from "../../../shared/api-types";
 
 /** Click-to-cycle order for the caption style chip. */
@@ -96,6 +99,18 @@ export function HighlightsView({
       setDetecting(false);
     }
   }, [transcript, config, filePath]);
+
+  const nudge = (id: number, edge: "start" | "end", dir: 1 | -1): void => {
+    setCandidates((prev) => {
+      if (!prev) return prev;
+      return prev.map((c) => {
+        if (c.id !== id) return c;
+        const adjusted = adjustClipBoundary(transcript, c, edge, dir);
+        // manual edits reset the boundary badge to sentence-aligned honesty
+        return adjusted ? { ...c, ...adjusted, boundary: "segment" as const } : c;
+      });
+    });
+  };
 
   const toggle = (id: number): void => {
     setSelected((prev) => {
@@ -301,10 +316,36 @@ export function HighlightsView({
                 )}
 
                 <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-dashed border-line pt-3.5 text-[11px] text-mut">
+                  {([
+                    ["start", -1, LuChevronLeft], ["start", 1, LuChevronRight],
+                  ] as const).map(([edge, dir, Icon]) => (
+                    <button
+                      key={`s${dir}`}
+                      type="button"
+                      title={t(dir === -1 ? "nudgeStartBack" : "nudgeStartFwd")}
+                      onClick={(e) => { e.stopPropagation(); nudge(c.id, edge, dir); }}
+                      className="chip rounded-md p-1 transition-colors hover:text-fg"
+                    >
+                      <Icon className="h-3 w-3" />
+                    </button>
+                  ))}
                   <span className="chip flex items-center gap-1 rounded-md px-2 py-0.5 font-mono">
                     <LuClock3 className="h-3 w-3" />
                     {formatClock(c.startSec)} → {formatClock(c.endSec)}
                   </span>
+                  {([
+                    ["end", -1, LuChevronLeft], ["end", 1, LuChevronRight],
+                  ] as const).map(([edge, dir, Icon]) => (
+                    <button
+                      key={`e${dir}`}
+                      type="button"
+                      title={t(dir === -1 ? "nudgeEndBack" : "nudgeEndFwd")}
+                      onClick={(e) => { e.stopPropagation(); nudge(c.id, edge, dir); }}
+                      className="chip rounded-md p-1 transition-colors hover:text-fg"
+                    >
+                      <Icon className="h-3 w-3" />
+                    </button>
+                  ))}
                   <span className="chip rounded-md px-2 py-0.5 font-semibold">
                     {t("durationChip", { n: Math.round(c.endSec - c.startSec) })}
                   </span>

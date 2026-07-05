@@ -1,0 +1,68 @@
+import { describe, it, expect } from "vitest";
+import { adjustClipBoundary } from "../../shared/boundary";
+import type { Transcript } from "../../shared/api-types";
+
+// four 4s sentences back to back: [0-4] [4-8] [8-12] [12-16]
+const tx: Transcript = {
+  language: "zh",
+  engine: "test",
+  durationSec: 16,
+  segments: [0, 1, 2, 3].map((i) => ({
+    id: i + 1,
+    startSec: i * 4,
+    endSec: i * 4 + 4,
+    text: `第${i + 1}句`,
+    words: [],
+  })),
+};
+
+describe("adjustClipBoundary", () => {
+  const clip = { startSec: 4, endSec: 12 }; // sentences 2+3
+
+  it("start -1 pulls the previous sentence in", () => {
+    const r = adjustClipBoundary(tx, clip, "start", -1)!;
+    expect(r.startSec).toBe(0);
+    expect(r.text).toBe("第1句 第2句 第3句");
+  });
+
+  it("start +1 drops the first sentence", () => {
+    const r = adjustClipBoundary(tx, clip, "start", 1)!;
+    expect(r.startSec).toBe(8);
+    expect(r.text).toBe("第3句");
+  });
+
+  it("end +1 pulls the next sentence in", () => {
+    const r = adjustClipBoundary(tx, clip, "end", 1)!;
+    expect(r.endSec).toBe(16);
+    expect(r.text).toBe("第2句 第3句 第4句");
+  });
+
+  it("end -1 drops the last sentence", () => {
+    const r = adjustClipBoundary(tx, clip, "end", -1)!;
+    expect(r.endSec).toBe(8);
+    expect(r.text).toBe("第2句");
+  });
+
+  it("refuses to move past the transcript edges", () => {
+    expect(adjustClipBoundary(tx, { startSec: 0, endSec: 8 }, "start", -1)).toBeNull();
+    expect(adjustClipBoundary(tx, { startSec: 8, endSec: 16 }, "end", 1)).toBeNull();
+  });
+
+  it("refuses to collapse a single-sentence clip", () => {
+    expect(adjustClipBoundary(tx, { startSec: 4, endSec: 8 }, "start", 1)).toBeNull();
+    expect(adjustClipBoundary(tx, { startSec: 4, endSec: 8 }, "end", -1)).toBeNull();
+  });
+
+  it("refuses durations below the minimum", () => {
+    // dropping one sentence from a 2-sentence clip leaves 4s ≥ 3s min — fine;
+    // but a sub-3s result must be rejected
+    const shortTx: Transcript = {
+      ...tx,
+      segments: [
+        { id: 1, startSec: 0, endSec: 1, text: "a", words: [] },
+        { id: 2, startSec: 1, endSec: 2, text: "b", words: [] },
+      ],
+    };
+    expect(adjustClipBoundary(shortTx, { startSec: 0, endSec: 2 }, "end", -1)).toBeNull();
+  });
+});
