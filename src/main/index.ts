@@ -9,7 +9,8 @@ import { basename, extname } from "path";
 import { probeMedia } from "@core/probe";
 import { SenseVoiceEngine } from "@core/transcribe/sensevoice";
 import { ParaformerEngine } from "@core/transcribe/paraformer";
-import { isModelInstalled, SENSEVOICE_MODEL, PARAFORMER_MODEL } from "@core/models";
+import { FireRedEngine } from "@core/transcribe/firered";
+import { isModelInstalled, SENSEVOICE_MODEL, PARAFORMER_MODEL, FIRERED_MODEL } from "@core/models";
 import { ASR_CATALOG } from "../shared/asr-catalog";
 import { detectHighlights } from "@core/highlight/detect";
 import { exportClips, sanitizeFilename } from "@core/export";
@@ -81,6 +82,7 @@ const modelsRoot = (): string => join(app.getPath("userData"), "models");
 const ASR_ENGINES = {
   sensevoice: { make: () => new SenseVoiceEngine(modelsRoot()), asset: SENSEVOICE_MODEL },
   paraformer: { make: () => new ParaformerEngine(modelsRoot()), asset: PARAFORMER_MODEL },
+  fireredasr: { make: () => new FireRedEngine(modelsRoot()), asset: FIRERED_MODEL },
 } as const;
 
 ipcMain.handle("hotclip:list-asr-engines", async () => {

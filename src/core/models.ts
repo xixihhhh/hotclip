@@ -58,8 +58,21 @@ export const PARAFORMER_MODEL: ModelAsset = {
 };
 
 /**
- * CT-Transformer punctuation (zh/en, int8, Apache-2.0) — Paraformer emits no
- * punctuation, which starves sentence segmentation; this model restores it.
+ * FireRedASR2-CTC int8 (zh + dialects + en, Apache-2.0, XiaoHongShu 2026-02)
+ * via sherpa-onnx — the top-accuracy local tier: ~half the relative error of
+ * SenseVoice-Small, per-token timestamps. Needs sherpa-onnx >= 1.12.27.
+ */
+export const FIRERED_MODEL: ModelAsset = {
+  id: "fireredasr2-ctc-2026-02-25",
+  url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-fire-red-asr2-ctc-zh_en-int8-2026-02-25.tar.bz2",
+  mirrors: ["https://ghfast.top/", "https://gh-proxy.com/"],
+  extractedDir: "sherpa-onnx-fire-red-asr2-ctc-zh_en-int8-2026-02-25",
+  approxBytes: 520 * 1024 * 1024,
+};
+
+/**
+ * CT-Transformer punctuation (zh/en, int8, Apache-2.0) — Paraformer/FireRed
+ * emit no punctuation, which starves sentence segmentation; this restores it.
  */
 export const PUNCT_MODEL: ModelAsset = {
   id: "punct-ct-transformer-2024-04-12",

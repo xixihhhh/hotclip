@@ -42,6 +42,7 @@ const STAGE_KEY: Record<TranscribeProgressEvent["stage"], string> = {
 const ENGINE_TEXT: Record<string, { name: string; desc: string }> = {
   sensevoice: { name: "engineSensevoiceName", desc: "engineSensevoiceDesc" },
   paraformer: { name: "engineParaformerName", desc: "engineParaformerDesc" },
+  fireredasr: { name: "engineFireredName", desc: "engineFireredDesc" },
 };
 
 /** Transcript.engine ids reported by backends → catalog id. */
