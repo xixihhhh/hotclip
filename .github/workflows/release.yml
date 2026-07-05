@@ -1,9 +1,10 @@
 name: Release
 
-# Tag push (v*) → build installers on native runners and attach them to the
-# GitHub Release. Native runners matter: sherpa-onnx-node / ffmpeg-static
-# install platform-specific binaries at install time, so cross-building
-# would ship the wrong (or no) native addon.
+# Tag push (v*) → build installers on native runners, then publish from ONE
+# job. (Two electron-builder jobs publishing to the same draft race and
+# overwrite each other's assets — bit us on v0.1.0 and v0.2.0.)
+# Native runners matter: sherpa-onnx-node / ffmpeg-static install
+# platform-specific binaries at install time.
 on:
   push:
     tags:
@@ -44,9 +45,35 @@ jobs:
       - name: Build bundles
         run: pnpm build
 
-      - name: Package & publish to GitHub Release
-        run: pnpm exec electron-builder ${{ matrix.args }} --publish always
+      - name: Package installers
+        run: pnpm exec electron-builder ${{ matrix.args }} --publish never
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # unsigned builds for now — signing is a paid-cert decision
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.os }}
+          path: |
+            dist/*.dmg
+            dist/*.exe
+            dist/*.zip
+            dist/*.blockmap
+            dist/latest*.yml
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+
+      - name: Create release and upload all assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --title "$GITHUB_REF_NAME" --notes "Draft — notes attached on publish." || true
+          gh release upload "$GITHUB_REF_NAME" assets/* --repo "$GITHUB_REPOSITORY" --clobber
