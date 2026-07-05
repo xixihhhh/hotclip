@@ -6,11 +6,13 @@
 import { app, shell, BrowserWindow, ipcMain, dialog } from "electron";
 import { join } from "path";
 import { basename, extname } from "path";
+import { stat } from "fs/promises";
 import { probeMedia } from "@core/probe";
 import { SenseVoiceEngine } from "@core/transcribe/sensevoice";
 import { ParaformerEngine } from "@core/transcribe/paraformer";
 import { FireRedEngine } from "@core/transcribe/firered";
 import { ElevenLabsEngine } from "@core/transcribe/elevenlabs";
+import { readTranscriptCache, writeTranscriptCache } from "@core/transcribe/cache";
 import { isModelInstalled, ensureModel, SENSEVOICE_MODEL, PARAFORMER_MODEL, FIRERED_MODEL, SEGMENTATION_MODEL, SPEAKER_EMBEDDING_MODEL } from "@core/models";
 import { runDiarization, labelTranscript } from "@core/diarize";
 import { ASR_CATALOG } from "../shared/asr-catalog";
@@ -81,6 +83,7 @@ ipcMain.handle("hotclip:probe-media", async (_event, filePath: unknown) => {
 // Engine instances are cheap; models are downloaded once into userData.
 
 const modelsRoot = (): string => join(app.getPath("userData"), "models");
+const transcriptCacheDir = (): string => join(app.getPath("userData"), "transcript-cache");
 
 /** catalog id → engine factory + its model asset (for install checks). */
 const ASR_ENGINES = {
@@ -129,20 +132,39 @@ ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: 
   transcribing = true;
   void warmSignals(filePath); // runs alongside transcription
   try {
+    const resolvedEngineId =
+      engineId === "elevenlabs"
+        ? "elevenlabs"
+        : typeof engineId === "string" && engineId in ASR_ENGINES
+          ? engineId
+          : "sensevoice";
+    // Persistent cache: same file (size+mtime) + same engine → skip the slowest
+    // step entirely. Stat may fail (unusual paths) — then we just transcribe.
+    let fileStat: { size: number; mtimeMs: number } | undefined;
+    try {
+      fileStat = await stat(filePath);
+    } catch {
+      fileStat = undefined;
+    }
+    if (fileStat) {
+      const cached = await readTranscriptCache(transcriptCacheDir(), filePath, fileStat, resolvedEngineId);
+      if (cached) return cached;
+    }
     // cloud engines take the user's key for this one call — never persisted here
     const engine =
-      engineId === "elevenlabs"
+      resolvedEngineId === "elevenlabs"
         ? new ElevenLabsEngine(typeof apiKey === "string" ? apiKey : "")
-        : ASR_ENGINES[
-            (typeof engineId === "string" && engineId in ASR_ENGINES ? engineId : "sensevoice") as
-              keyof typeof ASR_ENGINES
-          ].make();
-    return await engine.transcribe(filePath, {
+        : ASR_ENGINES[resolvedEngineId as keyof typeof ASR_ENGINES].make();
+    const result = await engine.transcribe(filePath, {
       onProgress: (p) => {
         // renderer may already be gone on quit — guard the send
         if (!event.sender.isDestroyed()) event.sender.send("hotclip:transcribe-progress", p);
       },
     });
+    if (fileStat && result?.segments?.length) {
+      void writeTranscriptCache(transcriptCacheDir(), filePath, fileStat, resolvedEngineId, result);
+    }
+    return result;
   } finally {
     transcribing = false;
   }
