@@ -10,6 +10,7 @@ import { probeMedia } from "@core/probe";
 import { SenseVoiceEngine } from "@core/transcribe/sensevoice";
 import { ParaformerEngine } from "@core/transcribe/paraformer";
 import { FireRedEngine } from "@core/transcribe/firered";
+import { ElevenLabsEngine } from "@core/transcribe/elevenlabs";
 import { isModelInstalled, SENSEVOICE_MODEL, PARAFORMER_MODEL, FIRERED_MODEL } from "@core/models";
 import { ASR_CATALOG } from "../shared/asr-catalog";
 import { detectHighlights } from "@core/highlight/detect";
@@ -118,7 +119,7 @@ function warmSignals(filePath: string): Promise<import("@core/signals").MediaSig
   return p;
 }
 
-ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: unknown) => {
+ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: unknown, apiKey: unknown) => {
   if (typeof filePath !== "string" || !filePath.trim()) {
     throw new Error("transcribe requires a file path");
   }
@@ -126,9 +127,14 @@ ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: 
   transcribing = true;
   void warmSignals(filePath); // runs alongside transcription
   try {
-    const key = (typeof engineId === "string" && engineId in ASR_ENGINES ? engineId : "sensevoice") as
-      keyof typeof ASR_ENGINES;
-    const engine = ASR_ENGINES[key].make();
+    // cloud engines take the user's key for this one call — never persisted here
+    const engine =
+      engineId === "elevenlabs"
+        ? new ElevenLabsEngine(typeof apiKey === "string" ? apiKey : "")
+        : ASR_ENGINES[
+            (typeof engineId === "string" && engineId in ASR_ENGINES ? engineId : "sensevoice") as
+              keyof typeof ASR_ENGINES
+          ].make();
     return await engine.transcribe(filePath, {
       onProgress: (p) => {
         // renderer may already be gone on quit — guard the send

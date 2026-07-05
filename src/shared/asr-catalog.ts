@@ -51,4 +51,12 @@ export const ASR_CATALOG: AsrEngineFacts[] = [
     accuracy: 3,
     uploads: false,
   },
+  {
+    id: "elevenlabs",
+    kind: "cloud",
+    langs: ["90+", "zh", "en"],
+    speed: 3,
+    accuracy: 3,
+    uploads: true,
+  },
 ];

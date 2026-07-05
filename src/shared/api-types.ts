@@ -147,8 +147,8 @@ export interface HotClipApi {
   probeMedia: (filePath: string) => Promise<MediaInfo>;
   /** List selectable transcription engines with install state. */
   listAsrEngines: () => Promise<AsrEngineInfo[]>;
-  /** Transcribe a media file with the chosen engine (default when omitted). */
-  transcribeMedia: (filePath: string, engineId?: string) => Promise<Transcript>;
+  /** Transcribe with the chosen engine; cloud engines need the user's API key. */
+  transcribeMedia: (filePath: string, engineId?: string, apiKey?: string) => Promise<Transcript>;
   /** Subscribe to transcription progress; returns an unsubscribe function. */
   onTranscribeProgress: (cb: (p: TranscribeProgressEvent) => void) => () => void;
   /** Detect highlight candidates via the configured LLM; filePath enables audiovisual-signal evidence. */

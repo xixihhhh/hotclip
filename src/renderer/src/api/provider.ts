@@ -71,6 +71,7 @@ const browserMock: HotClipApi = {
       { id: "sensevoice", kind: "local", langs: ["zh", "yue", "en", "ja", "ko"], sizeMB: 170, speed: 3, accuracy: 1, uploads: false, installed: true },
       { id: "paraformer", kind: "local", langs: ["zh", "en"], sizeMB: 230, speed: 2, accuracy: 2, uploads: false, installed: false },
       { id: "fireredasr", kind: "local", langs: ["zh", "方言", "en"], sizeMB: 520, speed: 2, accuracy: 3, uploads: false, installed: false },
+      { id: "elevenlabs", kind: "cloud", langs: ["90+", "zh", "en"], speed: 3, accuracy: 3, uploads: true, installed: false },
     ];
   },
   async probeMedia() {
