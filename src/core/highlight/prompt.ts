@@ -119,3 +119,62 @@ export function extractJson(text: string): string {
   if (brace) return brace[0].trim();
   return text.trim();
 }
+
+// ---------- Stage 2: adversarial review ----------
+
+export const REVIEW_SYSTEM_PROMPT_ZH = `你是一位极其严格的短视频内容评审。给你若干条已切好的候选片段,你从「刷到这条视频的陌生观众」视角盲评每一条:
+- 钩子:前 3 秒(第一句)能不能让人停下滑动?平淡开场直接不及格
+- 完整:是不是断章取义?开头是否像半截话、结尾有没有收住?
+- 独立:不看原视频,这条能不能看懂、有没有信息量或情绪价值?
+你要敢于否决:平庸、凑数、需要上下文才能懂的片段,一律 keep=false。这是发布前的最后一道质量门,放水的代价是账号发废片。`;
+
+export const REVIEW_SYSTEM_PROMPT_EN = `You are a ruthless short-form content reviewer. You receive pre-cut clip candidates and judge each one blind, as a stranger scrolling past:
+- Hook: does the FIRST line stop the scroll within 3 seconds? Flat openings fail.
+- Complete: is it quote-mined? Does it start mid-thought or end without landing?
+- Standalone: without the source video, is it understandable and worth watching?
+Reject freely: mediocre, filler, or context-dependent clips get keep=false. You are the final quality gate before publishing — letting weak clips through burns the channel.`;
+
+export function reviewSystemPrompt(transcript: Transcript): string {
+  return isChineseTranscript(transcript) ? REVIEW_SYSTEM_PROMPT_ZH : REVIEW_SYSTEM_PROMPT_EN;
+}
+
+const REVIEW_SHAPE = `{
+  "reviews": [
+    { "id": 1, "keep": true, "score": 85, "note": "..." }
+  ]
+}`;
+
+interface ReviewableClip {
+  id: number;
+  title: string;
+  startSec: number;
+  endSec: number;
+  text: string;
+}
+
+/** One sentence of context on each side, so the reviewer can spot quote-mining. */
+function contextAround(transcript: Transcript, startSec: number, endSec: number): { before: string; after: string } {
+  const segs = transcript.segments;
+  const firstIdx = segs.findIndex((s) => s.endSec > startSec);
+  const lastIdx = segs.findLastIndex((s) => s.startSec < endSec);
+  return {
+    before: firstIdx > 0 ? segs[firstIdx - 1].text : "",
+    after: lastIdx >= 0 && lastIdx + 1 < segs.length ? segs[lastIdx + 1].text : "",
+  };
+}
+
+export function buildReviewPrompt(transcript: Transcript, clips: ReviewableClip[]): string {
+  const zh = isChineseTranscript(transcript);
+  const blocks = clips
+    .map((c) => {
+      const ctx = contextAround(transcript, c.startSec, c.endSec);
+      const dur = Math.round(c.endSec - c.startSec);
+      return zh
+        ? `【候选 ${c.id}】《${c.title}》 时长${dur}秒\n前文:${ctx.before || "(无)"}\n片段:${c.text}\n后文:${ctx.after || "(无)"}`
+        : `【Candidate ${c.id}】"${c.title}" ${dur}s\nBefore: ${ctx.before || "(none)"}\nClip: ${c.text}\nAfter: ${ctx.after || "(none)"}`;
+    })
+    .join("\n\n");
+  return zh
+    ? `逐条盲评下面的候选片段。score=0-100 重新打分(横向比较);keep=false 表示不建议发布;note=一句话评语(不推荐时必须说清原因)。\n\n${blocks}\n\n【输出格式】严格输出 JSON,不要任何多余文字:\n${REVIEW_SHAPE}`
+    : `Blind-review each candidate below. Re-score 0-100 (relative); keep=false means do not publish; note = one-line verdict (mandatory when rejecting).\n\n${blocks}\n\n【Output format】STRICT JSON only:\n${REVIEW_SHAPE}`;
+}

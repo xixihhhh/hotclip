@@ -18,6 +18,7 @@ import {
   LuCaptions,
   LuFastForward,
   LuEraser,
+  LuTriangleAlert,
 } from "react-icons/lu";
 import { useT } from "../i18n/store";
 import { getApi, isElectron } from "../api/provider";
@@ -82,7 +83,8 @@ export function HighlightsView({
     try {
       const result = await getApi().detectHighlights(transcript, config);
       setCandidates(result);
-      setSelected(new Set(result.map((c) => c.id))); // all selected by default
+      // reviewer-approved clips are pre-selected; flagged ones start unchecked
+      setSelected(new Set(result.filter((c) => c.recommended).map((c) => c.id)));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -109,9 +111,10 @@ export function HighlightsView({
   // 托管: ship every candidate with the default render stack, hands-off.
   const autoExported = useRef(false);
   useEffect(() => {
-    if (auto && onExport && candidates && candidates.length > 0 && !autoExported.current) {
+    const publishable = candidates?.filter((c) => c.recommended) ?? [];
+    if (auto && onExport && publishable.length > 0 && !autoExported.current) {
       autoExported.current = true;
-      onExport(candidates, { vertical: true, captionStyle: "karaoke", jumpCut: true, trimUi: true });
+      onExport(publishable, { vertical: true, captionStyle: "karaoke", jumpCut: true, trimUi: true });
     }
   }, [auto, candidates, onExport]);
 
@@ -282,6 +285,13 @@ export function HighlightsView({
                   <p className="mt-2 flex items-start gap-2 text-[12.5px] leading-relaxed text-mut">
                     <LuSparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ember/70" />
                     {c.reason}
+                  </p>
+                )}
+                {!c.recommended && (
+                  <p className="mt-2 flex items-start gap-2 rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-[12px] leading-relaxed text-amber-400">
+                    <LuTriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    {t("reviewWeak")}
+                    {c.reviewNote ? `:${c.reviewNote}` : ""}
                   </p>
                 )}
 

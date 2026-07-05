@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { normalizeText, buildTokenIndex, matchQuote, resolveSelection } from "../highlight/match";
-import { parseSelections, dropOverlaps } from "../highlight/detect";
+import { parseSelections, dropOverlaps, parseReviews, applyReviews } from "../highlight/detect";
 import {
   buildHighlightPrompt,
   renderTranscriptLines,
@@ -116,9 +116,37 @@ describe("parseSelections", () => {
   });
 });
 
+describe("parseReviews / applyReviews", () => {
+  it("parses verdicts and tolerates fenced JSON", () => {
+    const out = parseReviews('```json\n{"reviews":[{"id":1,"keep":false,"score":30,"note":"平淡"},{"id":2,"keep":true,"score":88}]}\n```');
+    expect(out).toEqual([
+      { id: 1, keep: false, score: 30, note: "平淡" },
+      { id: 2, keep: true, score: 88, note: "" },
+    ]);
+  });
+
+  it("applies verdicts and fails open for unreviewed ids", () => {
+    const base = {
+      startSec: 0, endSec: 10, text: "", title: "", hook: "", reason: "",
+      boundary: "exact" as const, keywords: [], recommended: true, reviewNote: "",
+    };
+    const cands = [
+      { ...base, id: 1, score: 90 },
+      { ...base, id: 2, score: 80 },
+    ];
+    const out = applyReviews(cands, [{ id: 1, keep: false, score: 35, note: "弱钩子" }]);
+    expect(out[0]).toMatchObject({ recommended: false, score: 35, reviewNote: "弱钩子" });
+    expect(out[1]).toMatchObject({ recommended: true, score: 80 });
+  });
+
+  it("throws on malformed reviewer output", () => {
+    expect(() => parseReviews("完全不是JSON")).toThrow();
+  });
+});
+
 describe("dropOverlaps", () => {
   const c = (id: number, s: number, e: number, score: number): HighlightCandidate => ({
-    id, startSec: s, endSec: e, text: "", title: "", hook: "", score, reason: "", boundary: "exact", keywords: [],
+    id, startSec: s, endSec: e, text: "", title: "", hook: "", score, reason: "", boundary: "exact", keywords: [], recommended: true, reviewNote: "",
   });
 
   it("keeps higher-scored clip among overlaps, renumbers by time order", () => {

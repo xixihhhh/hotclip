@@ -79,6 +79,7 @@ export const en = {
     hookLabel: "Opening hook",
     reasonLabel: "Why this clip",
     durationChip: "{n}s",
+    reviewWeak: "AI review: not recommended",
     boundaryExact: "Cut: word-exact",
     boundaryAnchored: "Cut: anchored",
     boundarySegment: "Cut: sentence-aligned",

@@ -4,7 +4,13 @@
  */
 import type { Transcript } from "../transcribe/types";
 import type { HighlightCandidate, LlmConfig } from "../../shared/api-types";
-import { highlightSystemPrompt, buildHighlightPrompt, extractJson } from "./prompt";
+import {
+  highlightSystemPrompt,
+  buildHighlightPrompt,
+  reviewSystemPrompt,
+  buildReviewPrompt,
+  extractJson,
+} from "./prompt";
 import { resolveSelection, type RawSelection } from "./match";
 
 const MIN_CLIP_SEC = 5;
@@ -97,6 +103,49 @@ export function parseSelections(content: string): RawSelection[] {
   return out;
 }
 
+export interface ReviewVerdict {
+  id: number;
+  keep: boolean;
+  score: number;
+  note: string;
+}
+
+/** Parse the stage-2 reviewer output (drops malformed rows). */
+export function parseReviews(content: string): ReviewVerdict[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(extractJson(content));
+  } catch {
+    throw new Error(`reviewer returned invalid JSON: ${content.slice(0, 200)}`);
+  }
+  const reviews = (parsed as { reviews?: unknown[] })?.reviews;
+  if (!Array.isArray(reviews)) throw new Error("reviewer output missing reviews array");
+  const out: ReviewVerdict[] = [];
+  for (const r of reviews) {
+    if (typeof r !== "object" || r === null) continue;
+    const v = r as Record<string, unknown>;
+    const id = Number(v.id);
+    if (!Number.isFinite(id)) continue;
+    out.push({
+      id,
+      keep: v.keep !== false,
+      score: Math.max(0, Math.min(100, Number(v.score) || 0)),
+      note: String(v.note ?? "").trim(),
+    });
+  }
+  return out;
+}
+
+/** Merge verdicts onto candidates. Unreviewed ids stay recommended (fail-open). */
+export function applyReviews(candidates: HighlightCandidate[], reviews: ReviewVerdict[]): HighlightCandidate[] {
+  const byId = new Map(reviews.map((r) => [r.id, r]));
+  return candidates.map((c) => {
+    const r = byId.get(c.id);
+    if (!r) return c;
+    return { ...c, score: r.score || c.score, recommended: r.keep, reviewNote: r.note };
+  });
+}
+
 /** Drop overlapping candidates, keeping higher scores (they arrive score-sorted). */
 export function dropOverlaps(candidates: HighlightCandidate[]): HighlightCandidate[] {
   const kept: HighlightCandidate[] = [];
@@ -136,7 +185,26 @@ export async function detectHighlights(
       // keep only keywords the clip actually contains — hallucinated ones
       // would silently no-op in caption highlighting anyway
       keywords: sel.keywords.filter((k) => resolved.text.toLowerCase().includes(k.toLowerCase())),
+      recommended: true,
+      reviewNote: "",
     });
   }
-  return dropOverlaps(candidates);
+  const kept = dropOverlaps(candidates);
+  if (kept.length === 0) return kept;
+
+  // Stage 2: adversarial review — a stricter pass judges each clip's hook,
+  // completeness and standalone value; weak clips get flagged (not silently
+  // dropped) so the UI can default-deselect them and hands-off mode skips
+  // them. Fail-open: a broken review call must never take down detection.
+  try {
+    const reviewContent = await chatComplete(
+      llm,
+      reviewSystemPrompt(transcript),
+      buildReviewPrompt(transcript, kept),
+      signal
+    );
+    return applyReviews(kept, parseReviews(reviewContent));
+  } catch {
+    return kept;
+  }
 }

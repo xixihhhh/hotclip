@@ -96,6 +96,10 @@ export interface HighlightCandidate {
   boundary: "exact" | "anchored" | "segment";
   /** Verbatim in-clip keywords (caption emphasis); may be empty. */
   keywords: string[];
+  /** Stage-2 review verdict: false = the AI reviewer advises against publishing. */
+  recommended: boolean;
+  /** One-line reviewer note (why weak / why strong); may be empty. */
+  reviewNote: string;
 }
 
 /** Burned-in caption style choices (none = no captions). */

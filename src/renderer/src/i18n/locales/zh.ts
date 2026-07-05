@@ -83,6 +83,7 @@ export const zh = {
     hookLabel: "开场钩子",
     reasonLabel: "为什么选这段",
     durationChip: "{n} 秒",
+    reviewWeak: "AI 复评:不建议发布",
     boundaryExact: "切点:逐字精确",
     boundaryAnchored: "切点:首尾锚定",
     boundarySegment: "切点:按句对齐",
