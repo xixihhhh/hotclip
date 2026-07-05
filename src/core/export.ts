@@ -247,6 +247,7 @@ export async function exportClips(
             text: w.text,
             startSec: w.startSec - captionShift,
             endSec: w.endSec - captionShift,
+            speaker: w.speaker, // keep per-word speaker so the overlay colors by talker
           }));
           const payload = buildOverlayPayload(relWords, overlayLayout, {
             keywords: clip.keywords,

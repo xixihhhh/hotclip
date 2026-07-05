@@ -36,6 +36,19 @@ describe("sliceWords", () => {
   it("skips whole segments outside the range", () => {
     expect(sliceWords(TRANSCRIPT, 10, 20)).toEqual([]);
   });
+
+  it("preserves per-word speaker labels for end-to-end caption coloring", () => {
+    const labeled: Transcript = {
+      ...TRANSCRIPT,
+      segments: [
+        { ...TRANSCRIPT.segments[0], words: TRANSCRIPT.segments[0].words.map((x) => ({ ...x, speaker: 0 })) },
+        { ...TRANSCRIPT.segments[1], words: TRANSCRIPT.segments[1].words.map((x) => ({ ...x, speaker: 1 })) },
+      ],
+    };
+    const words = sliceWords(labeled, 1, 6);
+    expect(words.find((x) => x.text === "好")?.speaker).toBe(0);
+    expect(words.find((x) => x.text === "第")?.speaker).toBe(1);
+  });
 });
 
 describe("groupWordsIntoLines", () => {

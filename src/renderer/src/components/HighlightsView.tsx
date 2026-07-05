@@ -60,6 +60,7 @@ export function HighlightsView({
   filePath,
   onBack,
   onExport,
+  onTranscriptLabeled,
   auto,
 }: {
   transcript: Transcript;
@@ -67,6 +68,8 @@ export function HighlightsView({
   filePath?: string;
   onBack: () => void;
   onExport?: (clips: HighlightCandidate[], options: Pick<ExportOptions, "vertical" | "captionStyle" | "jumpCut" | "cleanFillers" | "trimUi" | "titleCard">) => void;
+  /** Lift the diarization-labeled transcript up so export colors captions by speaker. */
+  onTranscriptLabeled?: (t: Transcript) => void;
   /** 托管 mode: export every candidate with default render options as soon as they land. */
   auto?: boolean;
 }): React.JSX.Element {
@@ -94,15 +97,17 @@ export function HighlightsView({
     setError(null);
     try {
       const result = await getApi().detectHighlights(transcript, config, filePath, useDiarize);
-      setCandidates(result);
+      setCandidates(result.candidates);
       // reviewer-approved clips are pre-selected; flagged ones start unchecked
-      setSelected(new Set(result.filter((c) => c.recommended).map((c) => c.id)));
+      setSelected(new Set(result.candidates.filter((c) => c.recommended).map((c) => c.id)));
+      // Lift the speaker-labeled transcript so export can color captions by speaker.
+      if (result.transcript) onTranscriptLabeled?.(result.transcript);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setDetecting(false);
     }
-  }, [transcript, config, filePath]);
+  }, [transcript, config, filePath, onTranscriptLabeled]);
 
   // Multi-speaker attribution: re-detect with diarization when toggled on.
   const toggleDiarize = useCallback((): void => {

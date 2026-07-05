@@ -30,7 +30,7 @@ export function ExportView({
 }: {
   filePath: string;
   clips: HighlightCandidate[];
-  options: Pick<ExportOptions, "vertical" | "captionStyle" | "jumpCut" | "trimUi" | "titleCard">;
+  options: Pick<ExportOptions, "vertical" | "captionStyle" | "jumpCut" | "cleanFillers" | "trimUi" | "titleCard">;
   transcript: Transcript;
   onBack: () => void;
   onRestart: () => void;
@@ -50,7 +50,8 @@ export function ExportView({
       // the transcript ships along only when captions need word timestamps
       .exportClips(filePath, clips, {
         ...options,
-        transcript: options.captionStyle !== "none" || options.jumpCut ? transcript : undefined,
+        transcript:
+          options.captionStyle !== "none" || options.jumpCut || options.cleanFillers ? transcript : undefined,
       })
       .then(setResults)
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))

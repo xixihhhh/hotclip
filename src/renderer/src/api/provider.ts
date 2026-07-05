@@ -11,6 +11,7 @@ import type {
   Transcript,
   TranscribeProgressEvent,
   HighlightCandidate,
+  DetectHighlightsResult,
   ExportProgressEvent,
 } from "../../../shared/api-types";
 
@@ -121,7 +122,7 @@ const browserMock: HotClipApi = {
   revealClip() {
     /* browser mock: nothing to reveal */
   },
-  async detectHighlights(transcript, _llm, _filePath, _diarize): Promise<HighlightCandidate[]> {
+  async detectHighlights(transcript, _llm, _filePath, diarize): Promise<DetectHighlightsResult> {
     await sleep(1500);
     const segs = transcript.segments;
     const pick = (from: number, to: number, id: number, title: string, hook: string, score: number, reason: string): HighlightCandidate => ({
@@ -149,11 +150,25 @@ const browserMock: HotClipApi = {
       recommended: id !== 3,
       reviewNote: id === 3 ? "开场是问候语,前3秒没有钩子,独立可看性弱" : "",
     });
-    return [
+    const candidates = [
       pick(3, 4, 1, "半杯水都不渗?实测给你看", "你看这个吸水速度,直接倒半杯水都不带渗的", 92, "强演示钩子+价格反差,完播率高"),
       pick(1, 2, 2, "十几块和两块多的纸巾差在哪", "很多朋友问我,这个和超市里十几块的有什么区别", 81, "悬念提问开场,击中比价心理"),
       pick(0, 1, 3, "欢迎来到直播间", "大家好,欢迎来到我的直播间", 38, "开场白"),
     ];
+    // Multi-speaker demo: label the transcript by alternating segments so the
+    // browser preview can show per-speaker caption coloring end-to-end.
+    if (diarize) {
+      const labeled: Transcript = {
+        ...transcript,
+        segments: segs.map((s, i) => ({
+          ...s,
+          speaker: i % 2,
+          words: (s.words ?? []).map((w) => ({ ...w, speaker: i % 2 })),
+        })),
+      };
+      return { candidates, transcript: labeled };
+    }
+    return { candidates };
   },
 };
 

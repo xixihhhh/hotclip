@@ -133,6 +133,17 @@ export interface ExportOptions {
   transcript?: Transcript;
 }
 
+/**
+ * Detection result: the ranked candidates, plus the diarization-labeled
+ * transcript when multi-speaker attribution ran — so the export path can
+ * carry per-word speaker ids through to caption coloring.
+ */
+export interface DetectHighlightsResult {
+  candidates: HighlightCandidate[];
+  /** Present only when diarization labeled the transcript this run. */
+  transcript?: Transcript;
+}
+
 /** One exported clip file on disk. */
 export interface ExportedClip {
   id: number;
@@ -164,7 +175,7 @@ export interface HotClipApi {
   /** Subscribe to transcription progress; returns an unsubscribe function. */
   onTranscribeProgress: (cb: (p: TranscribeProgressEvent) => void) => () => void;
   /** Detect highlight candidates via the configured LLM; filePath enables audiovisual-signal evidence. */
-  detectHighlights: (transcript: Transcript, llm: LlmConfig, filePath?: string, diarize?: boolean) => Promise<HighlightCandidate[]>;
+  detectHighlights: (transcript: Transcript, llm: LlmConfig, filePath?: string, diarize?: boolean) => Promise<DetectHighlightsResult>;
   /** Cut the selected highlights into mp4 files; resolves with the file list. */
   exportClips: (filePath: string, clips: HighlightCandidate[], options?: ExportOptions) => Promise<ExportedClip[]>;
   /** Subscribe to per-clip export progress; returns an unsubscribe function. */

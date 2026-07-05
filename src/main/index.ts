@@ -171,10 +171,13 @@ ipcMain.handle(
     }
     // Multi-speaker attribution (opt-in): label the transcript so the LLM knows
     // who says what. Fail-open — a diarization hiccup must not block detection.
+    let labeled: Transcript | undefined;
     if (diarize === true && typeof filePath === "string" && filePath.trim()) {
       t = await diarizeTranscript(t, filePath).catch(() => t);
+      labeled = t; // surface the labeled transcript so export can color captions by speaker
     }
-    return detectHighlights(t, config, undefined, signals);
+    const candidates = await detectHighlights(t, config, undefined, signals);
+    return { candidates, transcript: labeled };
   }
 );
 
