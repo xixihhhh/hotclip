@@ -27,6 +27,8 @@ export interface TranscriptWord {
   text: string;
   startSec: number;
   endSec: number;
+  /** Diarization speaker id (0-based); absent when diarization didn't run. */
+  speaker?: number;
 }
 
 /** A sentence-ish unit built from words; the granularity shown in the editor. */

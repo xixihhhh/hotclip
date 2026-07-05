@@ -101,6 +101,32 @@ export const PUNCT_MODEL: ModelAsset = {
   approxBytes: 65 * 1024 * 1024,
 };
 
+/**
+ * pyannote segmentation-3.0 ONNX (MIT) — speaker-change detection front-end
+ * for diarization. Distributed by sherpa-onnx releases (no HF login needed).
+ */
+export const SEGMENTATION_MODEL: ModelAsset = {
+  id: "pyannote-segmentation-3-0",
+  url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
+  mirrors: ["https://ghfast.top/", "https://gh-proxy.com/"],
+  extractedDir: "sherpa-onnx-pyannote-segmentation-3-0",
+  approxBytes: 7 * 1024 * 1024,
+};
+
+/**
+ * 3D-Speaker ERes2Net base zh embedding (Apache-2.0) — voice fingerprints for
+ * clustering diarization segments into speakers. NOTE: the upstream release
+ * tag really is spelled "speaker-recongition-models".
+ */
+export const SPEAKER_EMBEDDING_MODEL: ModelAsset = {
+  id: "3dspeaker-eres2net-base-zh",
+  url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
+  mirrors: ["https://ghfast.top/", "https://gh-proxy.com/"],
+  extractedDir: "3dspeaker-eres2net-base-zh",
+  approxBytes: 39 * 1024 * 1024,
+  singleFile: "model.onnx",
+};
+
 export interface DownloadProgress {
   downloadedBytes: number;
   totalBytes: number;
