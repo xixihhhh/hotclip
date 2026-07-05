@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { computeJumpCut } from "../gaps";
+import { computeJumpCut, mergeShortCuts } from "../gaps";
 import { buildJumpCutArgs } from "../cut";
+import type { PeakTrack } from "../audio-peaks";
 import type { TranscriptWord } from "../../shared/api-types";
 
 function w(text: string, startSec: number, endSec: number): TranscriptWord {
@@ -48,6 +49,54 @@ describe("computeJumpCut", () => {
     const plan = computeJumpCut([], 5, 10);
     expect(plan.segments).toEqual([{ startSec: 5, endSec: 10 }]);
     expect(plan.durationSec).toBe(5);
+  });
+
+  // peaks: 30 blocks/s track covering 10-16.5s, quiet everywhere by default
+  function trackWithBurst(burstFrom?: number, burstTo?: number): PeakTrack {
+    const hopSec = 1 / 30;
+    const values = new Float32Array(Math.ceil(6.5 / hopSec)).fill(0.01);
+    if (burstFrom !== undefined && burstTo !== undefined) {
+      for (let i = Math.floor((burstFrom - 10) / hopSec); i * hopSec + 10 < burstTo; i++) {
+        values[i] = 0.4;
+      }
+    }
+    return { values, startSec: 10, hopSec };
+  }
+
+  it("AND gate: quiet gap still gets cut when peaks are provided", () => {
+    const plan = computeJumpCut(words, 10, 16.5, { peaks: trackWithBurst() });
+    expect(plan.segments).toHaveLength(2);
+  });
+
+  it("AND gate: loud wordless gap (laughter/applause) survives the cut", () => {
+    const plan = computeJumpCut(words, 10, 16.5, { peaks: trackWithBurst(12.5, 13.5) });
+    expect(plan.segments).toHaveLength(1);
+    expect(plan.removedSec).toBeLessThan(0.5);
+  });
+});
+
+describe("mergeShortCuts", () => {
+  it("fills back splices shorter than the minimum cut", () => {
+    const merged = mergeShortCuts(
+      [
+        { startSec: 0, endSec: 2 },
+        { startSec: 2.1, endSec: 4 }, // 0.1s cut — churn
+        { startSec: 5, endSec: 6 }, // 1s cut — real
+      ],
+      0.2
+    );
+    expect(merged).toEqual([
+      { startSec: 0, endSec: 4 },
+      { startSec: 5, endSec: 6 },
+    ]);
+  });
+
+  it("passes through when nothing is short", () => {
+    const segs = [
+      { startSec: 0, endSec: 2 },
+      { startSec: 3, endSec: 4 },
+    ];
+    expect(mergeShortCuts(segs, 0.2)).toEqual(segs);
   });
 });
 

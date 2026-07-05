@@ -13,6 +13,7 @@ import { resolveFfmpegPath } from "./binaries";
 const execFileAsync = promisify(execFile);
 import { cutClip, cutJumpClip } from "./cut";
 import { computeJumpCut } from "./gaps";
+import { extractPeaks } from "./audio-peaks";
 import { detectUiCrop, type UiCrop } from "./uicrop";
 import { generateCropPlan, renderCropXExpr, mapToOutputTime } from "./reframe";
 import { buildCaptionAss, VERTICAL_LAYOUT, HORIZONTAL_LAYOUT, type CaptionStyle } from "./subtitle";
@@ -121,10 +122,13 @@ export async function exportClips(
       onProgress?.({ current: i + 1, total: clips.length, clipId: clip.id, stage: "cutting" });
 
       // Jump cut: plan kept segments + words remapped to the output timeline.
-      const plan =
-        options.jumpCut && clip.words && clip.words.length > 0
-          ? computeJumpCut(clip.words, clip.startSec, clip.endSec)
-          : null;
+      // Peaks gate the cuts so wordless-but-loud moments (laughter, applause,
+      // BGM stings) survive; peak extraction failure degrades to gap-only.
+      let plan = null;
+      if (options.jumpCut && clip.words && clip.words.length > 0) {
+        const peaks = await extractPeaks(inputPath, clip.startSec, clip.endSec).catch(() => undefined);
+        plan = computeJumpCut(clip.words, clip.startSec, clip.endSec, { peaks });
+      }
       const captionWords = plan ? plan.words : clip.words;
       const captionShift = plan ? 0 : clip.startSec;
 

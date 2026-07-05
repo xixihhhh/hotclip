@@ -8,11 +8,23 @@
  * Pure functions — ffmpeg execution lives in cut.ts.
  */
 import type { TranscriptWord } from "../shared/api-types";
+import { peakInRange, type PeakTrack } from "./audio-peaks";
 
 export interface KeptSegment {
   /** Absolute source time. */
   startSec: number;
   endSec: number;
+}
+
+export interface JumpCutOptions {
+  /**
+   * Audio peak track for the clip. When present, a word gap is only cut if
+   * the region that would be removed is actually quiet — laughter, applause
+   * and BGM stings carry no words but must survive.
+   */
+  peaks?: PeakTrack;
+  /** Peak (0..1) above which a gap counts as "not silent" (~-28dBFS). */
+  silenceThreshold?: number;
 }
 
 export interface JumpCutPlan {
@@ -39,31 +51,60 @@ const PAD_AFTER_SEC = 0.18;
 /** Lead-in / tail padding at the clip boundaries. */
 const LEAD_IN_SEC = 0.15;
 const TAIL_SEC = 0.3;
+/** Default peak above which a gap is loud enough to keep (~-28dBFS). */
+const SILENCE_PEAK_THRESHOLD = 0.04;
+/** Splices removing less than this are churn, not rhythm — fill them back. */
+const MIN_CUT_SEC = 0.2;
+
+/** Merge kept segments whose separating cut is too short to be worth a splice. */
+export function mergeShortCuts(segments: KeptSegment[], minCutSec = MIN_CUT_SEC): KeptSegment[] {
+  if (segments.length < 2) return segments;
+  const out: KeptSegment[] = [{ ...segments[0] }];
+  for (let i = 1; i < segments.length; i++) {
+    const prev = out[out.length - 1];
+    if (segments[i].startSec - prev.endSec < minCutSec) {
+      prev.endSec = Math.max(prev.endSec, segments[i].endSec);
+    } else {
+      out.push({ ...segments[i] });
+    }
+  }
+  return out;
+}
 
 export function computeJumpCut(
   words: TranscriptWord[],
   clipStartSec: number,
-  clipEndSec: number
+  clipEndSec: number,
+  options: JumpCutOptions = {}
 ): JumpCutPlan {
+  const { peaks, silenceThreshold = SILENCE_PEAK_THRESHOLD } = options;
   const inClip = words.filter((w) => w.endSec > clipStartSec && w.startSec < clipEndSec);
   if (inClip.length === 0) {
     const full = { startSec: clipStartSec, endSec: clipEndSec };
     return { segments: [full], words: [], breaks: [], removedSec: 0, durationSec: clipEndSec - clipStartSec };
   }
 
-  const segments: KeptSegment[] = [];
+  let segments: KeptSegment[] = [];
   let segStart = Math.max(clipStartSec, inClip[0].startSec - LEAD_IN_SEC);
   let prevEnd = inClip[0].endSec;
   for (let i = 1; i < inClip.length; i++) {
     const w = inClip[i];
     const gap = w.startSec - prevEnd;
     if (gap > GAP_THRESHOLD_SEC) {
-      segments.push({ startSec: segStart, endSec: Math.min(prevEnd + PAD_AFTER_SEC, clipEndSec) });
-      segStart = Math.max(w.startSec - PAD_BEFORE_SEC, prevEnd + PAD_AFTER_SEC);
+      // AND gate: the removed span must be word-free AND acoustically quiet.
+      const removedFrom = prevEnd + PAD_AFTER_SEC;
+      const removedTo = w.startSec - PAD_BEFORE_SEC;
+      const quiet =
+        !peaks || removedTo <= removedFrom || peakInRange(peaks, removedFrom, removedTo) < silenceThreshold;
+      if (quiet) {
+        segments.push({ startSec: segStart, endSec: Math.min(prevEnd + PAD_AFTER_SEC, clipEndSec) });
+        segStart = Math.max(w.startSec - PAD_BEFORE_SEC, prevEnd + PAD_AFTER_SEC);
+      }
     }
     prevEnd = Math.max(prevEnd, w.endSec);
   }
   segments.push({ startSec: segStart, endSec: Math.min(prevEnd + TAIL_SEC, clipEndSec) });
+  segments = mergeShortCuts(segments);
 
   const durationSec = segments.reduce((acc, s) => acc + (s.endSec - s.startSec), 0);
   const removedSec = clipEndSec - clipStartSec - durationSec;
