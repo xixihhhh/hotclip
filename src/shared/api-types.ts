@@ -149,8 +149,8 @@ export interface HotClipApi {
   transcribeMedia: (filePath: string, engineId?: string) => Promise<Transcript>;
   /** Subscribe to transcription progress; returns an unsubscribe function. */
   onTranscribeProgress: (cb: (p: TranscribeProgressEvent) => void) => () => void;
-  /** Detect highlight candidates from a finished transcript via the configured LLM. */
-  detectHighlights: (transcript: Transcript, llm: LlmConfig) => Promise<HighlightCandidate[]>;
+  /** Detect highlight candidates via the configured LLM; filePath enables audiovisual-signal evidence. */
+  detectHighlights: (transcript: Transcript, llm: LlmConfig, filePath?: string) => Promise<HighlightCandidate[]>;
   /** Cut the selected highlights into mp4 files; resolves with the file list. */
   exportClips: (filePath: string, clips: HighlightCandidate[], options?: ExportOptions) => Promise<ExportedClip[]>;
   /** Subscribe to per-clip export progress; returns an unsubscribe function. */

@@ -7,6 +7,7 @@ import {
   extractJson,
   isChineseTranscript,
   highlightSystemPrompt,
+  renderSignals,
 } from "../highlight/prompt";
 import type { Transcript, TranscriptWord } from "../transcribe/types";
 import type { HighlightCandidate } from "../../shared/api-types";
@@ -218,5 +219,32 @@ describe("prompt language routing（中英分流）", () => {
     expect(isChineseTranscript(autoTx)).toBe(true);
     const autoEn: Transcript = { ...enTx, language: "auto" };
     expect(isChineseTranscript(autoEn)).toBe(false);
+  });
+});
+
+describe("renderSignals / signal injection", () => {
+  const signals = {
+    loudPeaks: [{ startSec: 192, endSec: 198 }],
+    cutDense: [{ startSec: 500, endSec: 515 }],
+  };
+
+  it("renders bilingual signal blocks with MM:SS ranges", () => {
+    const zh = renderSignals(signals, true);
+    expect(zh).toContain("画面与声音信号");
+    expect(zh).toContain("03:12-03:18");
+    const en = renderSignals(signals, false);
+    expect(en).toContain("Audiovisual signals");
+    expect(en).toContain("08:20-08:35");
+  });
+
+  it("empty signals render nothing", () => {
+    expect(renderSignals({ loudPeaks: [], cutDense: [] }, true)).toBe("");
+    expect(renderSignals(undefined, true)).toBe("");
+  });
+
+  it("buildHighlightPrompt embeds the signal section when provided", () => {
+    const tx = makeTranscript(["第一句话。", "第二句话。"]);
+    expect(buildHighlightPrompt(tx, 6, signals)).toContain("画面与声音信号");
+    expect(buildHighlightPrompt(tx)).not.toContain("画面与声音信号");
   });
 });

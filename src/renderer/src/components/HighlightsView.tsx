@@ -52,11 +52,14 @@ const BOUNDARY_KEY: Record<HighlightCandidate["boundary"], string> = {
 
 export function HighlightsView({
   transcript,
+  filePath,
   onBack,
   onExport,
   auto,
 }: {
   transcript: Transcript;
+  /** Source path — lets the backend add audiovisual-signal evidence. */
+  filePath?: string;
   onBack: () => void;
   onExport?: (clips: HighlightCandidate[], options: Pick<ExportOptions, "vertical" | "captionStyle" | "jumpCut" | "trimUi" | "titleCard">) => void;
   /** 托管 mode: export every candidate with default render options as soon as they land. */
@@ -83,7 +86,7 @@ export function HighlightsView({
     setDetecting(true);
     setError(null);
     try {
-      const result = await getApi().detectHighlights(transcript, config);
+      const result = await getApi().detectHighlights(transcript, config, filePath);
       setCandidates(result);
       // reviewer-approved clips are pre-selected; flagged ones start unchecked
       setSelected(new Set(result.filter((c) => c.recommended).map((c) => c.id)));
@@ -92,7 +95,7 @@ export function HighlightsView({
     } finally {
       setDetecting(false);
     }
-  }, [transcript, config]);
+  }, [transcript, config, filePath]);
 
   const toggle = (id: number): void => {
     setSelected((prev) => {

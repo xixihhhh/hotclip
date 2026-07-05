@@ -8,6 +8,7 @@
  * own language. Pure builders, testable.
  */
 import type { Transcript } from "../transcribe/types";
+import type { MediaSignals } from "../signals";
 
 export const HIGHLIGHT_SYSTEM_PROMPT_ZH = `你是一位顶级短视频切片操盘手。给你一份长视频的逐句稿,你要从中挑出最可能在抖音/快手/B站/TikTok 上爆的片段。
 
@@ -86,13 +87,37 @@ const OUTPUT_SHAPE = `{
   ]
 }`;
 
-export function buildHighlightPrompt(transcript: Transcript, maxClips = 6): string {
+function fmtClock(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const ss = Math.floor(sec % 60);
+  return `${String(m).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+}
+
+/** Render Tier-0 audiovisual evidence for prompt injection ("" when empty). */
+export function renderSignals(signals: MediaSignals | undefined, zh: boolean): string {
+  if (!signals) return "";
+  const fmt = (rs: Array<{ startSec: number; endSec: number }>): string =>
+    rs.map((r) => `${fmtClock(r.startSec)}-${fmtClock(r.endSec)}`).join(", ");
+  const lines: string[] = [];
+  if (signals.loudPeaks.length > 0) {
+    lines.push(zh ? `- 响度峰值时段(情绪爆发/笑声/喊叫): ${fmt(signals.loudPeaks)}` : `- Loudness peaks (bursts/laughter/shouting): ${fmt(signals.loudPeaks)}`);
+  }
+  if (signals.cutDense.length > 0) {
+    lines.push(zh ? `- 镜头切换密集段(画面高能): ${fmt(signals.cutDense)}` : `- Dense scene-cut windows (visual action): ${fmt(signals.cutDense)}`);
+  }
+  if (lines.length === 0) return "";
+  return zh
+    ? `\n【画面与声音信号】(辅助证据——与这些时段重合的内容更可能有真实的情绪/画面爆点,但仍以文本质量为准)\n${lines.join("\n")}\n`
+    : `\n【Audiovisual signals】(supporting evidence — content overlapping these windows likely has real emotional/visual peaks; text quality still rules)\n${lines.join("\n")}\n`;
+}
+
+export function buildHighlightPrompt(transcript: Transcript, maxClips = 6, signals?: MediaSignals): string {
   if (isChineseTranscript(transcript)) {
     return `请从下面的逐句稿中挑出最多 ${maxClips} 个最有爆款潜质的片段。
 
 【逐句稿】(格式: [句id] 开始时间 内容)
 ${renderTranscriptLines(transcript)}
-
+${renderSignals(signals, true)}
 【输出格式】严格输出 JSON,不要任何多余文字:
 ${OUTPUT_SHAPE}
 
@@ -103,7 +128,7 @@ ${OUTPUT_SHAPE}
 
 【Transcript】(format: [sentenceId] startTime text)
 ${renderTranscriptLines(transcript)}
-
+${renderSignals(signals, false)}
 【Output format】Respond with STRICT JSON only, no extra text:
 ${OUTPUT_SHAPE}
 

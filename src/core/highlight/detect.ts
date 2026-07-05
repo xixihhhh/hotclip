@@ -3,6 +3,7 @@
  * matching → validated HighlightCandidate list.
  */
 import type { Transcript } from "../transcribe/types";
+import type { MediaSignals } from "../signals";
 import type { HighlightCandidate, LlmConfig } from "../../shared/api-types";
 import {
   highlightSystemPrompt,
@@ -160,10 +161,16 @@ export function dropOverlaps(candidates: HighlightCandidate[]): HighlightCandida
 export async function detectHighlights(
   transcript: Transcript,
   llm: LlmConfig,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  signals?: MediaSignals
 ): Promise<HighlightCandidate[]> {
   if (transcript.segments.length === 0) return [];
-  const content = await chatComplete(llm, highlightSystemPrompt(transcript), buildHighlightPrompt(transcript), signal);
+  const content = await chatComplete(
+    llm,
+    highlightSystemPrompt(transcript),
+    buildHighlightPrompt(transcript, 6, signals),
+    signal
+  );
   const selections = parseSelections(content);
 
   const candidates: HighlightCandidate[] = [];

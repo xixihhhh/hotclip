@@ -13,6 +13,7 @@ import { FireRedEngine } from "@core/transcribe/firered";
 import { isModelInstalled, SENSEVOICE_MODEL, PARAFORMER_MODEL, FIRERED_MODEL } from "@core/models";
 import { ASR_CATALOG } from "../shared/asr-catalog";
 import { detectHighlights } from "@core/highlight/detect";
+import { collectSignals } from "@core/signals";
 import { exportClips, sanitizeFilename } from "@core/export";
 import { sliceWords } from "@core/subtitle";
 import type { Transcript, LlmConfig, HighlightCandidate, ExportOptions } from "../shared/api-types";
@@ -122,12 +123,21 @@ ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: 
 // The LLM key comes from the renderer's settings; it is used for this one
 // call and never persisted in the main process.
 
-ipcMain.handle("hotclip:detect-highlights", async (_event, transcript: unknown, llm: unknown) => {
+ipcMain.handle("hotclip:detect-highlights", async (_event, transcript: unknown, llm: unknown, filePath: unknown) => {
   const t = transcript as Transcript;
   const config = llm as LlmConfig;
   if (!t || !Array.isArray(t.segments)) throw new Error("detect-highlights requires a transcript");
   if (!config?.baseUrl || !config?.model) throw new Error("请先在设置里配置 LLM(baseUrl/model)");
-  return detectHighlights(t, config);
+  // Tier-0 audiovisual evidence (loudness peaks + cut density), capped so a
+  // pathological source can never stall detection; failures degrade to none.
+  let signals;
+  if (typeof filePath === "string" && filePath.trim()) {
+    signals = await Promise.race([
+      collectSignals(filePath),
+      new Promise<undefined>((r) => setTimeout(() => r(undefined), 120_000)),
+    ]).catch(() => undefined);
+  }
+  return detectHighlights(t, config, undefined, signals);
 });
 
 // ---- IPC: export selected clips (wizard step 3) ----

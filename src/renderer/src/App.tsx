@@ -192,6 +192,7 @@ export default function App(): React.JSX.Element {
         {step === 1 && transcript && phase === "highlights" && (
           <HighlightsView
             transcript={transcript}
+            filePath={file?.path}
             auto={auto}
             onBack={() => {
               setAuto(false);
