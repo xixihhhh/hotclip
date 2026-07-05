@@ -90,7 +90,7 @@ export const zh = {
     selectedCount: "已选 {n} 条",
     exportSelected: "出片",
     optVertical: "竖屏 9:16",
-    optVerticalHint: "居中裁剪成 1080×1920,适配抖音 / 视频号 / TikTok",
+    optVerticalHint: "裁成 1080×1920;检测到人脸会自动跟随取景,人不在中间也不切歪",
     captionStyleHint: "点击切换字幕样式,直接烧录进画面",
     optJumpCut: "剪气口",
     optJumpCutHint: "自动剪掉说话间的停顿静音,成片节奏像人剪的",

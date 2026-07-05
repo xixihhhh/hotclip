@@ -26,6 +26,11 @@ export interface CutOptions {
   preset?: string;
   /** Crop away static screen-recording chrome first (fractions of height). */
   uiCrop?: { topFrac: number; bottomFrac: number };
+  /**
+   * Face-tracking reframe: crop x follows a piecewise-linear expression in t.
+   * Replaces uiCrop+vertical (their geometry is folded into the plan).
+   */
+  trackPlan?: { cropXExpr: string; cropW: number; cropH: number; cropY: number };
   /** Reframe to 9:16 vertical (center crop → 1080×1920). Requires re-encode. */
   vertical?: boolean;
   /** Burn an .ass karaoke subtitle file via libass. Requires re-encode. */
@@ -45,6 +50,16 @@ export function escapeFilterPath(p: string): string {
 /** Compose the -vf chain for reframing + caption burn-in. Empty = no filter. */
 export function buildVideoFilters(options: CutOptions): string[] {
   const filters: string[] = [];
+  if (options.trackPlan) {
+    const p = options.trackPlan;
+    filters.push(`crop=w=${p.cropW}:h=${p.cropH}:x='${p.cropXExpr}':y=${p.cropY}`);
+    filters.push("scale=1080:1920:flags=lanczos", "setsar=1");
+    if (options.subtitlePath) {
+      const fonts = options.fontsDir ? `:fontsdir='${escapeFilterPath(options.fontsDir)}'` : "";
+      filters.push(`subtitles=filename='${escapeFilterPath(options.subtitlePath)}'${fonts}`);
+    }
+    return filters;
+  }
   const ui = options.uiCrop;
   if (ui && (ui.topFrac > 0 || ui.bottomFrac > 0)) {
     // strip static screen-recording chrome BEFORE any reframe; keep dims even

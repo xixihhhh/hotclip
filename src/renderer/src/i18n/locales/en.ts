@@ -95,7 +95,7 @@ export const en = {
     selectedCount: "{n} selected",
     exportSelected: "Export clips",
     optVertical: "Vertical 9:16",
-    optVerticalHint: "Center-crop to 1080×1920 — ready for TikTok / Shorts / Reels",
+    optVerticalHint: "Crop to 1080×1920 with automatic face tracking — subjects stay framed even off-center",
     captionStyleHint: "Click to cycle caption styles (burned into the video)",
     optJumpCut: "Cut silences",
     optJumpCutHint: "Splice out pauses between speech — hand-edited rhythm, automatically",

@@ -14,6 +14,7 @@ const execFileAsync = promisify(execFile);
 import { cutClip, cutJumpClip } from "./cut";
 import { computeJumpCut } from "./gaps";
 import { detectUiCrop, type UiCrop } from "./uicrop";
+import { generateCropPlan, renderCropXExpr, mapToOutputTime } from "./reframe";
 import { buildCaptionAss, VERTICAL_LAYOUT, HORIZONTAL_LAYOUT, type CaptionStyle } from "./subtitle";
 import type { TranscriptWord } from "../shared/api-types";
 
@@ -46,6 +47,10 @@ export interface ExportRenderOptions {
   jumpCut?: boolean;
   /** Auto-detect & crop static screen-recording chrome (status bars, app UI). */
   trimUi?: boolean;
+  /** Face-tracking vertical reframe (needs modelsRoot); falls back to center. */
+  faceTrack?: boolean;
+  /** Where AI models live (userData/models in the app). */
+  modelsRoot?: string;
   /** Burn each clip's title into the top safe zone. */
   titleCard?: boolean;
   /** Bundled-font directory handed to libass so CJK renders identically everywhere. */
@@ -126,7 +131,7 @@ export async function exportClips(
       const clipDuration = plan ? plan.durationSec : clip.endSec - clip.startSec;
       let subtitlePath: string | undefined;
       const wantCaptions = Boolean(options.captionStyle && captionWords && captionWords.length > 0);
-      if (assDir && (wantCaptions || options.titleCard)) {
+      if (assDir && needAss && (wantCaptions || options.titleCard)) {
         subtitlePath = join(assDir, `clip-${clip.id}.ass`);
         const ass = buildCaptionAss(
           wantCaptions ? captionWords! : [],
@@ -142,13 +147,43 @@ export async function exportClips(
         await writeFile(subtitlePath, ass, "utf8");
       }
 
+      // Face-aware reframe: plan per clip; any failure falls back to center.
+      let trackPlan;
+      if (options.vertical && options.faceTrack && options.modelsRoot) {
+        const cp = await generateCropPlan(
+          inputPath, clip.startSec, clip.endSec, options.modelsRoot, uiCrop
+        ).catch(() => null);
+        if (cp) {
+          let kfs = cp.keyframes;
+          if (plan) {
+            // jump cut: remap keyframes onto the compressed output timeline
+            kfs = kfs
+              .map((k) => {
+                const t = mapToOutputTime(k.t, plan.segments, clip.startSec);
+                return t === null ? null : { t, x: k.x };
+              })
+              .filter((k): k is { t: number; x: number } => k !== null);
+          }
+          if (kfs.length > 0) {
+            trackPlan = {
+              cropXExpr: renderCropXExpr(kfs),
+              cropW: cp.cropW,
+              cropH: cp.cropH,
+              cropY: cp.cropY,
+            };
+          }
+        }
+      }
+
       const outPath = join(outDir, clipFilename(i + 1, clip.title));
-      const cutOptions = {
-        uiCrop,
-        vertical: options.vertical,
-        subtitlePath,
-        fontsDir: subtitlePath ? options.fontsDir : undefined,
-      };
+      const cutOptions = trackPlan
+        ? { trackPlan, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined }
+        : {
+            uiCrop,
+            vertical: options.vertical,
+            subtitlePath,
+            fontsDir: subtitlePath ? options.fontsDir : undefined,
+          };
       if (plan && plan.segments.length > 1) {
         await cutJumpClip(inputPath, outPath, clip.startSec, plan.segments, cutOptions);
       } else {

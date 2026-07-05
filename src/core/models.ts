@@ -26,6 +26,11 @@ export interface ModelAsset {
   extractedDir: string;
   /** Approximate size for progress UI. */
   approxBytes: number;
+  /**
+   * Single raw file instead of a tar.bz2 archive — downloaded straight to
+   * `<modelsRoot>/<extractedDir>/<singleFile>`.
+   */
+  singleFile?: string;
 }
 
 /**
@@ -71,6 +76,20 @@ export const FIRERED_MODEL: ModelAsset = {
 };
 
 /**
+ * YuNet face detector (233KB, MIT, OpenCV zoo) — powers face-aware vertical
+ * reframing. Fixed 640×640 input variant (verified decode); tiny enough that
+ * downloading is instant even without mirrors.
+ */
+export const YUNET_MODEL: ModelAsset = {
+  id: "yunet-2023mar",
+  url: "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx",
+  mirrors: ["https://ghfast.top/", "https://gh-proxy.com/"],
+  extractedDir: "yunet-2023mar",
+  approxBytes: 233 * 1024,
+  singleFile: "model.onnx",
+};
+
+/**
  * CT-Transformer punctuation (zh/en, int8, Apache-2.0) — Paraformer/FireRed
  * emit no punctuation, which starves sentence segmentation; this restores it.
  */
@@ -100,6 +119,10 @@ export function modelDir(modelsRoot: string, asset: ModelAsset): string {
 /** True when the model is already present on disk. */
 export async function isModelInstalled(modelsRoot: string, asset: ModelAsset): Promise<boolean> {
   try {
+    if (asset.singleFile) {
+      const s = await stat(join(modelDir(modelsRoot, asset), asset.singleFile));
+      return s.isFile() && s.size > 0;
+    }
     const s = await stat(modelDir(modelsRoot, asset));
     return s.isDirectory();
   } catch {
@@ -147,9 +170,20 @@ export async function ensureModel(
         { signal }
       );
 
-      // extract next to the archive, then verify the expected folder appeared
-      await execFileAsync("tar", ["-xjf", archivePath, "-C", modelsRoot], { maxBuffer: 8 * 1024 * 1024 });
-      await rm(archivePath, { force: true });
+      if (asset.singleFile) {
+        // guard against Git-LFS pointer files masquerading as the model
+        const dl = await stat(archivePath);
+        if (dl.size < asset.approxBytes * 0.5) {
+          throw new Error(`downloaded file too small (${dl.size}B) — likely an LFS pointer`);
+        }
+        // raw file: move into place atomically
+        await mkdir(target, { recursive: true });
+        await rename(archivePath, join(target, asset.singleFile));
+      } else {
+        // extract next to the archive, then verify the expected folder appeared
+        await execFileAsync("tar", ["-xjf", archivePath, "-C", modelsRoot], { maxBuffer: 8 * 1024 * 1024 });
+        await rm(archivePath, { force: true });
+      }
       if (!(await isModelInstalled(modelsRoot, asset))) {
         throw new Error(`archive did not contain expected dir ${asset.extractedDir}`);
       }
