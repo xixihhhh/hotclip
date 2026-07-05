@@ -8,7 +8,8 @@ import type { HotClipApi, TranscribeProgressEvent, ExportProgressEvent } from ".
 const api: HotClipApi = {
   selectMedia: () => ipcRenderer.invoke("hotclip:select-media"),
   probeMedia: (filePath) => ipcRenderer.invoke("hotclip:probe-media", filePath),
-  transcribeMedia: (filePath) => ipcRenderer.invoke("hotclip:transcribe", filePath),
+  listAsrEngines: () => ipcRenderer.invoke("hotclip:list-asr-engines"),
+  transcribeMedia: (filePath, engineId) => ipcRenderer.invoke("hotclip:transcribe", filePath, engineId),
   onTranscribeProgress: (cb) => {
     const listener = (_e: IpcRendererEvent, p: TranscribeProgressEvent): void => cb(p);
     ipcRenderer.on("hotclip:transcribe-progress", listener);

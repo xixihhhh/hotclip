@@ -113,7 +113,7 @@ Electron + React + TypeScript + Tailwind · ffmpeg(打包内置,无需自装)· 
 导入文件 → AI 转写并标出爆点(可手动增删调边界)→ 一键导出竖屏成片。Import → AI transcribes & flags highlights (fully editable) → export vertical clips.
 
 **支持中文视频吗?/ Does it work for Chinese video?**
-中文是一等公民:中文识别走 SenseVoice/Paraformer 类专用引擎,准确率显著高于通用模型;界面、字幕、导出规格均为中文原生。Chinese is first-class, with a dedicated zh ASR engine.
+支持。中文识别走专用引擎(SenseVoice/Paraformer 一类),准确率显著高于通用模型;界面、字幕、prompt 都针对中文内容做了适配。Yes — Chinese speech goes through a dedicated ASR engine with noticeably better accuracy than general-purpose models.
 
 **需要显卡吗?/ Do I need a GPU?**
 不需要。本地转写用的是 int8 量化的 SenseVoice 小模型,普通 CPU 就能跑;找爆点的大模型在云端(或你本机的 Ollama)。No GPU needed — the local ASR model is int8-quantized and runs fine on CPU; the LLM runs in the cloud (or your local Ollama).

@@ -49,6 +49,19 @@ export interface Transcript {
 
 export type TranscribeStage = "preparing" | "downloading-model" | "decoding" | "transcribing" | "finalizing";
 
+/** Catalog facts + runtime state for one transcription engine choice. */
+export interface AsrEngineInfo {
+  id: string;
+  kind: "local" | "cloud";
+  langs: string[];
+  sizeMB?: number;
+  speed: 1 | 2 | 3;
+  accuracy: 1 | 2 | 3;
+  uploads: boolean;
+  /** Local model already on disk (no download needed). */
+  installed: boolean;
+}
+
 export interface TranscribeProgressEvent {
   /** 0..1 fraction of the current stage's work. */
   fraction: number;
@@ -115,8 +128,10 @@ export interface HotClipApi {
   selectMedia: () => Promise<string | null>;
   /** Probe a media file (duration/streams/fps); throws on unreadable input. */
   probeMedia: (filePath: string) => Promise<MediaInfo>;
-  /** Transcribe a media file with the current engine (local SenseVoice for now). */
-  transcribeMedia: (filePath: string) => Promise<Transcript>;
+  /** List selectable transcription engines with install state. */
+  listAsrEngines: () => Promise<AsrEngineInfo[]>;
+  /** Transcribe a media file with the chosen engine (default when omitted). */
+  transcribeMedia: (filePath: string, engineId?: string) => Promise<Transcript>;
   /** Subscribe to transcription progress; returns an unsubscribe function. */
   onTranscribeProgress: (cb: (p: TranscribeProgressEvent) => void) => () => void;
   /** Detect highlight candidates from a finished transcript via the configured LLM. */

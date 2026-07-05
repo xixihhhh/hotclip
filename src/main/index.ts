@@ -8,6 +8,9 @@ import { join } from "path";
 import { basename, extname } from "path";
 import { probeMedia } from "@core/probe";
 import { SenseVoiceEngine } from "@core/transcribe/sensevoice";
+import { ParaformerEngine } from "@core/transcribe/paraformer";
+import { isModelInstalled, SENSEVOICE_MODEL, PARAFORMER_MODEL } from "@core/models";
+import { ASR_CATALOG } from "../shared/asr-catalog";
 import { detectHighlights } from "@core/highlight/detect";
 import { exportClips, sanitizeFilename } from "@core/export";
 import { sliceWords } from "@core/subtitle";
@@ -70,19 +73,38 @@ ipcMain.handle("hotclip:probe-media", async (_event, filePath: unknown) => {
 });
 
 // ---- IPC: transcription (wizard step 2) ----
-// Engine instances are cheap; the model itself is downloaded once into userData.
+// Engine instances are cheap; models are downloaded once into userData.
+
+const modelsRoot = (): string => join(app.getPath("userData"), "models");
+
+/** catalog id → engine factory + its model asset (for install checks). */
+const ASR_ENGINES = {
+  sensevoice: { make: () => new SenseVoiceEngine(modelsRoot()), asset: SENSEVOICE_MODEL },
+  paraformer: { make: () => new ParaformerEngine(modelsRoot()), asset: PARAFORMER_MODEL },
+} as const;
+
+ipcMain.handle("hotclip:list-asr-engines", async () => {
+  return Promise.all(
+    ASR_CATALOG.map(async (facts) => {
+      const entry = ASR_ENGINES[facts.id as keyof typeof ASR_ENGINES];
+      const installed = entry ? await isModelInstalled(modelsRoot(), entry.asset) : false;
+      return { ...facts, installed };
+    })
+  );
+});
 
 let transcribing = false;
 
-ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown) => {
+ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: unknown) => {
   if (typeof filePath !== "string" || !filePath.trim()) {
     throw new Error("transcribe requires a file path");
   }
   if (transcribing) throw new Error("another transcription is already running");
   transcribing = true;
   try {
-    const modelsRoot = join(app.getPath("userData"), "models");
-    const engine = new SenseVoiceEngine(modelsRoot);
+    const key = (typeof engineId === "string" && engineId in ASR_ENGINES ? engineId : "sensevoice") as
+      keyof typeof ASR_ENGINES;
+    const engine = ASR_ENGINES[key].make();
     return await engine.transcribe(filePath, {
       onProgress: (p) => {
         // renderer may already be gone on quit — guard the send

@@ -44,6 +44,31 @@ export const SENSEVOICE_MODEL: ModelAsset = {
   approxBytes: 170 * 1024 * 1024,
 };
 
+/**
+ * Paraformer-large zh/en int8 (Apache-2.0) via sherpa-onnx — the "more
+ * accurate" local tier: noticeably lower zh CER than SenseVoice-Small,
+ * per-token timestamps, ~230MB.
+ */
+export const PARAFORMER_MODEL: ModelAsset = {
+  id: "paraformer-zh-2023-09-14",
+  url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-paraformer-zh-2023-09-14.tar.bz2",
+  mirrors: ["https://ghfast.top/", "https://gh-proxy.com/"],
+  extractedDir: "sherpa-onnx-paraformer-zh-2023-09-14",
+  approxBytes: 240 * 1024 * 1024,
+};
+
+/**
+ * CT-Transformer punctuation (zh/en, int8, Apache-2.0) — Paraformer emits no
+ * punctuation, which starves sentence segmentation; this model restores it.
+ */
+export const PUNCT_MODEL: ModelAsset = {
+  id: "punct-ct-transformer-2024-04-12",
+  url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/punctuation-models/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8.tar.bz2",
+  mirrors: ["https://ghfast.top/", "https://gh-proxy.com/"],
+  extractedDir: "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8",
+  approxBytes: 65 * 1024 * 1024,
+};
+
 export interface DownloadProgress {
   downloadedBytes: number;
   totalBytes: number;

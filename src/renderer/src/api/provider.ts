@@ -65,6 +65,13 @@ const browserMock: HotClipApi = {
     await sleep(300);
     return "/demo/我的直播回放-2026-07-04.mp4";
   },
+  async listAsrEngines() {
+    await sleep(200);
+    return [
+      { id: "sensevoice", kind: "local", langs: ["zh", "yue", "en", "ja", "ko"], sizeMB: 170, speed: 3, accuracy: 2, uploads: false, installed: true },
+      { id: "paraformer", kind: "local", langs: ["zh", "en"], sizeMB: 230, speed: 2, accuracy: 3, uploads: false, installed: false },
+    ];
+  },
   async probeMedia() {
     await sleep(600);
     return { ...MOCK_MEDIA };
