@@ -4,7 +4,7 @@
  * fusion reuse the proven ASS pipeline logic, so web captions and libass
  * captions break identically. Pure — the Electron renderer lives in main/.
  */
-import { groupWordsIntoLines, mergeKeywordWords, type AssLayout } from "../subtitle";
+import { groupWordsIntoLines, mergeKeywordWords, CAPTION_HOLD_MAX_SEC, type AssLayout } from "../subtitle";
 import type { TranscriptWord } from "../../shared/api-types";
 
 /** Caption styles rendered by the web overlay engine (name = template file). */
@@ -73,7 +73,11 @@ export function buildOverlayPayload(
     const next = grouped[i + 1];
     const start = lineWords[0].startSec;
     const lastEnd = lineWords[lineWords.length - 1].endSec;
-    const end = next ? Math.min(next[0].startSec, lastEnd + LINE_LINGER_MS / 1000) : lastEnd + LINE_LINGER_MS / 1000;
+    // Hold each line until the next begins (anti-flicker), capped so a real
+    // pause still clears it; the last line gets a short linger.
+    const end = next
+      ? Math.min(next[0].startSec, lastEnd + CAPTION_HOLD_MAX_SEC)
+      : lastEnd + LINE_LINGER_MS / 1000;
     return {
       startMs: Math.round(start * 1000),
       endMs: Math.round(Math.max(end, lastEnd) * 1000),

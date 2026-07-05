@@ -38,6 +38,17 @@ describe("buildOverlayPayload", () => {
     expect(p.lines[1].words[0].text).toBe("三");
   });
 
+  it("holds each line until the next begins (anti-flicker) but clears on a real pause", () => {
+    // 0.4s gap after "这个" → bridged; 1.8s gap after "速度" → capped hold, not bridged
+    const p = buildOverlayPayload(words, { ...VERTICAL_LAYOUT, maxLineUnits: 4 });
+    expect(p.lines.length).toBeGreaterThanOrEqual(3);
+    // line "你看" (ends 0.4) holds to "这个" start (0.4) — contiguous, no flicker
+    expect(p.lines[0].endMs).toBe(p.lines[1].startMs);
+    // "速度" ends 1.2 before a 1.8s pause → held only +0.8 cap = 2.0s, not to 3.0
+    const beforePause = p.lines[2];
+    expect(beforePause.endMs).toBe(2000);
+  });
+
   it("carries per-word speaker ids through for caption coloring", () => {
     const spoken = [
       { ...w("甲", 0, 0.4), speaker: 0 },

@@ -103,6 +103,16 @@ const BREAK_AFTER_PARTICLE = /(的|了|着|过|地|得|吧|呢|吗|啊|嘛|呀)$
 const LOOKBACK_MIN_FRAC = 0.35;
 
 /**
+ * How long a caption line may hold on screen waiting for the next one. A line
+ * ends the instant its last word does, which flashes a blank frame between
+ * consecutive lines of continuous speech (the default karaoke/keyword styles
+ * showed this). Holding until the next line begins removes the flicker — but
+ * only across a gap the line grouper did NOT treat as a real pause
+ * (≤ GAP_BREAK_SEC); a longer, genuine pause still clears the caption.
+ */
+export const CAPTION_HOLD_MAX_SEC = 0.8;
+
+/**
  * On a width-overflow break, find the latest word inside `line` that ends on a
  * particle boundary and still leaves a substantial head (≥ LOOKBACK_MIN_FRAC of
  * the cap). Returns the break-after index, or -1 when no good boundary exists.
@@ -398,8 +408,9 @@ export function buildCaptionAss(
     for (let i = 0; i < units.length; i++) {
       const unit = units[i];
       const start = unit[0].startSec - clipStartSec;
+      const lastEnd = unit[unit.length - 1].endSec;
       const next = units[i + 1]?.[0].startSec;
-      const end = (next !== undefined ? next : unit[unit.length - 1].endSec + 0.2) - clipStartSec;
+      const end = (next !== undefined ? Math.min(next, lastEnd + CAPTION_HOLD_MAX_SEC) : lastEnd + 0.2) - clipStartSec;
       const text = unit
         .map((w, j) => escapeAssText(w.text) + (needsSpaceAfter(w.text, unit[j + 1]?.text) ? " " : ""))
         .join("");
@@ -409,9 +420,15 @@ export function buildCaptionAss(
     // keyword style: fuse keyword runs first so line breaks can't split them
     const lineWords = style === "keyword" ? mergeKeywordWords(words, options.keywords ?? []) : words;
     const lines = groupWordsIntoLines(lineWords, layout.maxLineUnits, forcedBreaks).filter((l) => l.length > 0);
-    for (const line of lines) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
       const start = line[0].startSec - clipStartSec;
-      const end = line[line.length - 1].endSec - clipStartSec;
+      const lastEnd = line[line.length - 1].endSec;
+      // Hold the line until the next one begins (anti-flicker), capped so a real
+      // pause still clears it; the last line ends with its final word.
+      const nextStart = lines[i + 1]?.[0].startSec;
+      const end =
+        (nextStart !== undefined ? Math.min(nextStart, lastEnd + CAPTION_HOLD_MAX_SEC) : lastEnd) - clipStartSec;
       const text = style === "karaoke" ? karaokeText(line) : keywordText(line, options.keywords ?? []);
       events.push(dialogue(start, end, text));
     }

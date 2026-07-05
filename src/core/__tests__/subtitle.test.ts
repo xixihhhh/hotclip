@@ -135,6 +135,23 @@ describe("buildKaraokeAss", () => {
     const ass = buildKaraokeAss(hostile, 0, HORIZONTAL_LAYOUT, "Arial");
     expect(ass).toContain("{\\k100}你好{\\k100}世界");
   });
+
+  it("holds a line until the next begins so continuous speech never flickers", () => {
+    // two width-split lines with a 0.3s gap (1.0→1.3): line 1 must end at 1.30,
+    // not at its last word (1.0), so no blank frame flashes between them.
+    const words = [w("一", 0, 0.5), w("二", 0.5, 1.0), w("三", 1.3, 1.8), w("四", 1.8, 2.3)];
+    const ass = buildCaptionAss(words, 0, { ...VERTICAL_LAYOUT, maxLineUnits: 4 }, "karaoke");
+    expect(ass.match(/^Dialogue:/gm)).toHaveLength(2);
+    // line 1 ends at line 2's start (1.30), bridging the 0.3s gap
+    expect(ass).toContain("Dialogue: 0,0:00:00.00,0:00:01.30,Caption");
+  });
+
+  it("clears the caption across a real pause instead of holding stale text", () => {
+    // 1.5s gap (>0.8 cap): line 1 holds only +0.8 (ends 1.80), then blank until line 2
+    const words = [w("一", 0, 0.5), w("二", 0.5, 1.0), w("三", 2.5, 3.0), w("四", 3.0, 3.5)];
+    const ass = buildCaptionAss(words, 0, { ...VERTICAL_LAYOUT, maxLineUnits: 4 }, "karaoke");
+    expect(ass).toContain("Dialogue: 0,0:00:00.00,0:00:01.80,Caption");
+  });
 });
 
 describe("keywordText", () => {
