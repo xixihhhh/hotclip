@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { normalizeText, buildTokenIndex, matchQuote, resolveSelection } from "../highlight/match";
-import { parseSelections, dropOverlaps, parseReviews, applyReviews } from "../highlight/detect";
+import { parseSelections, dropOverlaps, parseReviews, applyReviews, normalizeScores } from "../highlight/detect";
 import {
   buildHighlightPrompt,
   renderTranscriptLines,
@@ -142,6 +142,58 @@ describe("parseReviews / applyReviews", () => {
 
   it("throws on malformed reviewer output", () => {
     expect(() => parseReviews("完全不是JSON")).toThrow();
+  });
+
+  it("parses four-dimension verdicts into a weighted composite", () => {
+    const out = parseReviews(
+      '{"reviews":[{"id":1,"keep":true,"hook":80,"hookNote":"强","flow":60,"flowNote":"顺","value":100,"valueNote":"高","trend":40,"trendNote":"一般","teaser":"倒半杯水会怎样?","note":"总评"}]}'
+    );
+    expect(out[0].dims).toEqual({ hook: 80, flow: 60, value: 100, trend: 40 });
+    // 80*.35 + 60*.25 + 100*.25 + 40*.15 = 74
+    expect(out[0].score).toBe(74);
+    expect(out[0].dimNotes?.value).toBe("高");
+    expect(out[0].teaser).toBe("倒半杯水会怎样?");
+  });
+
+  it("carries dims and teaser onto candidates via applyReviews", () => {
+    const base = {
+      startSec: 0, endSec: 10, text: "", title: "", hook: "", reason: "",
+      boundary: "exact" as const, keywords: [], recommended: true, reviewNote: "",
+    };
+    const out = applyReviews(
+      [{ ...base, id: 1, score: 90 }],
+      [{ id: 1, keep: true, score: 74, note: "", dims: { hook: 80, flow: 60, value: 100, trend: 40 }, teaser: "钩子句" }]
+    );
+    expect(out[0].scoreDims).toEqual({ hook: 80, flow: 60, value: 100, trend: 40 });
+    expect(out[0].teaser).toBe("钩子句");
+  });
+});
+
+describe("normalizeScores", () => {
+  const base = {
+    startSec: 0, endSec: 10, text: "", title: "", hook: "", reason: "",
+    boundary: "exact" as const, keywords: [], recommended: true, reviewNote: "",
+  };
+
+  it("maps recommended clips onto 76-99 by rank, preserving order", () => {
+    const out = normalizeScores([
+      { ...base, id: 1, score: 74 },
+      { ...base, id: 2, score: 88 },
+      { ...base, id: 3, score: 60 },
+    ]);
+    expect(out.map((c) => c.id)).toEqual([1, 2, 3]); // array order untouched
+    expect(out.find((c) => c.id === 2)?.score).toBe(99); // best
+    expect(out.find((c) => c.id === 1)?.score).toBe(88); // middle: 99-23*1/2 rounded
+    expect(out.find((c) => c.id === 3)?.score).toBe(76); // worst
+  });
+
+  it("a single recommended clip gets 97, rejected clips sit below 75", () => {
+    const out = normalizeScores([
+      { ...base, id: 1, score: 40 },
+      { ...base, id: 2, score: 90, recommended: false },
+    ]);
+    expect(out.find((c) => c.id === 1)?.score).toBe(97);
+    expect(out.find((c) => c.id === 2)?.score).toBe(62);
   });
 });
 

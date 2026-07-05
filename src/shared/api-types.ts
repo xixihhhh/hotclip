@@ -96,6 +96,12 @@ export interface HighlightCandidate {
   boundary: "exact" | "anchored" | "segment";
   /** Verbatim in-clip keywords (caption emphasis); may be empty. */
   keywords: string[];
+  /** Four-dimension virality breakdown (0-100 each) from the stage-2 reviewer. */
+  scoreDims?: { hook: number; flow: number; value: number; trend: number };
+  /** One-line reviewer reason per dimension; may be empty strings. */
+  dimNotes?: { hook: string; flow: string; value: string; trend: string };
+  /** Short suspense line (≤15 chars) usable as an on-video text hook. */
+  teaser?: string;
   /** Stage-2 review verdict: false = the AI reviewer advises against publishing. */
   recommended: boolean;
   /** One-line reviewer note (why weak / why strong); may be empty. */

@@ -147,16 +147,20 @@ export function extractJson(text: string): string {
 
 // ---------- Stage 2: adversarial review ----------
 
-export const REVIEW_SYSTEM_PROMPT_ZH = `你是一位极其严格的短视频内容评审。给你若干条已切好的候选片段,你从「刷到这条视频的陌生观众」视角盲评每一条:
-- 钩子:前 3 秒(第一句)能不能让人停下滑动?平淡开场直接不及格
-- 完整:是不是断章取义?开头是否像半截话、结尾有没有收住?
-- 独立:不看原视频,这条能不能看懂、有没有信息量或情绪价值?
+export const REVIEW_SYSTEM_PROMPT_ZH = `你是一位极其严格的短视频内容评审。给你若干条已切好的候选片段,你从「刷到这条视频的陌生观众」视角盲评每一条,分四个维度分别打分(0-100)并各给一句话理由:
+- hook 钩子:前 3 秒(第一句)能不能让人停下滑动?平淡开场直接不及格
+- flow 结构:是不是断章取义?开头是否像半截话、结尾有没有收住?逻辑顺不顺?
+- value 价值:不看原视频,这条有没有信息量或情绪价值?值不值得看完?
+- trend 热点:话题/情绪贴不贴近当下平台上正在火的内容?
+另外给每条写一个 teaser:≤15 个字的悬念句,能印在视频开头当文字钩子,要勾人但不剧透。
 你要敢于否决:平庸、凑数、需要上下文才能懂的片段,一律 keep=false。这是发布前的最后一道质量门,放水的代价是账号发废片。`;
 
-export const REVIEW_SYSTEM_PROMPT_EN = `You are a ruthless short-form content reviewer. You receive pre-cut clip candidates and judge each one blind, as a stranger scrolling past:
-- Hook: does the FIRST line stop the scroll within 3 seconds? Flat openings fail.
-- Complete: is it quote-mined? Does it start mid-thought or end without landing?
-- Standalone: without the source video, is it understandable and worth watching?
+export const REVIEW_SYSTEM_PROMPT_EN = `You are a ruthless short-form content reviewer. You receive pre-cut clip candidates and judge each one blind, as a stranger scrolling past, scoring FOUR dimensions (0-100 each) with a one-line reason per dimension:
+- hook: does the FIRST line stop the scroll within 3 seconds? Flat openings fail.
+- flow: is it quote-mined? Does it start mid-thought or end without landing? Does it flow?
+- value: without the source video, is it informative or emotionally worth watching to the end?
+- trend: does the topic/emotion ride what is currently hot on the platforms?
+Also write a teaser per clip: a suspense line of ≤8 words that could be printed at the top of the video as a text hook — intriguing, no spoilers.
 Reject freely: mediocre, filler, or context-dependent clips get keep=false. You are the final quality gate before publishing — letting weak clips through burns the channel.`;
 
 export function reviewSystemPrompt(transcript: Transcript): string {
@@ -165,7 +169,15 @@ export function reviewSystemPrompt(transcript: Transcript): string {
 
 const REVIEW_SHAPE = `{
   "reviews": [
-    { "id": 1, "keep": true, "score": 85, "note": "..." }
+    {
+      "id": 1, "keep": true,
+      "hook": 82, "hookNote": "...",
+      "flow": 74, "flowNote": "...",
+      "value": 88, "valueNote": "...",
+      "trend": 60, "trendNote": "...",
+      "teaser": "...",
+      "note": "..."
+    }
   ]
 }`;
 
@@ -200,6 +212,6 @@ export function buildReviewPrompt(transcript: Transcript, clips: ReviewableClip[
     })
     .join("\n\n");
   return zh
-    ? `逐条盲评下面的候选片段。score=0-100 重新打分(横向比较);keep=false 表示不建议发布;note=一句话评语(不推荐时必须说清原因)。\n\n${blocks}\n\n【输出格式】严格输出 JSON,不要任何多余文字:\n${REVIEW_SHAPE}`
-    : `Blind-review each candidate below. Re-score 0-100 (relative); keep=false means do not publish; note = one-line verdict (mandatory when rejecting).\n\n${blocks}\n\n【Output format】STRICT JSON only:\n${REVIEW_SHAPE}`;
+    ? `逐条盲评下面的候选片段。hook/flow/value/trend 四维各 0-100 打分(横向比较)+ 各一句话理由;teaser=≤15字悬念句(勾人不剧透,逐句稿同款语言);keep=false 表示不建议发布;note=一句话总评(不推荐时必须说清原因)。\n\n${blocks}\n\n【输出格式】严格输出 JSON,不要任何多余文字:\n${REVIEW_SHAPE}`
+    : `Blind-review each candidate below. Score hook/flow/value/trend 0-100 each (relative) with a one-line reason per dimension; teaser = a ≤8-word suspense line (intriguing, no spoilers, transcript language); keep=false means do not publish; note = one-line overall verdict (mandatory when rejecting).\n\n${blocks}\n\n【Output format】STRICT JSON only:\n${REVIEW_SHAPE}`;
 }

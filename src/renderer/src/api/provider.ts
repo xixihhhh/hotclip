@@ -135,6 +135,17 @@ const browserMock: HotClipApi = {
       reason,
       boundary: id === 2 ? "anchored" : "exact",
       keywords: id === 2 ? ["十几块", "区别"] : ["吸水速度", "半杯水"],
+      scoreDims:
+        id === 1
+          ? { hook: 91, flow: 84, value: 88, trend: 72 }
+          : id === 2
+            ? { hook: 78, flow: 80, value: 74, trend: 66 }
+            : { hook: 22, flow: 60, value: 30, trend: 40 },
+      dimNotes:
+        id === 1
+          ? { hook: "实测演示开场,3秒内有画面冲击", flow: "起于提问收于结论,完整", value: "省钱结论直接可用", trend: "比价内容平台长青" }
+          : undefined,
+      teaser: id === 1 ? "倒半杯水会怎样?" : id === 2 ? "差价10倍的真相" : "",
       recommended: id !== 3,
       reviewNote: id === 3 ? "开场是问候语,前3秒没有钩子,独立可看性弱" : "",
     });

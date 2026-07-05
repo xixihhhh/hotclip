@@ -36,6 +36,8 @@ export interface ExportClipSpec {
     text: string;
     recommended: boolean;
     reviewNote: string;
+    scoreDims?: { hook: number; flow: number; value: number; trend: number };
+    teaser?: string;
   };
 }
 

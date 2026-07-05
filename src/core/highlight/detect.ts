@@ -104,11 +104,31 @@ export function parseSelections(content: string): RawSelection[] {
   return out;
 }
 
+export interface ScoreDims {
+  hook: number;
+  flow: number;
+  value: number;
+  trend: number;
+}
+
 export interface ReviewVerdict {
   id: number;
   keep: boolean;
   score: number;
   note: string;
+  dims?: ScoreDims;
+  dimNotes?: { hook: string; flow: string; value: string; trend: string };
+  teaser?: string;
+}
+
+/** Hook rules the scroll; trend is the softest signal. */
+const DIM_WEIGHTS: ScoreDims = { hook: 0.35, flow: 0.25, value: 0.25, trend: 0.15 };
+
+/** Weighted composite of the four dimensions, 0-100. */
+export function compositeScore(dims: ScoreDims): number {
+  return Math.round(
+    dims.hook * DIM_WEIGHTS.hook + dims.flow * DIM_WEIGHTS.flow + dims.value * DIM_WEIGHTS.value + dims.trend * DIM_WEIGHTS.trend
+  );
 }
 
 /** Parse the stage-2 reviewer output (drops malformed rows). */
@@ -127,11 +147,27 @@ export function parseReviews(content: string): ReviewVerdict[] {
     const v = r as Record<string, unknown>;
     const id = Number(v.id);
     if (!Number.isFinite(id)) continue;
+    const clamp = (x: unknown): number => Math.max(0, Math.min(100, Number(x) || 0));
+    // four-dimension shape, with legacy single-score fallback
+    const hasDims = ["hook", "flow", "value", "trend"].some((k) => Number.isFinite(Number(v[k])));
+    const dims = hasDims
+      ? { hook: clamp(v.hook), flow: clamp(v.flow), value: clamp(v.value), trend: clamp(v.trend) }
+      : undefined;
     out.push({
       id,
       keep: v.keep !== false,
-      score: Math.max(0, Math.min(100, Number(v.score) || 0)),
+      score: dims ? compositeScore(dims) : clamp(v.score),
       note: String(v.note ?? "").trim(),
+      dims,
+      dimNotes: dims
+        ? {
+            hook: String(v.hookNote ?? "").trim(),
+            flow: String(v.flowNote ?? "").trim(),
+            value: String(v.valueNote ?? "").trim(),
+            trend: String(v.trendNote ?? "").trim(),
+          }
+        : undefined,
+      teaser: String(v.teaser ?? "").trim().slice(0, 30) || undefined,
     });
   }
   return out;
@@ -143,8 +179,36 @@ export function applyReviews(candidates: HighlightCandidate[], reviews: ReviewVe
   return candidates.map((c) => {
     const r = byId.get(c.id);
     if (!r) return c;
-    return { ...c, score: r.score || c.score, recommended: r.keep, reviewNote: r.note };
+    return {
+      ...c,
+      score: r.score || c.score,
+      recommended: r.keep,
+      reviewNote: r.note,
+      scoreDims: r.dims,
+      dimNotes: r.dimNotes,
+      teaser: r.teaser || undefined,
+    };
   });
+}
+
+/**
+ * Rank-normalise scores the way commercial tools do: the displayed number is
+ * a RANK dressed as a score, which sidesteps LLM score drift between runs.
+ * Recommended clips land in 76-99 (single clip → 97); rejected ones in 50-70
+ * so they always sort below every recommended clip. Order is preserved.
+ */
+export function normalizeScores(candidates: HighlightCandidate[]): HighlightCandidate[] {
+  const assign = (group: HighlightCandidate[], top: number, bottom: number, single: number): Map<number, number> => {
+    const ranked = [...group].sort((a, b) => b.score - a.score);
+    const m = new Map<number, number>();
+    ranked.forEach((c, i) => {
+      m.set(c.id, ranked.length === 1 ? single : Math.round(top - ((top - bottom) * i) / (ranked.length - 1)));
+    });
+    return m;
+  };
+  const rec = assign(candidates.filter((c) => c.recommended), 99, 76, 97);
+  const rej = assign(candidates.filter((c) => !c.recommended), 70, 50, 62);
+  return candidates.map((c) => ({ ...c, score: (c.recommended ? rec : rej).get(c.id) ?? c.score }));
 }
 
 /** Drop overlapping candidates, keeping higher scores (they arrive score-sorted). */
@@ -210,7 +274,7 @@ export async function detectHighlights(
       buildReviewPrompt(transcript, kept),
       signal
     );
-    return applyReviews(kept, parseReviews(reviewContent));
+    return normalizeScores(applyReviews(kept, parseReviews(reviewContent)));
   } catch {
     return kept;
   }

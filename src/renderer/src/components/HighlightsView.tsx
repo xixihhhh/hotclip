@@ -307,6 +307,34 @@ export function HighlightsView({
                     {c.reason}
                   </p>
                 )}
+                {c.scoreDims && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {(
+                      [
+                        ["dimHook", c.scoreDims.hook, c.dimNotes?.hook],
+                        ["dimFlow", c.scoreDims.flow, c.dimNotes?.flow],
+                        ["dimValue", c.scoreDims.value, c.dimNotes?.value],
+                        ["dimTrend", c.scoreDims.trend, c.dimNotes?.trend],
+                      ] as const
+                    ).map(([key, val, note]) => (
+                      <span
+                        key={key}
+                        title={note || undefined}
+                        className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
+                          val >= 75 ? "bg-ember/15 text-ember" : val >= 50 ? "bg-white/5 text-fg/70" : "bg-white/5 text-mut"
+                        }`}
+                      >
+                        {t(key)} {val}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {c.teaser && (
+                  <p className="mt-2 text-[12px] leading-relaxed text-fg/60">
+                    <span className="mr-1.5 rounded bg-white/5 px-1.5 py-0.5 text-[10.5px] text-mut">{t("teaserLabel")}</span>
+                    {c.teaser}
+                  </p>
+                )}
                 {!c.recommended && (
                   <p className="mt-2 flex items-start gap-2 rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-[12px] leading-relaxed text-amber-400">
                     <LuTriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
