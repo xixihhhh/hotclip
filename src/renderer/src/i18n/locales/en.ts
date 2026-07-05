@@ -119,6 +119,7 @@ export const en = {
     captionKaraoke: "Captions: karaoke",
     captionKeyword: "Captions: keyword highlight",
     captionPop: "Captions: word pop",
+    captionBubble: "Captions: bubble FX",
   },
   exportPage: {
     title: "Exporting clips",

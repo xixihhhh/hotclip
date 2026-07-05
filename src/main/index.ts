@@ -17,6 +17,7 @@ import { detectHighlights } from "@core/highlight/detect";
 import { collectSignals } from "@core/signals";
 import { exportClips, sanitizeFilename } from "@core/export";
 import { sliceWords } from "@core/subtitle";
+import { renderCaptionOverlay } from "./overlay-renderer";
 import type { Transcript, LlmConfig, HighlightCandidate, ExportOptions } from "../shared/api-types";
 
 const VIDEO_EXTENSIONS = ["mp4", "mkv", "mov", "flv", "ts", "webm", "avi", "m4v"];
@@ -216,6 +217,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       faceTrack: true,
       modelsRoot: modelsRoot(),
       fontsDir,
+      renderOverlay: renderCaptionOverlay,
     },
     (p) => {
       if (!event.sender.isDestroyed()) event.sender.send("hotclip:export-progress", p);

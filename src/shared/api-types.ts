@@ -108,8 +108,8 @@ export interface HighlightCandidate {
   reviewNote: string;
 }
 
-/** Burned-in caption style choices (none = no captions). */
-export type CaptionStyleChoice = "none" | "karaoke" | "keyword" | "pop";
+/** Burned-in caption style choices (none = no captions; bubble = web-rendered). */
+export type CaptionStyleChoice = "none" | "karaoke" | "keyword" | "pop" | "bubble";
 
 /** Render options for the export step (UI toggles on the highlight list). */
 export interface ExportOptions {

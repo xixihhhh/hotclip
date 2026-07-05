@@ -7,6 +7,26 @@
 import { groupWordsIntoLines, mergeKeywordWords, type AssLayout } from "../subtitle";
 import type { TranscriptWord } from "../../shared/api-types";
 
+/** Caption styles rendered by the web overlay engine (name = template file). */
+export type WebCaptionStyle = "bubble";
+
+export function isWebCaptionStyle(style: string | undefined): style is WebCaptionStyle {
+  return style === "bubble";
+}
+
+/**
+ * Overlay renderer contract. The implementation lives in the Electron main
+ * process (it needs a BrowserWindow); core code takes it via injection so the
+ * export pipeline stays free of electron imports.
+ */
+export type OverlayRenderFn = (
+  basePath: string,
+  outPath: string,
+  payload: OverlayPayload,
+  durationSec: number,
+  template: string
+) => Promise<void>;
+
 export interface OverlayWord {
   text: string;
   startMs: number;

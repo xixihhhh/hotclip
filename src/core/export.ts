@@ -17,6 +17,8 @@ import { extractPeaks } from "./audio-peaks";
 import { detectUiCrop, type UiCrop } from "./uicrop";
 import { generateCropPlan, renderCropXExpr, mapToOutputTime } from "./reframe";
 import { buildCaptionAss, VERTICAL_LAYOUT, HORIZONTAL_LAYOUT, type CaptionStyle } from "./subtitle";
+import { buildOverlayPayload, isWebCaptionStyle, type OverlayRenderFn, type WebCaptionStyle } from "./caption-overlay/payload";
+import { probeMedia } from "./probe";
 import type { TranscriptWord } from "../shared/api-types";
 
 export interface ExportClipSpec {
@@ -45,7 +47,9 @@ export interface ExportRenderOptions {
   /** Center-crop reframe to 9:16 (1080×1920). */
   vertical?: boolean;
   /** Caption style to burn in (clips must carry `words`); omit for none. */
-  captionStyle?: CaptionStyle;
+  captionStyle?: CaptionStyle | WebCaptionStyle;
+  /** Injected web-overlay renderer (Electron main); required for web styles. */
+  renderOverlay?: OverlayRenderFn;
   /** Splice out intra-clip silences (clips must carry `words`). */
   jumpCut?: boolean;
   /** Auto-detect & crop static screen-recording chrome (status bars, app UI). */
@@ -137,13 +141,19 @@ export async function exportClips(
       const clipDuration = plan ? plan.durationSec : clip.endSec - clip.startSec;
       let subtitlePath: string | undefined;
       const wantCaptions = Boolean(options.captionStyle && captionWords && captionWords.length > 0);
-      if (assDir && needAss && (wantCaptions || options.titleCard)) {
+      // Web styles render words in the overlay pass; ASS then only draws the
+      // title card. ASS styles burn everything in one libass pass as before.
+      const webStyle = isWebCaptionStyle(options.captionStyle) && wantCaptions && options.renderOverlay
+        ? options.captionStyle
+        : undefined;
+      const assStyle: CaptionStyle = isWebCaptionStyle(options.captionStyle) ? "karaoke" : (options.captionStyle ?? "karaoke");
+      if (assDir && needAss && ((wantCaptions && !webStyle) || options.titleCard)) {
         subtitlePath = join(assDir, `clip-${clip.id}.ass`);
         const ass = buildCaptionAss(
-          wantCaptions ? captionWords! : [],
+          wantCaptions && !webStyle ? captionWords! : [],
           captionShift,
           layout,
-          options.captionStyle ?? "karaoke",
+          assStyle,
           {
             keywords: clip.keywords,
             forcedBreaks: plan?.breaks,
@@ -182,6 +192,8 @@ export async function exportClips(
       }
 
       const outPath = join(outDir, clipFilename(i + 1, clip.title));
+      // Web captions: cut to a base file first, then composite words on top.
+      const cutTarget = webStyle ? outPath.replace(/\.mp4$/, ".base.mp4") : outPath;
       const cutOptions = trackPlan
         ? { trackPlan, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined }
         : {
@@ -191,11 +203,44 @@ export async function exportClips(
             fontsDir: subtitlePath ? options.fontsDir : undefined,
           };
       if (plan && plan.segments.length > 1) {
-        await cutJumpClip(inputPath, outPath, clip.startSec, plan.segments, cutOptions);
+        await cutJumpClip(inputPath, cutTarget, clip.startSec, plan.segments, cutOptions);
       } else {
         // single kept segment → plain cut (honoring trimmed lead-in/tail)
         const range = plan?.segments[0] ?? { startSec: clip.startSec, endSec: clip.endSec };
-        await cutClip(inputPath, outPath, range.startSec, range.endSec, cutOptions);
+        await cutClip(inputPath, cutTarget, range.startSec, range.endSec, cutOptions);
+      }
+      if (webStyle) {
+        // Overlay geometry must match the base clip exactly, whatever the cut
+        // pipeline produced (vertical 1080×1920 or source-sized horizontal).
+        try {
+          const info = await probeMedia(cutTarget);
+          const scale = info.height / layout.playResY;
+          const overlayLayout = {
+            ...layout,
+            playResX: info.width,
+            playResY: info.height,
+            fontSize: Math.round(layout.fontSize * scale),
+            marginV: Math.round(layout.marginV * scale),
+            marginH: Math.round(layout.marginH * scale),
+          };
+          const relWords = captionWords!.map((w) => ({
+            text: w.text,
+            startSec: w.startSec - captionShift,
+            endSec: w.endSec - captionShift,
+          }));
+          const payload = buildOverlayPayload(relWords, overlayLayout, {
+            keywords: clip.keywords,
+            forcedBreaks: plan?.breaks,
+          });
+          await options.renderOverlay!(cutTarget, outPath, payload, clipDuration, webStyle);
+          await rm(cutTarget, { force: true });
+        } catch (e) {
+          // fail-open: ship the base clip (title card intact, no word captions)
+          await rm(outPath, { force: true }).catch(() => {});
+          const { rename } = await import("fs/promises");
+          await rename(cutTarget, outPath);
+          console.error(`overlay pass failed for clip ${clip.id}, shipped base:`, e);
+        }
       }
       const s = await stat(outPath);
 

@@ -114,6 +114,7 @@ export const zh = {
     captionKaraoke: "字幕:逐字点亮",
     captionKeyword: "字幕:智能划重点",
     captionPop: "字幕:大字弹跳",
+    captionBubble: "字幕:气泡特效",
     // LLM 设置
     llmTitle: "连接 AI 模型",
     llmDesc: "找爆点需要一个大模型。推荐 Atlas Cloud——一个 Key 用齐中外主流模型;也可用本地 Ollama 或任意 OpenAI 兼容接口。",

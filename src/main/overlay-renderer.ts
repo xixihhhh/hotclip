@@ -19,6 +19,7 @@ export interface OverlayRenderOptions {
 
 /** Template directory: extraResources when packaged, repo resources in dev. */
 export function templateDir(): string {
+  if (process.env.HOTCLIP_TEMPLATE_DIR) return process.env.HOTCLIP_TEMPLATE_DIR;
   return app.isPackaged
     ? join(process.resourcesPath, "caption-templates")
     : join(app.getAppPath(), "resources", "caption-templates");

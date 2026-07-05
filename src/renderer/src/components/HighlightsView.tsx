@@ -30,12 +30,13 @@ import { adjustClipBoundary } from "../../../shared/boundary";
 import type { Transcript, HighlightCandidate, ExportOptions, CaptionStyleChoice } from "../../../shared/api-types";
 
 /** Click-to-cycle order for the caption style chip. */
-const CAPTION_CYCLE: CaptionStyleChoice[] = ["karaoke", "keyword", "pop", "none"];
+const CAPTION_CYCLE: CaptionStyleChoice[] = ["karaoke", "keyword", "pop", "bubble", "none"];
 const CAPTION_KEY: Record<CaptionStyleChoice, string> = {
   none: "captionNone",
   karaoke: "captionKaraoke",
   keyword: "captionKeyword",
   pop: "captionPop",
+  bubble: "captionBubble",
 };
 
 function formatClock(totalSeconds: number): string {
