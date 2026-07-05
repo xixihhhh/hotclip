@@ -111,6 +111,8 @@ export const en = {
     captionStyleHint: "Click to cycle caption styles (burned into the video)",
     optJumpCut: "Cut silences",
     optJumpCutHint: "Splice out pauses between speech — hand-edited rhythm, automatically",
+    optCleanFillers: "Cut fillers",
+    optCleanFillersHint: "Remove um/uh hesitations and stutter repeats; removals are listed in clips.json",
     optTitleCard: "Title card",
     optTitleCardHint: "Burn the AI-written title into the top safe zone",
     optTrimUi: "Strip screen UI",

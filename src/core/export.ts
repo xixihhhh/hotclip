@@ -13,6 +13,7 @@ import { resolveFfmpegPath } from "./binaries";
 const execFileAsync = promisify(execFile);
 import { cutClip, cutJumpClip } from "./cut";
 import { computeJumpCut } from "./gaps";
+import { findFillerWords, dropFillerWords, fillerCutSpans, type FillerHit } from "./fillers";
 import { extractPeaks } from "./audio-peaks";
 import { detectUiCrop, type UiCrop } from "./uicrop";
 import { generateCropPlan, renderCropXExpr, mapToOutputTime } from "./reframe";
@@ -52,6 +53,8 @@ export interface ExportRenderOptions {
   renderOverlay?: OverlayRenderFn;
   /** Splice out intra-clip silences (clips must carry `words`). */
   jumpCut?: boolean;
+  /** Splice out hesitation sounds (嗯/呃/um/uh) and stutter repeats. */
+  cleanFillers?: boolean;
   /** Auto-detect & crop static screen-recording chrome (status bars, app UI). */
   trimUi?: boolean;
   /** Face-tracking vertical reframe (needs modelsRoot); falls back to center. */
@@ -122,6 +125,8 @@ export async function exportClips(
 
   try {
     const results: ExportedClip[] = [];
+    // "you decide what got cut": removed filler texts surface in clips.json
+    const removedFillersByClip = new Map<number, string[]>();
     for (let i = 0; i < clips.length; i++) {
       const clip = clips[i];
       if (signal?.aborted) throw new Error("export cancelled");
@@ -130,10 +135,25 @@ export async function exportClips(
       // Jump cut: plan kept segments + words remapped to the output timeline.
       // Peaks gate the cuts so wordless-but-loud moments (laughter, applause,
       // BGM stings) survive; peak extraction failure degrades to gap-only.
+      // Filler cleanup rides the same splice machinery: hesitation sounds and
+      // stutters become forced-cut spans (they are audible speech — neither
+      // the gap rule nor the silence gate would remove them).
       let plan = null;
-      if (options.jumpCut && clip.words && clip.words.length > 0) {
-        const peaks = await extractPeaks(inputPath, clip.startSec, clip.endSec).catch(() => undefined);
-        plan = computeJumpCut(clip.words, clip.startSec, clip.endSec, { peaks });
+      let fillerHits: FillerHit[] = [];
+      if ((options.jumpCut || options.cleanFillers) && clip.words && clip.words.length > 0) {
+        fillerHits = options.cleanFillers ? findFillerWords(clip.words) : [];
+        const planWords = dropFillerWords(clip.words, fillerHits);
+        const peaks = options.jumpCut
+          ? await extractPeaks(inputPath, clip.startSec, clip.endSec).catch(() => undefined)
+          : undefined;
+        // filler-only mode with nothing found → leave the clip untouched
+        if (options.jumpCut || fillerHits.length > 0) {
+          plan = computeJumpCut(planWords, clip.startSec, clip.endSec, {
+            peaks,
+            forceCutSpans: fillerCutSpans(fillerHits),
+            gapThresholdSec: options.jumpCut ? undefined : Infinity,
+          });
+        }
       }
       const captionWords = plan ? plan.words : clip.words;
       const captionShift = plan ? 0 : clip.startSec;
@@ -262,6 +282,9 @@ export async function exportClips(
         sizeBytes: s.size,
         durationSec: clipDuration,
       });
+      if (fillerHits.length > 0) {
+        removedFillersByClip.set(clip.id, fillerHits.map((h) => h.text.trim()));
+      }
       onProgress?.({ current: i + 1, total: clips.length, clipId: clip.id, stage: "done" });
     }
 
@@ -273,6 +296,7 @@ export async function exportClips(
         vertical: Boolean(options.vertical),
         captionStyle: options.captionStyle ?? "none",
         jumpCut: Boolean(options.jumpCut),
+        cleanFillers: Boolean(options.cleanFillers),
         trimUi: Boolean(options.trimUi),
         titleCard: Boolean(options.titleCard),
       },
@@ -286,6 +310,7 @@ export async function exportClips(
           sourceStartSec: spec?.startSec ?? null,
           sourceEndSec: spec?.endSec ?? null,
           keywords: spec?.keywords ?? [],
+          removedFillers: removedFillersByClip.get(r.id) ?? [],
           ...(spec?.meta ?? {}),
         };
       }),

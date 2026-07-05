@@ -25,6 +25,37 @@ export interface JumpCutOptions {
   peaks?: PeakTrack;
   /** Peak (0..1) above which a gap counts as "not silent" (~-28dBFS). */
   silenceThreshold?: number;
+  /**
+   * Spans that must be cut regardless of gaps or loudness — filler words and
+   * stutters are audible speech, so neither the gap rule nor the silence gate
+   * would ever remove them on their own.
+   */
+  forceCutSpans?: KeptSegment[];
+  /** Word-gap cut threshold; pass Infinity to disable gap cuts entirely. */
+  gapThresholdSec?: number;
+}
+
+/** Subtract cut spans from kept segments (interval difference). Pure. */
+export function subtractSpans(segments: KeptSegment[], spans: KeptSegment[], minKeepSec = 0.12): KeptSegment[] {
+  if (spans.length === 0) return segments;
+  const out: KeptSegment[] = [];
+  for (const seg of segments) {
+    let pieces: KeptSegment[] = [{ ...seg }];
+    for (const span of spans) {
+      const next: KeptSegment[] = [];
+      for (const p of pieces) {
+        if (span.endSec <= p.startSec || span.startSec >= p.endSec) {
+          next.push(p);
+          continue;
+        }
+        if (span.startSec > p.startSec) next.push({ startSec: p.startSec, endSec: span.startSec });
+        if (span.endSec < p.endSec) next.push({ startSec: span.endSec, endSec: p.endSec });
+      }
+      pieces = next;
+    }
+    out.push(...pieces.filter((p) => p.endSec - p.startSec >= minKeepSec));
+  }
+  return out;
 }
 
 export interface JumpCutPlan {
@@ -77,7 +108,7 @@ export function computeJumpCut(
   clipEndSec: number,
   options: JumpCutOptions = {}
 ): JumpCutPlan {
-  const { peaks, silenceThreshold = SILENCE_PEAK_THRESHOLD } = options;
+  const { peaks, silenceThreshold = SILENCE_PEAK_THRESHOLD, forceCutSpans = [], gapThresholdSec = GAP_THRESHOLD_SEC } = options;
   const inClip = words.filter((w) => w.endSec > clipStartSec && w.startSec < clipEndSec);
   if (inClip.length === 0) {
     const full = { startSec: clipStartSec, endSec: clipEndSec };
@@ -90,7 +121,7 @@ export function computeJumpCut(
   for (let i = 1; i < inClip.length; i++) {
     const w = inClip[i];
     const gap = w.startSec - prevEnd;
-    if (gap > GAP_THRESHOLD_SEC) {
+    if (gap > gapThresholdSec) {
       // AND gate: the removed span must be word-free AND acoustically quiet.
       const removedFrom = prevEnd + PAD_AFTER_SEC;
       const removedTo = w.startSec - PAD_BEFORE_SEC;
@@ -104,7 +135,10 @@ export function computeJumpCut(
     prevEnd = Math.max(prevEnd, w.endSec);
   }
   segments.push({ startSec: segStart, endSec: Math.min(prevEnd + TAIL_SEC, clipEndSec) });
+  // merge first, subtract after — a forced cut (filler ≈0.15s) must never be
+  // "filled back" by the short-cut smoothing pass
   segments = mergeShortCuts(segments);
+  segments = subtractSpans(segments, forceCutSpans);
 
   const durationSec = segments.reduce((acc, s) => acc + (s.endSec - s.startSec), 0);
   const removedSec = clipEndSec - clipStartSec - durationSec;

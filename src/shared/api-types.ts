@@ -119,6 +119,8 @@ export interface ExportOptions {
   captionStyle: CaptionStyleChoice;
   /** Splice out intra-clip silences for a tighter, hand-edited rhythm. */
   jumpCut: boolean;
+  /** Splice out hesitation sounds (嗯/呃/um/uh) and stutter repeats. */
+  cleanFillers?: boolean;
   /** Auto-crop static screen-recording chrome (status bar, app UI, letterbox). */
   trimUi: boolean;
   /** Burn each clip's title into the top safe zone. */

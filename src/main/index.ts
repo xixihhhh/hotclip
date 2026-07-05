@@ -180,7 +180,8 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
   const style =
     opts.captionStyle && opts.captionStyle !== "none" && opts.transcript ? opts.captionStyle : undefined;
   const jumpCut = Boolean(opts.jumpCut && opts.transcript);
-  const needWords = Boolean(style) || jumpCut;
+  const cleanFillers = Boolean(opts.cleanFillers && opts.transcript);
+  const needWords = Boolean(style) || jumpCut || cleanFillers;
   const sourceName = sanitizeFilename(basename(filePath, extname(filePath)), "video");
   const outDir = join(app.getPath("videos"), "HotClip", sourceName);
   // bundled caption font: packaged → resources/fonts, dev → repo resources/fonts
@@ -212,6 +213,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       vertical: Boolean(opts.vertical),
       captionStyle: style,
       jumpCut,
+      cleanFillers,
       trimUi: Boolean(opts.trimUi),
       titleCard: Boolean(opts.titleCard),
       faceTrack: true,
