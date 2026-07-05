@@ -98,6 +98,8 @@ export const en = {
     captionStyleHint: "Click to cycle caption styles (burned into the video)",
     optJumpCut: "Cut silences",
     optJumpCutHint: "Splice out pauses between speech — hand-edited rhythm, automatically",
+    optTrimUi: "Strip screen UI",
+    optTrimUiHint: "Detect & crop static screen-recording chrome (status bar, app UI, letterbox); no-op when none found",
     captionNone: "No captions",
     captionKaraoke: "Captions: karaoke",
     captionKeyword: "Captions: keyword highlight",

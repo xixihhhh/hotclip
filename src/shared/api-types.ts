@@ -109,6 +109,8 @@ export interface ExportOptions {
   captionStyle: CaptionStyleChoice;
   /** Splice out intra-clip silences for a tighter, hand-edited rhythm. */
   jumpCut: boolean;
+  /** Auto-crop static screen-recording chrome (status bar, app UI, letterbox). */
+  trimUi: boolean;
   /** Needed for captions/jump-cut: source of word-level timestamps. */
   transcript?: Transcript;
 }

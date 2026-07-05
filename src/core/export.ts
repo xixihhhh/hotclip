@@ -8,6 +8,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { cutClip, cutJumpClip } from "./cut";
 import { computeJumpCut } from "./gaps";
+import { detectUiCrop, type UiCrop } from "./uicrop";
 import { buildCaptionAss, VERTICAL_LAYOUT, HORIZONTAL_LAYOUT, type CaptionStyle } from "./subtitle";
 import type { TranscriptWord } from "../shared/api-types";
 
@@ -29,6 +30,8 @@ export interface ExportRenderOptions {
   captionStyle?: CaptionStyle;
   /** Splice out intra-clip silences (clips must carry `words`). */
   jumpCut?: boolean;
+  /** Auto-detect & crop static screen-recording chrome (status bars, app UI). */
+  trimUi?: boolean;
   /** Bundled-font directory handed to libass so CJK renders identically everywhere. */
   fontsDir?: string;
 }
@@ -78,6 +81,14 @@ export async function exportClips(
   const assDir = options.captionStyle ? await mkdtemp(join(tmpdir(), "hotclip-ass-")) : null;
   const layout = options.vertical ? VERTICAL_LAYOUT : HORIZONTAL_LAYOUT;
 
+  // one UI-chrome detection pass for the whole source (bands don't move)
+  let uiCrop: UiCrop | undefined;
+  if (options.trimUi && clips.length > 0) {
+    const spanEnd = Math.max(...clips.map((c) => c.endSec));
+    uiCrop = await detectUiCrop(inputPath, spanEnd).catch(() => undefined);
+    if (uiCrop && uiCrop.topFrac === 0 && uiCrop.bottomFrac === 0) uiCrop = undefined;
+  }
+
   try {
     const results: ExportedClip[] = [];
     for (let i = 0; i < clips.length; i++) {
@@ -105,6 +116,7 @@ export async function exportClips(
 
       const outPath = join(outDir, clipFilename(i + 1, clip.title));
       const cutOptions = {
+        uiCrop,
         vertical: options.vertical,
         subtitlePath,
         fontsDir: subtitlePath ? options.fontsDir : undefined,

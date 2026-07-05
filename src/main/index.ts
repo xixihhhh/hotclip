@@ -159,7 +159,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       keywords: c.keywords,
     })),
     outDir,
-    { vertical: Boolean(opts.vertical), captionStyle: style, jumpCut, fontsDir },
+    { vertical: Boolean(opts.vertical), captionStyle: style, jumpCut, trimUi: Boolean(opts.trimUi), fontsDir },
     (p) => {
       if (!event.sender.isDestroyed()) event.sender.send("hotclip:export-progress", p);
     }

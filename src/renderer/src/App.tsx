@@ -70,7 +70,7 @@ export default function App(): React.JSX.Element {
   /** Clips + render toggles chosen for export (moves the wizard to step 2). */
   const [exporting, setExporting] = useState<{
     clips: HighlightCandidate[];
-    options: Pick<ExportOptions, "vertical" | "captionStyle" | "jumpCut">;
+    options: Pick<ExportOptions, "vertical" | "captionStyle" | "jumpCut" | "trimUi">;
   } | null>(null);
 
   const restart = (): void => {

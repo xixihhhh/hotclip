@@ -24,6 +24,8 @@ export interface CutOptions {
   crf?: number;
   /** x264 preset for accurate mode; default "veryfast". */
   preset?: string;
+  /** Crop away static screen-recording chrome first (fractions of height). */
+  uiCrop?: { topFrac: number; bottomFrac: number };
   /** Reframe to 9:16 vertical (center crop → 1080×1920). Requires re-encode. */
   vertical?: boolean;
   /** Burn an .ass karaoke subtitle file via libass. Requires re-encode. */
@@ -43,6 +45,12 @@ export function escapeFilterPath(p: string): string {
 /** Compose the -vf chain for reframing + caption burn-in. Empty = no filter. */
 export function buildVideoFilters(options: CutOptions): string[] {
   const filters: string[] = [];
+  const ui = options.uiCrop;
+  if (ui && (ui.topFrac > 0 || ui.bottomFrac > 0)) {
+    // strip static screen-recording chrome BEFORE any reframe; keep dims even
+    const keep = Math.max(0.2, 1 - ui.topFrac - ui.bottomFrac);
+    filters.push(`crop=w=iw:h='floor(ih*${keep.toFixed(4)}/2)*2':x=0:y='floor(ih*${ui.topFrac.toFixed(4)}/2)*2'`);
+  }
   if (options.vertical) {
     // Center crop to exactly 9:16 (whichever axis binds), then normalize size.
     filters.push("crop=w='min(iw,ih*9/16)':h='min(ih,iw*16/9)'", "scale=1080:1920:flags=lanczos", "setsar=1");

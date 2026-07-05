@@ -30,7 +30,7 @@ export function ExportView({
 }: {
   filePath: string;
   clips: HighlightCandidate[];
-  options: Pick<ExportOptions, "vertical" | "captionStyle" | "jumpCut">;
+  options: Pick<ExportOptions, "vertical" | "captionStyle" | "jumpCut" | "trimUi">;
   transcript: Transcript;
   onBack: () => void;
   onRestart: () => void;

@@ -93,6 +93,8 @@ export const zh = {
     captionStyleHint: "点击切换字幕样式,直接烧录进画面",
     optJumpCut: "剪气口",
     optJumpCutHint: "自动剪掉说话间的停顿静音,成片节奏像人剪的",
+    optTrimUi: "去录屏UI",
+    optTrimUiHint: "自动检测并裁掉录屏的状态栏/固定UI/上下黑边(检测不到就不裁)",
     captionNone: "无字幕",
     captionKaraoke: "字幕:逐字点亮",
     captionKeyword: "字幕:智能划重点",
