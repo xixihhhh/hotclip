@@ -37,4 +37,15 @@ describe("buildOverlayPayload", () => {
     expect(p.lines.length).toBe(2);
     expect(p.lines[1].words[0].text).toBe("三");
   });
+
+  it("carries per-word speaker ids through for caption coloring", () => {
+    const spoken = [
+      { ...w("甲", 0, 0.4), speaker: 0 },
+      { ...w("乙", 0.4, 0.8), speaker: 1 },
+    ];
+    const p = buildOverlayPayload(spoken, VERTICAL_LAYOUT);
+    const flat = p.lines.flatMap((l) => l.words);
+    expect(flat.find((x) => x.text === "甲")?.speaker).toBe(0);
+    expect(flat.find((x) => x.text === "乙")?.speaker).toBe(1);
+  });
 });

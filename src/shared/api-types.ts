@@ -38,6 +38,8 @@ export interface TranscriptSegment {
   endSec: number;
   text: string;
   words: TranscriptWord[];
+  /** Dominant diarization speaker id (0-based); absent when not diarized. */
+  speaker?: number;
 }
 
 export interface Transcript {
@@ -162,7 +164,7 @@ export interface HotClipApi {
   /** Subscribe to transcription progress; returns an unsubscribe function. */
   onTranscribeProgress: (cb: (p: TranscribeProgressEvent) => void) => () => void;
   /** Detect highlight candidates via the configured LLM; filePath enables audiovisual-signal evidence. */
-  detectHighlights: (transcript: Transcript, llm: LlmConfig, filePath?: string) => Promise<HighlightCandidate[]>;
+  detectHighlights: (transcript: Transcript, llm: LlmConfig, filePath?: string, diarize?: boolean) => Promise<HighlightCandidate[]>;
   /** Cut the selected highlights into mp4 files; resolves with the file list. */
   exportClips: (filePath: string, clips: HighlightCandidate[], options?: ExportOptions) => Promise<ExportedClip[]>;
   /** Subscribe to per-clip export progress; returns an unsubscribe function. */

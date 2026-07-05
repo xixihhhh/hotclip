@@ -6,6 +6,7 @@ import {
   renderTranscriptLines,
   extractJson,
   isChineseTranscript,
+  isMultiSpeaker,
   highlightSystemPrompt,
   renderSignals,
 } from "../highlight/prompt";
@@ -229,6 +230,26 @@ describe("prompt builders", () => {
   it("extractJson handles fences and prose-wrapped objects", () => {
     expect(extractJson('```json\n{"a":1}\n```')).toBe('{"a":1}');
     expect(extractJson('好的,结果如下 {"a":1} 请查收')).toBe('{"a":1}');
+  });
+
+  it("prefixes speaker labels and injects attribution guidance when multi-speaker", () => {
+    const multi = makeTranscript(["嘉宾说的。", "主持人问的。"]);
+    multi.segments[0].speaker = 0;
+    multi.segments[1].speaker = 1;
+    expect(isMultiSpeaker(multi)).toBe(true);
+    const lines = renderTranscriptLines(multi).split("\n");
+    expect(lines[0]).toContain("S1: 嘉宾说的。");
+    expect(lines[1]).toContain("S2: 主持人问的。");
+    expect(buildHighlightPrompt(multi)).toContain("多人对谈");
+  });
+
+  it("stays single-speaker (no S-prefix) when only one speaker present", () => {
+    const one = makeTranscript(["只有一个人。", "还是这个人。"]);
+    one.segments[0].speaker = 0;
+    one.segments[1].speaker = 0;
+    expect(isMultiSpeaker(one)).toBe(false);
+    expect(renderTranscriptLines(one)).not.toContain("S1:");
+    expect(buildHighlightPrompt(one)).not.toContain("多人对谈");
   });
 });
 

@@ -11,7 +11,8 @@ import { SenseVoiceEngine } from "@core/transcribe/sensevoice";
 import { ParaformerEngine } from "@core/transcribe/paraformer";
 import { FireRedEngine } from "@core/transcribe/firered";
 import { ElevenLabsEngine } from "@core/transcribe/elevenlabs";
-import { isModelInstalled, SENSEVOICE_MODEL, PARAFORMER_MODEL, FIRERED_MODEL } from "@core/models";
+import { isModelInstalled, ensureModel, SENSEVOICE_MODEL, PARAFORMER_MODEL, FIRERED_MODEL, SEGMENTATION_MODEL, SPEAKER_EMBEDDING_MODEL } from "@core/models";
+import { runDiarization, labelTranscript } from "@core/diarize";
 import { ASR_CATALOG } from "../shared/asr-catalog";
 import { detectHighlights } from "@core/highlight/detect";
 import { collectSignals } from "@core/signals";
@@ -151,23 +152,40 @@ ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: 
 // The LLM key comes from the renderer's settings; it is used for this one
 // call and never persisted in the main process.
 
-ipcMain.handle("hotclip:detect-highlights", async (_event, transcript: unknown, llm: unknown, filePath: unknown) => {
-  const t = transcript as Transcript;
-  const config = llm as LlmConfig;
-  if (!t || !Array.isArray(t.segments)) throw new Error("detect-highlights requires a transcript");
-  if (!config?.baseUrl || !config?.model) throw new Error("请先在设置里配置 LLM(baseUrl/model)");
-  // Tier-0 audiovisual evidence (loudness peaks + cut density), capped so a
-  // pathological source can never stall detection; failures degrade to none.
-  let signals;
-  if (typeof filePath === "string" && filePath.trim()) {
-    // usually already resolved (warmed during transcription); cap the cold path
-    signals = await Promise.race([
-      warmSignals(filePath),
-      new Promise<undefined>((r) => setTimeout(() => r(undefined), 120_000)),
-    ]).catch(() => undefined);
+ipcMain.handle(
+  "hotclip:detect-highlights",
+  async (_event, transcript: unknown, llm: unknown, filePath: unknown, diarize: unknown) => {
+    let t = transcript as Transcript;
+    const config = llm as LlmConfig;
+    if (!t || !Array.isArray(t.segments)) throw new Error("detect-highlights requires a transcript");
+    if (!config?.baseUrl || !config?.model) throw new Error("请先在设置里配置 LLM(baseUrl/model)");
+    // Tier-0 audiovisual evidence (loudness peaks + cut density), capped so a
+    // pathological source can never stall detection; failures degrade to none.
+    let signals;
+    if (typeof filePath === "string" && filePath.trim()) {
+      // usually already resolved (warmed during transcription); cap the cold path
+      signals = await Promise.race([
+        warmSignals(filePath),
+        new Promise<undefined>((r) => setTimeout(() => r(undefined), 120_000)),
+      ]).catch(() => undefined);
+    }
+    // Multi-speaker attribution (opt-in): label the transcript so the LLM knows
+    // who says what. Fail-open — a diarization hiccup must not block detection.
+    if (diarize === true && typeof filePath === "string" && filePath.trim()) {
+      t = await diarizeTranscript(t, filePath).catch(() => t);
+    }
+    return detectHighlights(t, config, undefined, signals);
   }
-  return detectHighlights(t, config, undefined, signals);
-});
+);
+
+/** Ensure diarization models, run, and label the transcript. Throws on failure. */
+async function diarizeTranscript(t: Transcript, filePath: string): Promise<Transcript> {
+  const root = modelsRoot();
+  await ensureModel(root, SEGMENTATION_MODEL);
+  await ensureModel(root, SPEAKER_EMBEDDING_MODEL);
+  const turns = await runDiarization(filePath, root);
+  return labelTranscript(t, turns);
+}
 
 // ---- IPC: export selected clips (wizard step 3) ----
 // Output goes to ~/Movies/HotClip/<source-name>/ — a place beginners can find.

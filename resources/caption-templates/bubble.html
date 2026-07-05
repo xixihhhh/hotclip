@@ -67,6 +67,9 @@
     return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
   }
 
+  // Per-speaker tint for multi-speaker clips (keyword gradient still wins).
+  var SPEAKER_COLORS = ["#ffffff", "#7fd4ff", "#ffd36b", "#9dff8f", "#ff9dc4"];
+
   function buildLine(line) {
     lineEl.innerHTML = "";
     wordEls = line.words.map(function (w) {
@@ -75,6 +78,9 @@
       var inner = document.createElement("span");
       inner.className = "t";
       inner.textContent = w.text;
+      if (!w.keyword && typeof w.speaker === "number") {
+        inner.style.color = SPEAKER_COLORS[w.speaker % SPEAKER_COLORS.length];
+      }
       el.appendChild(inner);
       lineEl.appendChild(el);
       return el;

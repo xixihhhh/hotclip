@@ -121,7 +121,7 @@ const browserMock: HotClipApi = {
   revealClip() {
     /* browser mock: nothing to reveal */
   },
-  async detectHighlights(transcript): Promise<HighlightCandidate[]> {
+  async detectHighlights(transcript, _llm, _filePath, _diarize): Promise<HighlightCandidate[]> {
     await sleep(1500);
     const segs = transcript.segments;
     const pick = (from: number, to: number, id: number, title: string, hook: string, score: number, reason: string): HighlightCandidate => ({

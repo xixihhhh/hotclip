@@ -113,6 +113,8 @@ export const en = {
     optJumpCutHint: "Splice out pauses between speech — hand-edited rhythm, automatically",
     optCleanFillers: "Cut fillers",
     optCleanFillersHint: "Remove um/uh hesitations and stutter repeats; removals are listed in clips.json",
+    optDiarize: "Multi-speaker",
+    optDiarizeHint: "Label who is speaking so the AI picks per-speaker clips and avoids cross-speaker quote-mining; captions color by speaker (first use downloads ~47MB speaker models)",
     optTitleCard: "Title card",
     optTitleCardHint: "Burn the AI-written title into the top safe zone",
     optTrimUi: "Strip screen UI",

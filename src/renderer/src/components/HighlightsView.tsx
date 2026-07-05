@@ -18,6 +18,7 @@ import {
   LuCaptions,
   LuFastForward,
   LuEraser,
+  LuUsers,
   LuTriangleAlert,
   LuType,
   LuChevronLeft,
@@ -84,14 +85,15 @@ export function HighlightsView({
   const [jumpCut, setJumpCut] = useState(true);
   const [cleanFillers, setCleanFillers] = useState(true);
   const [trimUi, setTrimUi] = useState(true);
+  const [diarize, setDiarize] = useState(false);
   const [titleCard, setTitleCard] = useState(true);
   const startedRef = useRef(false);
 
-  const run = useCallback(async (): Promise<void> => {
+  const run = useCallback(async (useDiarize: boolean): Promise<void> => {
     setDetecting(true);
     setError(null);
     try {
-      const result = await getApi().detectHighlights(transcript, config, filePath);
+      const result = await getApi().detectHighlights(transcript, config, filePath, useDiarize);
       setCandidates(result);
       // reviewer-approved clips are pre-selected; flagged ones start unchecked
       setSelected(new Set(result.filter((c) => c.recommended).map((c) => c.id)));
@@ -101,6 +103,15 @@ export function HighlightsView({
       setDetecting(false);
     }
   }, [transcript, config, filePath]);
+
+  // Multi-speaker attribution: re-detect with diarization when toggled on.
+  const toggleDiarize = useCallback((): void => {
+    setDiarize((prev) => {
+      const next = !prev;
+      void run(next);
+      return next;
+    });
+  }, [run]);
 
   const nudge = (id: number, edge: "start" | "end", dir: 1 | -1): void => {
     setCandidates((prev) => {
@@ -126,7 +137,7 @@ export function HighlightsView({
   useEffect(() => {
     if (!showGate && !startedRef.current) {
       startedRef.current = true;
-      void run();
+      void run(false);
     }
   }, [showGate, run]);
 
@@ -241,7 +252,7 @@ export function HighlightsView({
             >
               {t("llmTitle")}
             </button>
-            <button type="button" onClick={run} className="btn-flame rounded-lg px-5 py-2 text-sm font-bold text-white">
+            <button type="button" onClick={() => run(diarize)} className="btn-flame rounded-lg px-5 py-2 text-sm font-bold text-white">
               {t("retry")}
             </button>
           </div>
@@ -259,14 +270,27 @@ export function HighlightsView({
               </h1>
               <p className="mt-1.5 text-[13px] text-mut">{t("resultCount", { n: candidates.length })}</p>
             </div>
-            <button
-              type="button"
-              onClick={onBack}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3.5 py-2 text-xs text-mut transition-colors hover:border-mut hover:text-fg"
-            >
-              <LuArrowLeft className="h-3.5 w-3.5" />
-              {t("retry")}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                title={t("optDiarizeHint")}
+                onClick={toggleDiarize}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                  diarize ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut hover:text-fg"
+                }`}
+              >
+                <LuUsers className={`h-3.5 w-3.5 ${diarize ? "text-ember" : ""}`} />
+                {t("optDiarize")}
+              </button>
+              <button
+                type="button"
+                onClick={onBack}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3.5 py-2 text-xs text-mut transition-colors hover:border-mut hover:text-fg"
+              >
+                <LuArrowLeft className="h-3.5 w-3.5" />
+                {t("retry")}
+              </button>
+            </div>
           </div>
 
           {candidates.length === 0 && <p className="card mt-5 rounded-2xl p-6 text-center text-sm text-mut">{t("empty")}</p>}

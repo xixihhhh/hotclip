@@ -33,6 +33,8 @@ export interface OverlayWord {
   endMs: number;
   /** True when the word is one of the clip's emphasis keywords. */
   keyword: boolean;
+  /** Diarization speaker id (0-based); absent when not diarized. */
+  speaker?: number;
 }
 
 export interface OverlayLine {
@@ -80,6 +82,7 @@ export function buildOverlayPayload(
         startMs: Math.round(w.startSec * 1000),
         endMs: Math.round(w.endSec * 1000),
         keyword: keywordSet.has(w.text.toLowerCase()),
+        speaker: w.speaker,
       })),
     };
   });

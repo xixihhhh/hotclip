@@ -10,7 +10,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { resolveFfmpegPath } from "./binaries";
 import { modelDir, SEGMENTATION_MODEL, SPEAKER_EMBEDDING_MODEL } from "./models";
-import type { TranscriptWord } from "../shared/api-types";
+import type { Transcript, TranscriptSegment, TranscriptWord } from "../shared/api-types";
 
 const execFileAsync = promisify(execFile);
 
@@ -131,4 +131,36 @@ export function assignWordSpeakers(
 /** Count distinct speakers in a turn list. */
 export function speakerCount(turns: SpeakerTurn[]): number {
   return new Set(turns.map((t) => t.speaker)).size;
+}
+
+/** The speaker owning the most word-time in a segment (majority vote). */
+export function dominantSpeaker(words: TranscriptWord[]): number | undefined {
+  const byId = new Map<number, number>();
+  for (const w of words) {
+    if (w.speaker === undefined) continue;
+    byId.set(w.speaker, (byId.get(w.speaker) ?? 0) + (w.endSec - w.startSec));
+  }
+  let best: number | undefined;
+  let bestDur = 0;
+  for (const [id, dur] of byId) {
+    if (dur > bestDur) {
+      bestDur = dur;
+      best = id;
+    }
+  }
+  return best;
+}
+
+/**
+ * Label a whole transcript: assign each word a speaker (max-overlap), then set
+ * each segment's dominant speaker. Returns a new transcript; the original is
+ * untouched. Words already carry the labeling for caption coloring downstream.
+ */
+export function labelTranscript(transcript: Transcript, turns: SpeakerTurn[]): Transcript {
+  if (turns.length === 0) return transcript;
+  const segments: TranscriptSegment[] = transcript.segments.map((seg) => {
+    const words = assignWordSpeakers(seg.words, turns);
+    return { ...seg, words, speaker: dominantSpeaker(words) };
+  });
+  return { ...transcript, segments };
 }

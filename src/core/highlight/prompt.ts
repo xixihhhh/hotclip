@@ -59,14 +59,27 @@ export function highlightSystemPrompt(transcript: Transcript): string {
   return isChineseTranscript(transcript) ? HIGHLIGHT_SYSTEM_PROMPT_ZH : HIGHLIGHT_SYSTEM_PROMPT_EN;
 }
 
-/** Render transcript segments as "[id] MM:SS text" lines the LLM can cite. */
+/** True when the transcript carries diarization with more than one speaker. */
+export function isMultiSpeaker(transcript: Transcript): boolean {
+  const ids = new Set<number>();
+  for (const s of transcript.segments) if (s.speaker !== undefined) ids.add(s.speaker);
+  return ids.size > 1;
+}
+
+/**
+ * Render transcript segments as "[id] MM:SS text" lines the LLM can cite.
+ * When diarized, each line is prefixed with the speaker ("S1:") so the LLM can
+ * attribute quotes and avoid stitching two speakers into one "highlight".
+ */
 export function renderTranscriptLines(transcript: Transcript): string {
+  const multi = isMultiSpeaker(transcript);
   return transcript.segments
     .map((s) => {
       const m = Math.floor(s.startSec / 60);
       const sec = Math.floor(s.startSec % 60);
       const clock = `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
-      return `[${s.id}] ${clock} ${s.text}`;
+      const spk = multi && s.speaker !== undefined ? `S${s.speaker + 1}: ` : "";
+      return `[${s.id}] ${clock} ${spk}${s.text}`;
     })
     .join("\n");
 }
@@ -111,13 +124,21 @@ export function renderSignals(signals: MediaSignals | undefined, zh: boolean): s
     : `\n【Audiovisual signals】(supporting evidence — content overlapping these windows likely has real emotional/visual peaks; text quality still rules)\n${lines.join("\n")}\n`;
 }
 
+/** Multi-speaker attribution guidance, injected only when diarized ≥2 speakers. */
+function speakerNote(transcript: Transcript, zh: boolean): string {
+  if (!isMultiSpeaker(transcript)) return "";
+  return zh
+    ? `\n【多人对谈】每句前的 S1/S2… 是说话人标签。挑段时优先选「同一个人一段完整的话」;若是精彩问答,可跨说话人但要含完整的一问一答,别把两个人的半句拼成断章取义。\n`
+    : `\n【Multi-speaker】The S1/S2… prefix on each line marks who is speaking. Prefer a single speaker's complete thought; for a great Q&A you may span speakers but keep the full exchange — never stitch two half-sentences into a misleading clip.\n`;
+}
+
 export function buildHighlightPrompt(transcript: Transcript, maxClips = 6, signals?: MediaSignals): string {
   if (isChineseTranscript(transcript)) {
     return `请从下面的逐句稿中挑出最多 ${maxClips} 个最有爆款潜质的片段。
 
 【逐句稿】(格式: [句id] 开始时间 内容)
 ${renderTranscriptLines(transcript)}
-${renderSignals(signals, true)}
+${speakerNote(transcript, true)}${renderSignals(signals, true)}
 【输出格式】严格输出 JSON,不要任何多余文字:
 ${OUTPUT_SHAPE}
 
@@ -128,7 +149,7 @@ ${OUTPUT_SHAPE}
 
 【Transcript】(format: [sentenceId] startTime text)
 ${renderTranscriptLines(transcript)}
-${renderSignals(signals, false)}
+${speakerNote(transcript, false)}${renderSignals(signals, false)}
 【Output format】Respond with STRICT JSON only, no extra text:
 ${OUTPUT_SHAPE}
 
