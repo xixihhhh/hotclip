@@ -17,6 +17,7 @@ import {
   LuFileCode2,
   LuCircleCheck,
   LuAudioLines,
+  LuWandSparkles,
 } from "react-icons/lu";
 import { useT, useLocaleStore } from "./i18n/store";
 import { LOCALE_LIST, REGISTRY } from "./i18n/messages";
@@ -64,10 +65,12 @@ export default function App(): React.JSX.Element {
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   /** Within step 1: transcript view first, highlights after the CTA. */
   const [phase, setPhase] = useState<"transcribe" | "highlights">("transcribe");
+  /** Hands-off mode: every wizard step advances itself (托管). */
+  const [auto, setAuto] = useState(false);
   /** Clips + render toggles chosen for export (moves the wizard to step 2). */
   const [exporting, setExporting] = useState<{
     clips: HighlightCandidate[];
-    options: Pick<ExportOptions, "vertical" | "captionStyle">;
+    options: Pick<ExportOptions, "vertical" | "captionStyle" | "jumpCut">;
   } | null>(null);
 
   const restart = (): void => {
@@ -75,6 +78,7 @@ export default function App(): React.JSX.Element {
     setTranscript(null);
     setPhase("transcribe");
     setExporting(null);
+    setAuto(false);
     setStep(0);
   };
 
@@ -172,18 +176,27 @@ export default function App(): React.JSX.Element {
           <TranscribeView
             filePath={file.path}
             cached={transcript}
+            autoStart={auto}
             onBack={() => {
               setTranscript(null);
+              setAuto(false);
               setStep(0);
             }}
-            onDone={setTranscript}
+            onDone={(t) => {
+              setTranscript(t);
+              if (auto) setPhase("highlights");
+            }}
             onFindHighlights={transcript ? () => setPhase("highlights") : undefined}
           />
         )}
         {step === 1 && transcript && phase === "highlights" && (
           <HighlightsView
             transcript={transcript}
-            onBack={() => setPhase("transcribe")}
+            auto={auto}
+            onBack={() => {
+              setAuto(false);
+              setPhase("transcribe");
+            }}
             onExport={(clips, options) => {
               setExporting({ clips, options });
               setStep(2);
@@ -300,18 +313,32 @@ export default function App(): React.JSX.Element {
               ))}
             </dl>
 
-            <div className="mt-5 flex items-center justify-between border-t border-dashed border-line pt-4">
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-dashed border-line pt-4">
               <p className="flex items-center gap-1.5 text-[13px] text-mut">
                 <LuCircleCheck className="h-4 w-4 text-emerald-400" />
                 {t("importHint")}
               </p>
-              <button
-                type="button"
-                onClick={() => setStep(1)}
-                className="btn-flame rounded-lg px-6 py-2.5 text-[14px] font-bold text-white"
-              >
-                {t("startTranscribe")}
-              </button>
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="rounded-lg border border-line px-4 py-2.5 text-[13px] font-semibold text-mut transition-colors hover:border-mut hover:text-fg"
+                >
+                  {t("startTranscribe")}
+                </button>
+                <button
+                  type="button"
+                  title={t("autoRunHint")}
+                  onClick={() => {
+                    setAuto(true);
+                    setStep(1);
+                  }}
+                  className="btn-flame inline-flex items-center gap-1.5 rounded-lg px-6 py-2.5 text-[14px] font-bold text-white"
+                >
+                  <LuWandSparkles className="h-4 w-4" />
+                  {t("autoRun")}
+                </button>
+              </div>
             </div>
           </section>
         )}

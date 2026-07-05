@@ -84,23 +84,34 @@ const HARD_PUNCT_END = /[。!?!?…]$/;
 
 /**
  * Break the word stream into caption lines: width cap, silence-gap breaks,
- * and sentence-final punctuation breaks (a new sentence starts a new line).
+ * sentence-final punctuation breaks, and forced breaks (e.g. jump-cut splice
+ * points, where the silence that used to separate sentences no longer exists).
  */
-export function groupWordsIntoLines(words: TranscriptWord[], maxLineUnits: number): TranscriptWord[][] {
+export function groupWordsIntoLines(
+  words: TranscriptWord[],
+  maxLineUnits: number,
+  forcedBreaks: number[] = []
+): TranscriptWord[][] {
   const GAP_BREAK_SEC = 0.8;
   const lines: TranscriptWord[][] = [];
   let line: TranscriptWord[] = [];
   let units = 0;
+  let bi = 0;
   const flush = (): void => {
     if (line.length > 0) lines.push(line);
     line = [];
     units = 0;
   };
   for (const w of words) {
+    let forced = false;
+    while (bi < forcedBreaks.length && w.startSec >= forcedBreaks[bi] - 1e-6) {
+      forced = true;
+      bi++;
+    }
     const wUnits = widthUnits(w.text);
     const prev = line[line.length - 1];
     const gapBreak = prev !== undefined && w.startSec - prev.endSec > GAP_BREAK_SEC;
-    if (line.length > 0 && (units + wUnits > maxLineUnits || gapBreak)) flush();
+    if (line.length > 0 && (forced || units + wUnits > maxLineUnits || gapBreak)) flush();
     line.push(w);
     units += wUnits;
     if (HARD_PUNCT_END.test(w.text)) flush();
@@ -209,6 +220,8 @@ export interface CaptionOptions {
   fontName?: string;
   /** Verbatim keywords to emphasize (keyword style). */
   keywords?: string[];
+  /** Timeline positions that must start a new line/chunk (jump-cut splices). */
+  forcedBreaks?: number[];
 }
 
 function assHeader(style: CaptionStyle, layout: AssLayout, fontName: string): string[] {
@@ -293,8 +306,9 @@ export function buildCaptionAss(
   const fontName = options.fontName ?? defaultFontName();
   const events: string[] = [];
 
+  const forcedBreaks = options.forcedBreaks ?? [];
   if (style === "pop") {
-    const units = groupWordsIntoLines(words, POP_MAX_UNITS);
+    const units = groupWordsIntoLines(words, POP_MAX_UNITS, forcedBreaks);
     for (let i = 0; i < units.length; i++) {
       const unit = units[i];
       const start = unit[0].startSec - clipStartSec;
@@ -308,7 +322,7 @@ export function buildCaptionAss(
   } else {
     // keyword style: fuse keyword runs first so line breaks can't split them
     const lineWords = style === "keyword" ? mergeKeywordWords(words, options.keywords ?? []) : words;
-    const lines = groupWordsIntoLines(lineWords, layout.maxLineUnits).filter((l) => l.length > 0);
+    const lines = groupWordsIntoLines(lineWords, layout.maxLineUnits, forcedBreaks).filter((l) => l.length > 0);
     for (const line of lines) {
       const start = line[0].startSec - clipStartSec;
       const end = line[line.length - 1].endSec - clipStartSec;

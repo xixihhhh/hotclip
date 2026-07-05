@@ -97,6 +97,77 @@ export function buildCutArgs(
   ];
 }
 
+/**
+ * Jump-cut arg builder: keep only `segments` (absolute source time) of one
+ * clip and splice them in a single filter_complex pass — trim/atrim → concat
+ * → optional reframe + caption burn-in. Fast seek still applies: we seek to
+ * the clip start and express segment times relative to the seek point.
+ */
+export function buildJumpCutArgs(
+  inputPath: string,
+  outputPath: string,
+  clipStartSec: number,
+  segments: Array<{ startSec: number; endSec: number }>,
+  options: CutOptions = {}
+): string[] {
+  if (segments.length === 0) throw new Error("jump cut requires at least one segment");
+  const seek = Math.max(0, clipStartSec);
+  const lastEnd = segments[segments.length - 1].endSec;
+  const readDuration = lastEnd - seek + 0.5; // small margin past the tail
+
+  const parts: string[] = [];
+  const labels: string[] = [];
+  segments.forEach((s, i) => {
+    const a = Math.max(0, s.startSec - seek);
+    const b = Math.max(a, s.endSec - seek);
+    parts.push(`[0:v]trim=start=${a.toFixed(3)}:end=${b.toFixed(3)},setpts=PTS-STARTPTS[v${i}]`);
+    parts.push(`[0:a]atrim=start=${a.toFixed(3)}:end=${b.toFixed(3)},asetpts=PTS-STARTPTS[a${i}]`);
+    labels.push(`[v${i}][a${i}]`);
+  });
+  const post = buildVideoFilters(options);
+  const concatOut = post.length > 0 ? "[vc]" : "[vout]";
+  parts.push(`${labels.join("")}concat=n=${segments.length}:v=1:a=1${concatOut}[aout]`);
+  if (post.length > 0) parts.push(`[vc]${post.join(",")}[vout]`);
+
+  const crf = Number.isFinite(options.crf) ? String(options.crf) : "18";
+  const preset = options.preset ?? "veryfast";
+  return [
+    "-hide_banner", "-y",
+    "-ss", toFfmpegTime(seek),
+    "-i", inputPath,
+    "-t", toFfmpegTime(readDuration),
+    "-filter_complex", parts.join(";"),
+    "-map", "[vout]",
+    "-map", "[aout]",
+    "-c:v", "libx264",
+    "-preset", preset,
+    "-crf", crf,
+    "-pix_fmt", "yuv420p",
+    "-c:a", "aac",
+    "-b:a", "192k",
+    "-movflags", "+faststart",
+    outputPath,
+  ];
+}
+
+/** Execute a jump cut. Throws with ffmpeg's stderr tail on failure. */
+export async function cutJumpClip(
+  inputPath: string,
+  outputPath: string,
+  clipStartSec: number,
+  segments: Array<{ startSec: number; endSec: number }>,
+  options: CutOptions = {}
+): Promise<void> {
+  const args = buildJumpCutArgs(inputPath, outputPath, clipStartSec, segments, options);
+  try {
+    await execFileAsync(resolveFfmpegPath(), args, { maxBuffer: 32 * 1024 * 1024 });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const tail = msg.split("\n").slice(-6).join("\n");
+    throw new Error(`ffmpeg jump cut failed (${segments.length} segments): ${tail}`);
+  }
+}
+
 /** Execute one cut. Throws with ffmpeg's stderr tail on failure. */
 export async function cutClip(
   inputPath: string,

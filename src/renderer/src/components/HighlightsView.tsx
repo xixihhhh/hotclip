@@ -16,6 +16,7 @@ import {
   LuScissors,
   LuSmartphone,
   LuCaptions,
+  LuFastForward,
 } from "react-icons/lu";
 import { useT } from "../i18n/store";
 import { getApi, isElectron } from "../api/provider";
@@ -50,10 +51,13 @@ export function HighlightsView({
   transcript,
   onBack,
   onExport,
+  auto,
 }: {
   transcript: Transcript;
   onBack: () => void;
-  onExport?: (clips: HighlightCandidate[], options: Pick<ExportOptions, "vertical" | "captionStyle">) => void;
+  onExport?: (clips: HighlightCandidate[], options: Pick<ExportOptions, "vertical" | "captionStyle" | "jumpCut">) => void;
+  /** 托管 mode: export every candidate with default render options as soon as they land. */
+  auto?: boolean;
 }): React.JSX.Element {
   const t = useT("highlights");
   const { config, setConfig } = useLlmStore();
@@ -64,9 +68,10 @@ export function HighlightsView({
   const [error, setError] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<HighlightCandidate[] | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
-  // Vertical + karaoke ON by default — publish-ready clips out of the box.
+  // Vertical + karaoke + jump-cut ON by default — publish-ready clips out of the box.
   const [vertical, setVertical] = useState(true);
   const [captionStyle, setCaptionStyle] = useState<CaptionStyleChoice>("karaoke");
+  const [jumpCut, setJumpCut] = useState(true);
   const startedRef = useRef(false);
 
   const run = useCallback(async (): Promise<void> => {
@@ -98,6 +103,15 @@ export function HighlightsView({
       void run();
     }
   }, [showGate, run]);
+
+  // 托管: ship every candidate with the default render stack, hands-off.
+  const autoExported = useRef(false);
+  useEffect(() => {
+    if (auto && onExport && candidates && candidates.length > 0 && !autoExported.current) {
+      autoExported.current = true;
+      onExport(candidates, { vertical: true, captionStyle: "karaoke", jumpCut: true });
+    }
+  }, [auto, candidates, onExport]);
 
   return (
     <div className="rise-in flex w-full max-w-2xl flex-col items-center">
@@ -303,6 +317,17 @@ export function HighlightsView({
                 </button>
                 <button
                   type="button"
+                  title={t("optJumpCutHint")}
+                  onClick={() => setJumpCut(!jumpCut)}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                    jumpCut ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
+                  }`}
+                >
+                  <LuFastForward className={`h-3.5 w-3.5 ${jumpCut ? "text-ember" : ""}`} />
+                  {t("optJumpCut")}
+                </button>
+                <button
+                  type="button"
                   title={t("captionStyleHint")}
                   onClick={() =>
                     setCaptionStyle(CAPTION_CYCLE[(CAPTION_CYCLE.indexOf(captionStyle) + 1) % CAPTION_CYCLE.length])
@@ -318,7 +343,9 @@ export function HighlightsView({
               <button
                 type="button"
                 disabled={selected.size === 0}
-                onClick={() => onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle })}
+                onClick={() =>
+                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut })
+                }
                 className="btn-flame inline-flex items-center gap-1.5 rounded-lg px-6 py-2.5 text-[14px] font-bold text-white disabled:opacity-40"
               >
                 <LuScissors className="h-4 w-4" />

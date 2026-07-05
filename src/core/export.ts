@@ -6,7 +6,8 @@
 import { mkdir, stat, writeFile, rm, mkdtemp } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
-import { cutClip } from "./cut";
+import { cutClip, cutJumpClip } from "./cut";
+import { computeJumpCut } from "./gaps";
 import { buildCaptionAss, VERTICAL_LAYOUT, HORIZONTAL_LAYOUT, type CaptionStyle } from "./subtitle";
 import type { TranscriptWord } from "../shared/api-types";
 
@@ -26,6 +27,8 @@ export interface ExportRenderOptions {
   vertical?: boolean;
   /** Caption style to burn in (clips must carry `words`); omit for none. */
   captionStyle?: CaptionStyle;
+  /** Splice out intra-clip silences (clips must carry `words`). */
+  jumpCut?: boolean;
   /** Bundled-font directory handed to libass so CJK renders identically everywhere. */
   fontsDir?: string;
 }
@@ -82,28 +85,44 @@ export async function exportClips(
       if (signal?.aborted) throw new Error("export cancelled");
       onProgress?.({ current: i + 1, total: clips.length, clipId: clip.id, stage: "cutting" });
 
+      // Jump cut: plan kept segments + words remapped to the output timeline.
+      const plan =
+        options.jumpCut && clip.words && clip.words.length > 0
+          ? computeJumpCut(clip.words, clip.startSec, clip.endSec)
+          : null;
+      const captionWords = plan ? plan.words : clip.words;
+      const captionShift = plan ? 0 : clip.startSec;
+
       let subtitlePath: string | undefined;
-      if (assDir && options.captionStyle && clip.words && clip.words.length > 0) {
+      if (assDir && options.captionStyle && captionWords && captionWords.length > 0) {
         subtitlePath = join(assDir, `clip-${clip.id}.ass`);
-        const ass = buildCaptionAss(clip.words, clip.startSec, layout, options.captionStyle, {
+        const ass = buildCaptionAss(captionWords, captionShift, layout, options.captionStyle, {
           keywords: clip.keywords,
+          forcedBreaks: plan?.breaks,
         });
         await writeFile(subtitlePath, ass, "utf8");
       }
 
       const outPath = join(outDir, clipFilename(i + 1, clip.title));
-      await cutClip(inputPath, outPath, clip.startSec, clip.endSec, {
+      const cutOptions = {
         vertical: options.vertical,
         subtitlePath,
         fontsDir: subtitlePath ? options.fontsDir : undefined,
-      });
+      };
+      if (plan && plan.segments.length > 1) {
+        await cutJumpClip(inputPath, outPath, clip.startSec, plan.segments, cutOptions);
+      } else {
+        // single kept segment → plain cut (honoring trimmed lead-in/tail)
+        const range = plan?.segments[0] ?? { startSec: clip.startSec, endSec: clip.endSec };
+        await cutClip(inputPath, outPath, range.startSec, range.endSec, cutOptions);
+      }
       const s = await stat(outPath);
       results.push({
         id: clip.id,
         title: clip.title,
         path: outPath,
         sizeBytes: s.size,
-        durationSec: clip.endSec - clip.startSec,
+        durationSec: plan ? plan.durationSec : clip.endSec - clip.startSec,
       });
       onProgress?.({ current: i + 1, total: clips.length, clipId: clip.id, stage: "done" });
     }

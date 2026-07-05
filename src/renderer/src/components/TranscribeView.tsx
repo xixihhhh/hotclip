@@ -56,6 +56,7 @@ export function TranscribeView({
   onDone,
   onFindHighlights,
   cached,
+  autoStart,
 }: {
   filePath: string;
   onBack: () => void;
@@ -63,6 +64,8 @@ export function TranscribeView({
   onFindHighlights?: () => void;
   /** Already-produced transcript (returning from a later phase) — skip work. */
   cached?: Transcript | null;
+  /** 托管 mode: skip the engine picker and start with the remembered engine. */
+  autoStart?: boolean;
 }): React.JSX.Element {
   const t = useT("transcribe");
   const { engineId, setEngineId } = useAsrStore();
@@ -73,8 +76,18 @@ export function TranscribeView({
   const [error, setError] = useState<string | null>(null);
   const unsubRef = useRef<(() => void) | null>(null);
 
+  const autoStarted = useRef(false);
+
   useEffect(() => {
     if (cached) return;
+    if (autoStart) {
+      // 托管: no picker, run immediately with the remembered engine
+      if (!autoStarted.current) {
+        autoStarted.current = true;
+        start();
+      }
+      return () => unsubRef.current?.();
+    }
     getApi()
       .listAsrEngines()
       .then(setEngines)

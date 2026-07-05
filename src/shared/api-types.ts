@@ -107,7 +107,9 @@ export interface ExportOptions {
   vertical: boolean;
   /** Caption style to burn into the picture. */
   captionStyle: CaptionStyleChoice;
-  /** Needed when captions are on: source of word-level timestamps. */
+  /** Splice out intra-clip silences for a tighter, hand-edited rhythm. */
+  jumpCut: boolean;
+  /** Needed for captions/jump-cut: source of word-level timestamps. */
   transcript?: Transcript;
 }
 
