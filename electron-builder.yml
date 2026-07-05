@@ -15,6 +15,9 @@ asarUnpack:
 extraResources:
   - from: resources/fonts
     to: fonts
+  # web-caption overlay templates (rendered by the offscreen BrowserWindow)
+  - from: resources/caption-templates
+    to: caption-templates
 win:
   target:
     - nsis
