@@ -32,6 +32,8 @@ export interface ExportRenderOptions {
   jumpCut?: boolean;
   /** Auto-detect & crop static screen-recording chrome (status bars, app UI). */
   trimUi?: boolean;
+  /** Burn each clip's title into the top safe zone. */
+  titleCard?: boolean;
   /** Bundled-font directory handed to libass so CJK renders identically everywhere. */
   fontsDir?: string;
 }
@@ -78,7 +80,8 @@ export async function exportClips(
 ): Promise<ExportedClip[]> {
   await mkdir(outDir, { recursive: true });
   // ASS files live in a throwaway temp dir for the duration of the run.
-  const assDir = options.captionStyle ? await mkdtemp(join(tmpdir(), "hotclip-ass-")) : null;
+  const needAss = Boolean(options.captionStyle) || Boolean(options.titleCard);
+  const assDir = needAss ? await mkdtemp(join(tmpdir(), "hotclip-ass-")) : null;
   const layout = options.vertical ? VERTICAL_LAYOUT : HORIZONTAL_LAYOUT;
 
   // one UI-chrome detection pass for the whole source (bands don't move)
@@ -104,13 +107,22 @@ export async function exportClips(
       const captionWords = plan ? plan.words : clip.words;
       const captionShift = plan ? 0 : clip.startSec;
 
+      const clipDuration = plan ? plan.durationSec : clip.endSec - clip.startSec;
       let subtitlePath: string | undefined;
-      if (assDir && options.captionStyle && captionWords && captionWords.length > 0) {
+      const wantCaptions = Boolean(options.captionStyle && captionWords && captionWords.length > 0);
+      if (assDir && (wantCaptions || options.titleCard)) {
         subtitlePath = join(assDir, `clip-${clip.id}.ass`);
-        const ass = buildCaptionAss(captionWords, captionShift, layout, options.captionStyle, {
-          keywords: clip.keywords,
-          forcedBreaks: plan?.breaks,
-        });
+        const ass = buildCaptionAss(
+          wantCaptions ? captionWords! : [],
+          captionShift,
+          layout,
+          options.captionStyle ?? "karaoke",
+          {
+            keywords: clip.keywords,
+            forcedBreaks: plan?.breaks,
+            titleCard: options.titleCard ? { text: clip.title, durationSec: clipDuration } : undefined,
+          }
+        );
         await writeFile(subtitlePath, ass, "utf8");
       }
 
@@ -134,7 +146,7 @@ export async function exportClips(
         title: clip.title,
         path: outPath,
         sizeBytes: s.size,
-        durationSec: plan ? plan.durationSec : clip.endSec - clip.startSec,
+        durationSec: clipDuration,
       });
       onProgress?.({ current: i + 1, total: clips.length, clipId: clip.id, stage: "done" });
     }

@@ -222,12 +222,20 @@ export interface CaptionOptions {
   keywords?: string[];
   /** Timeline positions that must start a new line/chunk (jump-cut splices). */
   forcedBreaks?: number[];
+  /** Burn the clip title into the top safe zone for the whole clip. */
+  titleCard?: { text: string; durationSec: number };
+}
+
+/** Title block sits below platform top overlays (~8% of height) with air. */
+function titleMarginV(layout: AssLayout): number {
+  return Math.round(layout.playResY * 0.1);
 }
 
 function assHeader(style: CaptionStyle, layout: AssLayout, fontName: string): string[] {
   // karaoke: Primary = sung color, Secondary = not-yet-sung; others: plain white
   const primary = style === "karaoke" ? EMBER_COLOR : WHITE_COLOR;
   const fontSize = style === "pop" ? Math.round(layout.fontSize * 1.45) : layout.fontSize;
+  const titleSize = Math.round(layout.fontSize * 0.82);
   return [
     "[Script Info]",
     "ScriptType: v4.00+",
@@ -239,10 +247,25 @@ function assHeader(style: CaptionStyle, layout: AssLayout, fontName: string): st
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
     `Style: Caption,${fontName},${fontSize},${primary},${WHITE_COLOR},${OUTLINE_COLOR},&H7F000000,-1,0,0,0,100,100,0,0,1,${layout.outline},0,2,${layout.marginH},${layout.marginH},${layout.marginV},1`,
+    // title card: opaque-box style (BorderStyle=3) → soft dark plate behind text
+    `Style: Title,${fontName},${titleSize},${WHITE_COLOR},${WHITE_COLOR},&H73000000,&H73000000,-1,0,0,0,100,100,0,0,3,12,0,8,${layout.marginH},${layout.marginH},${titleMarginV(layout)},1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
   ];
+}
+
+/** Manual title wrapping (no libunibreak in ffmpeg-static): ~14 CJK units/line, max 2 lines. */
+export function wrapTitle(text: string, maxUnits = 28): string {
+  const chars = Array.from(escapeAssText(text));
+  let units = 0;
+  let breakAt = -1;
+  for (let i = 0; i < chars.length; i++) {
+    units += CJK_RE.test(chars[i]) ? 2 : 1;
+    if (units > maxUnits && breakAt === -1) breakAt = i;
+  }
+  if (breakAt === -1) return chars.join("");
+  return `${chars.slice(0, breakAt).join("")}\\N${chars.slice(breakAt).join("")}`;
 }
 
 function dialogue(startSec: number, endSec: number, text: string): string {
@@ -305,6 +328,13 @@ export function buildCaptionAss(
 ): string {
   const fontName = options.fontName ?? defaultFontName();
   const events: string[] = [];
+
+  if (options.titleCard && options.titleCard.text.trim()) {
+    const tc = options.titleCard;
+    events.push(
+      `Dialogue: 1,${toAssTime(0)},${toAssTime(tc.durationSec)},Title,,0,0,0,,${wrapTitle(tc.text)}`
+    );
+  }
 
   const forcedBreaks = options.forcedBreaks ?? [];
   if (style === "pop") {

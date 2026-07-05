@@ -7,6 +7,7 @@ import {
   buildCaptionAss,
   keywordText,
   mergeKeywordWords,
+  wrapTitle,
   VERTICAL_LAYOUT,
   HORIZONTAL_LAYOUT,
 } from "../subtitle";
@@ -133,6 +134,31 @@ describe("mergeKeywordWords", () => {
     const lines = groupWordsIntoLines(merged, 6);
     const joined = lines.map((l) => l.map((x) => x.text).join(""));
     expect(joined.some((l) => l.includes("超级好用"))).toBe(true);
+  });
+});
+
+describe("title card", () => {
+  it("wraps long titles onto two lines by width units", () => {
+    expect(wrapTitle("短标题")).toBe("短标题");
+    const wrapped = wrapTitle("这是一个特别特别长的爆款标题要换行");
+    expect(wrapped).toContain("\\N");
+    expect(wrapped.split("\\N")).toHaveLength(2);
+  });
+
+  it("emits a full-duration Title dialogue on layer 1", () => {
+    const words = [w("你", 0, 1)];
+    const ass = buildCaptionAss(words, 0, VERTICAL_LAYOUT, "karaoke", {
+      titleCard: { text: "半杯水都不渗?", durationSec: 12.5 },
+    });
+    expect(ass).toContain("Style: Title,");
+    expect(ass).toContain("Dialogue: 1,0:00:00.00,0:00:12.50,Title,,0,0,0,,半杯水都不渗?");
+  });
+
+  it("title-only ASS works with zero caption words", () => {
+    const ass = buildCaptionAss([], 0, VERTICAL_LAYOUT, "karaoke", {
+      titleCard: { text: "标题", durationSec: 5 },
+    });
+    expect(ass.match(/^Dialogue:/gm)).toHaveLength(1);
   });
 });
 

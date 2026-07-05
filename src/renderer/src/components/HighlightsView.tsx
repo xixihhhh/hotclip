@@ -19,6 +19,7 @@ import {
   LuFastForward,
   LuEraser,
   LuTriangleAlert,
+  LuType,
 } from "react-icons/lu";
 import { useT } from "../i18n/store";
 import { getApi, isElectron } from "../api/provider";
@@ -57,7 +58,7 @@ export function HighlightsView({
 }: {
   transcript: Transcript;
   onBack: () => void;
-  onExport?: (clips: HighlightCandidate[], options: Pick<ExportOptions, "vertical" | "captionStyle" | "jumpCut" | "trimUi">) => void;
+  onExport?: (clips: HighlightCandidate[], options: Pick<ExportOptions, "vertical" | "captionStyle" | "jumpCut" | "trimUi" | "titleCard">) => void;
   /** 托管 mode: export every candidate with default render options as soon as they land. */
   auto?: boolean;
 }): React.JSX.Element {
@@ -75,6 +76,7 @@ export function HighlightsView({
   const [captionStyle, setCaptionStyle] = useState<CaptionStyleChoice>("karaoke");
   const [jumpCut, setJumpCut] = useState(true);
   const [trimUi, setTrimUi] = useState(true);
+  const [titleCard, setTitleCard] = useState(true);
   const startedRef = useRef(false);
 
   const run = useCallback(async (): Promise<void> => {
@@ -114,7 +116,7 @@ export function HighlightsView({
     const publishable = candidates?.filter((c) => c.recommended) ?? [];
     if (auto && onExport && publishable.length > 0 && !autoExported.current) {
       autoExported.current = true;
-      onExport(publishable, { vertical: true, captionStyle: "karaoke", jumpCut: true, trimUi: true });
+      onExport(publishable, { vertical: true, captionStyle: "karaoke", jumpCut: true, trimUi: true, titleCard: true });
     }
   }, [auto, candidates, onExport]);
 
@@ -340,6 +342,17 @@ export function HighlightsView({
                 </button>
                 <button
                   type="button"
+                  title={t("optTitleCardHint")}
+                  onClick={() => setTitleCard(!titleCard)}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                    titleCard ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
+                  }`}
+                >
+                  <LuType className={`h-3.5 w-3.5 ${titleCard ? "text-ember" : ""}`} />
+                  {t("optTitleCard")}
+                </button>
+                <button
+                  type="button"
                   title={t("optJumpCutHint")}
                   onClick={() => setJumpCut(!jumpCut)}
                   className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
@@ -367,7 +380,7 @@ export function HighlightsView({
                 type="button"
                 disabled={selected.size === 0}
                 onClick={() =>
-                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, trimUi })
+                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, trimUi, titleCard })
                 }
                 className="btn-flame inline-flex items-center gap-1.5 rounded-lg px-6 py-2.5 text-[14px] font-bold text-white disabled:opacity-40"
               >

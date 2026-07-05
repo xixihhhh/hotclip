@@ -115,6 +115,8 @@ export interface ExportOptions {
   jumpCut: boolean;
   /** Auto-crop static screen-recording chrome (status bar, app UI, letterbox). */
   trimUi: boolean;
+  /** Burn each clip's title into the top safe zone. */
+  titleCard: boolean;
   /** Needed for captions/jump-cut: source of word-level timestamps. */
   transcript?: Transcript;
 }

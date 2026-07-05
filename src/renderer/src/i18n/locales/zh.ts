@@ -94,6 +94,8 @@ export const zh = {
     captionStyleHint: "点击切换字幕样式,直接烧录进画面",
     optJumpCut: "剪气口",
     optJumpCutHint: "自动剪掉说话间的停顿静音,成片节奏像人剪的",
+    optTitleCard: "标题贴片",
+    optTitleCardHint: "把 AI 起的爆款标题烧进顶部安全区,切片标配",
     optTrimUi: "去录屏UI",
     optTrimUiHint: "自动检测并裁掉录屏的状态栏/固定UI/上下黑边(检测不到就不裁)",
     captionNone: "无字幕",
