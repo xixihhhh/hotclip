@@ -1,5 +1,33 @@
 import { describe, it, expect } from "vitest";
-import { sanitizeFilename, clipFilename } from "../export";
+import { sanitizeFilename, clipFilename, summarizeEdit } from "../export";
+
+describe("summarizeEdit", () => {
+  const plan = (durationSec: number, segs: number) => ({
+    segments: Array.from({ length: segs }, () => ({})),
+    durationSec,
+  });
+
+  it("reports splices, kept/removed seconds, and cut ratio", () => {
+    // 4s clip cut down to 2.1s across 2 kept segments → 1.9s removed, 47.5%
+    expect(summarizeEdit(4, plan(2.1, 2))).toEqual({
+      splices: 2,
+      keptSec: 2.1,
+      removedSec: 1.9,
+      cutRatio: 0.475,
+    });
+  });
+
+  it("is null when nothing was spliced", () => {
+    expect(summarizeEdit(4, null)).toBeNull();
+    expect(summarizeEdit(0, plan(2, 1))).toBeNull(); // guard against divide-by-zero
+  });
+
+  it("never reports negative removal when the plan kept more than the span", () => {
+    const out = summarizeEdit(2, plan(2.05, 1)); // rounding slack
+    expect(out?.removedSec).toBe(0);
+    expect(out?.cutRatio).toBe(0);
+  });
+});
 
 describe("sanitizeFilename", () => {
   it("keeps CJK/latin/digits/space/dash, strips hostile chars", () => {

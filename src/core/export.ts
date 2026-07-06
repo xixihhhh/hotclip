@@ -44,6 +44,38 @@ export interface ExportClipSpec {
   };
 }
 
+/**
+ * Summarize a jump-cut/filler splice plan into the clips.json `edit` block.
+ * Pure so the numbers (removed seconds, cut ratio) are unit-testable without
+ * running ffmpeg. Returns null when nothing was spliced.
+ */
+export function summarizeEdit(
+  origDurSec: number,
+  plan: { segments: unknown[]; durationSec: number } | null
+): ClipRenderOutcome["edit"] {
+  if (!plan || origDurSec <= 0) return null;
+  return {
+    splices: plan.segments.length,
+    keptSec: Number(plan.durationSec.toFixed(2)),
+    removedSec: Number(Math.max(0, origDurSec - plan.durationSec).toFixed(2)),
+    cutRatio: Number(Math.max(0, 1 - plan.durationSec / origDurSec).toFixed(3)),
+  };
+}
+
+/** What the pipeline actually did to one clip — surfaced in clips.json. */
+export interface ClipRenderOutcome {
+  /** Effective caption style burned in ("none" when captions were skipped). */
+  captionStyle: string;
+  /** False when a web-overlay pass failed and the clip shipped without word captions. */
+  captionsBurned: boolean;
+  /** "face-track" when the crop followed a face, "center-crop" on fallback, "none" for horizontal. */
+  reframe: "face-track" | "center-crop" | "none";
+  /** Jump-cut / filler splice outcome; null when the clip was cut whole. */
+  edit: { splices: number; keptSec: number; removedSec: number; cutRatio: number } | null;
+  /** Number of filler/stutter words removed. */
+  fillersRemoved: number;
+}
+
 export interface ExportRenderOptions {
   /** Center-crop reframe to 9:16 (1080×1920). */
   vertical?: boolean;
@@ -127,6 +159,9 @@ export async function exportClips(
     const results: ExportedClip[] = [];
     // "you decide what got cut": removed filler texts surface in clips.json
     const removedFillersByClip = new Map<number, string[]>();
+    // Per-clip processing outcomes for clips.json — what the pipeline actually
+    // did (and where it fell back), so "fully managed" stays inspectable.
+    const renderByClip = new Map<number, ClipRenderOutcome>();
     for (let i = 0; i < clips.length; i++) {
       const clip = clips[i];
       if (signal?.aborted) throw new Error("export cancelled");
@@ -212,6 +247,8 @@ export async function exportClips(
       }
 
       const outPath = join(outDir, clipFilename(i + 1, clip.title));
+      // Web overlay may fail-open to the base clip (no word captions) — record it.
+      let webRenderFailed = false;
       // Web captions: cut to a base file first, then composite words on top.
       const cutTarget = webStyle ? outPath.replace(/\.mp4$/, ".base.mp4") : outPath;
       const cutOptions = trackPlan
@@ -257,6 +294,7 @@ export async function exportClips(
           await rm(cutTarget, { force: true });
         } catch (e) {
           // fail-open: ship the base clip (title card intact, no word captions)
+          webRenderFailed = true;
           await rm(outPath, { force: true }).catch(() => {});
           const { rename } = await import("fs/promises");
           await rename(cutTarget, outPath);
@@ -286,6 +324,14 @@ export async function exportClips(
       if (fillerHits.length > 0) {
         removedFillersByClip.set(clip.id, fillerHits.map((h) => h.text.trim()));
       }
+      const origDur = clip.endSec - clip.startSec;
+      renderByClip.set(clip.id, {
+        captionStyle: wantCaptions ? (webStyle ?? assStyle) : "none",
+        captionsBurned: wantCaptions && !webRenderFailed,
+        reframe: options.vertical ? (trackPlan ? "face-track" : "center-crop") : "none",
+        edit: summarizeEdit(origDur, plan),
+        fillersRemoved: fillerHits.length,
+      });
       onProgress?.({ current: i + 1, total: clips.length, clipId: clip.id, stage: "done" });
     }
 
@@ -312,6 +358,7 @@ export async function exportClips(
           sourceEndSec: spec?.endSec ?? null,
           keywords: spec?.keywords ?? [],
           removedFillers: removedFillersByClip.get(r.id) ?? [],
+          render: renderByClip.get(r.id) ?? null,
           ...(spec?.meta ?? {}),
         };
       }),
