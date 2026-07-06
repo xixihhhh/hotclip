@@ -225,6 +225,43 @@ describe("title card", () => {
   });
 });
 
+describe("opening hook", () => {
+  it("emits a faded Hook dialogue on layer 2 for the first seconds", () => {
+    const words = [w("你", 0, 1)];
+    const ass = buildCaptionAss(words, 0, VERTICAL_LAYOUT, "karaoke", {
+      openingHook: { text: "倒半杯水会怎样?", durationSec: 2.2 },
+    });
+    expect(ass).toContain("Style: Hook,");
+    expect(ass).toContain("Dialogue: 2,0:00:00.00,0:00:02.20,Hook,,0,0,0,,{\\fad(220,300)}倒半杯水会怎样?");
+  });
+
+  it("hook coexists with the title card and captions (distinct layers)", () => {
+    const words = [w("你", 0, 1)];
+    const ass = buildCaptionAss(words, 0, VERTICAL_LAYOUT, "karaoke", {
+      titleCard: { text: "标题", durationSec: 12 },
+      openingHook: { text: "钩子句", durationSec: 2.2 },
+    });
+    expect(ass).toMatch(/^Dialogue: 1,.*,Title,/m);
+    expect(ass).toMatch(/^Dialogue: 2,.*,Hook,/m);
+    expect(ass).toMatch(/^Dialogue: 0,.*,Caption,/m); // karaoke line still there
+  });
+
+  it("no Hook dialogue when the teaser is blank", () => {
+    const ass = buildCaptionAss([w("你", 0, 1)], 0, VERTICAL_LAYOUT, "karaoke", {
+      openingHook: { text: "   ", durationSec: 2.2 },
+    });
+    expect(ass).not.toMatch(/,Hook,,/);
+  });
+
+  it("wraps a long teaser onto two lines", () => {
+    const ass = buildCaptionAss([w("你", 0, 1)], 0, VERTICAL_LAYOUT, "karaoke", {
+      openingHook: { text: "这是一句特别特别长的悬念钩子句要换行", durationSec: 2.2 },
+    });
+    const hookLine = ass.split("\n").find((l) => l.includes(",Hook,")) ?? "";
+    expect(hookLine).toContain("\\N");
+  });
+});
+
 describe("buildCaptionAss styles", () => {
   const words = "一二三四五六七八".split("").map((ch, i) => w(ch, i, i + 1));
 

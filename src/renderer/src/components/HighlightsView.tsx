@@ -21,6 +21,7 @@ import {
   LuUsers,
   LuTriangleAlert,
   LuType,
+  LuZap,
   LuVolume2,
   LuChevronLeft,
   LuChevronRight,
@@ -68,7 +69,7 @@ export function HighlightsView({
   /** Source path — lets the backend add audiovisual-signal evidence. */
   filePath?: string;
   onBack: () => void;
-  onExport?: (clips: HighlightCandidate[], options: Pick<ExportOptions, "vertical" | "captionStyle" | "jumpCut" | "cleanFillers" | "trimUi" | "titleCard" | "normalizeLoudness">) => void;
+  onExport?: (clips: HighlightCandidate[], options: Pick<ExportOptions, "vertical" | "captionStyle" | "jumpCut" | "cleanFillers" | "trimUi" | "titleCard" | "openingHook" | "normalizeLoudness">) => void;
   /** Lift the diarization-labeled transcript up so export colors captions by speaker. */
   onTranscriptLabeled?: (t: Transcript) => void;
   /** 托管 mode: export every candidate with default render options as soon as they land. */
@@ -91,6 +92,7 @@ export function HighlightsView({
   const [trimUi, setTrimUi] = useState(true);
   const [diarize, setDiarize] = useState(false);
   const [titleCard, setTitleCard] = useState(true);
+  const [openingHook, setOpeningHook] = useState(true);
   const [normalizeLoudness, setNormalizeLoudness] = useState(true);
   const startedRef = useRef(false);
 
@@ -154,7 +156,7 @@ export function HighlightsView({
     const publishable = candidates?.filter((c) => c.recommended) ?? [];
     if (auto && onExport && publishable.length > 0 && !autoExported.current) {
       autoExported.current = true;
-      onExport(publishable, { vertical: true, captionStyle: "karaoke", jumpCut: true, cleanFillers: true, trimUi: true, titleCard: true, normalizeLoudness: true });
+      onExport(publishable, { vertical: true, captionStyle: "karaoke", jumpCut: true, cleanFillers: true, trimUi: true, titleCard: true, openingHook: true, normalizeLoudness: true });
     }
   }, [auto, candidates, onExport]);
 
@@ -458,6 +460,17 @@ export function HighlightsView({
                 </button>
                 <button
                   type="button"
+                  title={t("optOpeningHookHint")}
+                  onClick={() => setOpeningHook(!openingHook)}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                    openingHook ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
+                  }`}
+                >
+                  <LuZap className={`h-3.5 w-3.5 ${openingHook ? "text-ember" : ""}`} />
+                  {t("optOpeningHook")}
+                </button>
+                <button
+                  type="button"
                   title={t("optJumpCutHint")}
                   onClick={() => setJumpCut(!jumpCut)}
                   className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
@@ -507,7 +520,7 @@ export function HighlightsView({
                 type="button"
                 disabled={selected.size === 0}
                 onClick={() =>
-                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, cleanFillers, trimUi, titleCard, normalizeLoudness })
+                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, cleanFillers, trimUi, titleCard, openingHook, normalizeLoudness })
                 }
                 className="btn-flame inline-flex items-center gap-1.5 rounded-lg px-6 py-2.5 text-[14px] font-bold text-white disabled:opacity-40"
               >

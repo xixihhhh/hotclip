@@ -114,6 +114,8 @@ export const zh = {
     optDiarizeHint: "标注谁在说话:让 AI 按说话人挑段、避免把两个人的话拼成断章取义,字幕也按人上色(首次需下载约47MB说话人模型)",
     optTitleCard: "标题贴片",
     optTitleCardHint: "把 AI 起的爆款标题烧进顶部安全区,切片标配",
+    optOpeningHook: "开场钩子",
+    optOpeningHookHint: "把 AI 写的悬念句大字烧在开头 2 秒当文字钩子(黄金3秒留人),无悬念句的片自动不加",
     optTrimUi: "去录屏UI",
     optTrimUiHint: "自动检测并裁掉录屏的状态栏/固定UI/上下黑边(检测不到就不裁)",
     captionNone: "无字幕",

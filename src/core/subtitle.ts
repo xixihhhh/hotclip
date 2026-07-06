@@ -290,6 +290,11 @@ export interface CaptionOptions {
   forcedBreaks?: number[];
   /** Burn the clip title into the top safe zone for the whole clip. */
   titleCard?: { text: string; durationSec: number };
+  /**
+   * Opening hook: the AI teaser (悬念句) burned big in the upper third for the
+   * clip's first seconds — the 黄金3秒 text hook the teaser was written for.
+   */
+  openingHook?: { text: string; durationSec: number };
 }
 
 /** Title block sits below platform top overlays (~8% of height) with air. */
@@ -297,11 +302,17 @@ function titleMarginV(layout: AssLayout): number {
   return Math.round(layout.playResY * 0.1);
 }
 
+/** Opening hook sits in the upper third — below the title, clear of center faces. */
+function hookMarginV(layout: AssLayout): number {
+  return Math.round(layout.playResY * 0.3);
+}
+
 function assHeader(style: CaptionStyle, layout: AssLayout, fontName: string): string[] {
   // karaoke: Primary = sung color, Secondary = not-yet-sung; others: plain white
   const primary = style === "karaoke" ? EMBER_COLOR : WHITE_COLOR;
   const fontSize = style === "pop" ? Math.round(layout.fontSize * 1.45) : layout.fontSize;
   const titleSize = Math.round(layout.fontSize * 0.82);
+  const hookSize = Math.round(layout.fontSize * 1.25);
   return [
     "[Script Info]",
     "ScriptType: v4.00+",
@@ -315,6 +326,8 @@ function assHeader(style: CaptionStyle, layout: AssLayout, fontName: string): st
     `Style: Caption,${fontName},${fontSize},${primary},${WHITE_COLOR},${OUTLINE_COLOR},&H7F000000,-1,0,0,0,100,100,0,0,1,${layout.outline},0,2,${layout.marginH},${layout.marginH},${layout.marginV},1`,
     // title card: opaque-box style (BorderStyle=3) → soft dark plate behind text
     `Style: Title,${fontName},${titleSize},${WHITE_COLOR},${WHITE_COLOR},&H73000000,&H73000000,-1,0,0,0,100,100,0,0,3,12,0,8,${layout.marginH},${layout.marginH},${titleMarginV(layout)},1`,
+    // opening hook: ember text on a dark plate, big, upper-third (Alignment 8 + high MarginV)
+    `Style: Hook,${fontName},${hookSize},${EMBER_COLOR},${WHITE_COLOR},&H73000000,&H73000000,-1,0,0,0,100,100,0,0,3,14,0,8,${layout.marginH},${layout.marginH},${hookMarginV(layout)},1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -399,6 +412,14 @@ export function buildCaptionAss(
     const tc = options.titleCard;
     events.push(
       `Dialogue: 1,${toAssTime(0)},${toAssTime(tc.durationSec)},Title,,0,0,0,,${wrapTitle(tc.text)}`
+    );
+  }
+
+  // Opening hook (layer 2, above title & captions): the teaser, faded in/out.
+  if (options.openingHook && options.openingHook.text.trim()) {
+    const hk = options.openingHook;
+    events.push(
+      `Dialogue: 2,${toAssTime(0)},${toAssTime(hk.durationSec)},Hook,,0,0,0,,{\\fad(220,300)}${wrapTitle(hk.text)}`
     );
   }
 

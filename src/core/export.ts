@@ -44,6 +44,9 @@ export interface ExportClipSpec {
   };
 }
 
+/** How long the opening hook (teaser) stays on screen — the 黄金3秒 window. */
+const OPENING_HOOK_SEC = 2.2;
+
 /**
  * Summarize a jump-cut/filler splice plan into the clips.json `edit` block.
  * Pure so the numbers (removed seconds, cut ratio) are unit-testable without
@@ -76,6 +79,8 @@ export interface ClipRenderOutcome {
   fillersRemoved: number;
   /** True when audio was matched to the -14 LUFS social loudness target. */
   loudnessNormalized: boolean;
+  /** True when the AI teaser was burned in as an opening hook. */
+  openingHookBurned: boolean;
 }
 
 export interface ExportRenderOptions {
@@ -97,6 +102,8 @@ export interface ExportRenderOptions {
   modelsRoot?: string;
   /** Burn each clip's title into the top safe zone. */
   titleCard?: boolean;
+  /** Burn the AI teaser (悬念句) as a big opening hook over the clip's first seconds. */
+  openingHook?: boolean;
   /** Bundled-font directory handed to libass so CJK renders identically everywhere. */
   fontsDir?: string;
   /** Match audio to the -14 LUFS social loudness target (EBU R128 loudnorm). */
@@ -147,7 +154,7 @@ export async function exportClips(
 ): Promise<ExportedClip[]> {
   await mkdir(outDir, { recursive: true });
   // ASS files live in a throwaway temp dir for the duration of the run.
-  const needAss = Boolean(options.captionStyle) || Boolean(options.titleCard);
+  const needAss = Boolean(options.captionStyle) || Boolean(options.titleCard) || Boolean(options.openingHook);
   const assDir = needAss ? await mkdtemp(join(tmpdir(), "hotclip-ass-")) : null;
   const layout = options.vertical ? VERTICAL_LAYOUT : HORIZONTAL_LAYOUT;
 
@@ -206,7 +213,13 @@ export async function exportClips(
         ? options.captionStyle
         : undefined;
       const assStyle: CaptionStyle = isWebCaptionStyle(options.captionStyle) ? "karaoke" : (options.captionStyle ?? "karaoke");
-      if (assDir && needAss && ((wantCaptions && !webStyle) || options.titleCard)) {
+      // Opening hook: burn the AI teaser (悬念句) big in the upper third for the
+      // clip's first seconds — this is what the teaser was generated for.
+      const teaser = clip.meta?.teaser?.trim();
+      const openingHook = options.openingHook && teaser
+        ? { text: teaser, durationSec: Math.min(OPENING_HOOK_SEC, clipDuration) }
+        : undefined;
+      if (assDir && needAss && ((wantCaptions && !webStyle) || options.titleCard || openingHook)) {
         subtitlePath = join(assDir, `clip-${clip.id}.ass`);
         const ass = buildCaptionAss(
           wantCaptions && !webStyle ? captionWords! : [],
@@ -217,6 +230,7 @@ export async function exportClips(
             keywords: clip.keywords,
             forcedBreaks: plan?.breaks,
             titleCard: options.titleCard ? { text: clip.title, durationSec: clipDuration } : undefined,
+            openingHook,
           }
         );
         await writeFile(subtitlePath, ass, "utf8");
@@ -337,6 +351,7 @@ export async function exportClips(
         edit: summarizeEdit(origDur, plan),
         fillersRemoved: fillerHits.length,
         loudnessNormalized: Boolean(options.normalizeLoudness),
+        openingHookBurned: Boolean(openingHook),
       });
       onProgress?.({ current: i + 1, total: clips.length, clipId: clip.id, stage: "done" });
     }
@@ -352,6 +367,7 @@ export async function exportClips(
         cleanFillers: Boolean(options.cleanFillers),
         trimUi: Boolean(options.trimUi),
         titleCard: Boolean(options.titleCard),
+        openingHook: Boolean(options.openingHook),
         normalizeLoudness: Boolean(options.normalizeLoudness),
       },
       clips: results.map((r) => {

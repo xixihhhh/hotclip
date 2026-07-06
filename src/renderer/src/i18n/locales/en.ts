@@ -119,6 +119,8 @@ export const en = {
     optDiarizeHint: "Label who is speaking so the AI picks per-speaker clips and avoids cross-speaker quote-mining; captions color by speaker (first use downloads ~47MB speaker models)",
     optTitleCard: "Title card",
     optTitleCardHint: "Burn the AI-written title into the top safe zone",
+    optOpeningHook: "Hook intro",
+    optOpeningHookHint: "Burn the AI teaser big over the first ~2s as an opening text hook (grab-them-in-3s); clips without a teaser skip it",
     optTrimUi: "Strip screen UI",
     optTrimUiHint: "Detect & crop static screen-recording chrome (status bar, app UI, letterbox); no-op when none found",
     captionNone: "No captions",
