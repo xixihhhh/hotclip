@@ -16,6 +16,21 @@ import { toFfmpegTime } from "./time";
 
 const execFileAsync = promisify(execFile);
 
+/**
+ * Social loudness target (EBU R128): -14 LUFS integrated, -1.5 dBTP true-peak
+ * ceiling — the level TikTok / Reels / Shorts / 抖音 normalize playback to, so
+ * a batch of clips lands at one consistent, platform-friendly volume instead of
+ * the source's raw (often too quiet) level.
+ *
+ * loudnorm runs its analysis at 192kHz internally and would hand that rate to
+ * the AAC encoder (which caps at 96kHz). We pin the output rate with the `-ar`
+ * output option (see LOUDNORM_OUT_RATE) rather than an in-graph aresample —
+ * output-side resampling negotiates the channel layout, an in-graph one does not.
+ */
+export const LOUDNORM_FILTER = "loudnorm=I=-14:TP=-1.5:LRA=11";
+/** Output sample rate forced alongside loudnorm to cap its 192kHz output. */
+export const LOUDNORM_OUT_RATE = "48000";
+
 export type CutMode = "accurate" | "copy";
 
 export interface CutOptions {
@@ -37,6 +52,8 @@ export interface CutOptions {
   subtitlePath?: string;
   /** Directory holding bundled fonts for libass (subtitles filter fontsdir). */
   fontsDir?: string;
+  /** Normalize output audio to the -14 LUFS social target (EBU R128 loudnorm). */
+  normalizeLoudness?: boolean;
 }
 
 /**
@@ -89,8 +106,9 @@ export function buildCutArgs(
     throw new Error(`invalid cut range: start=${startSec} end=${endSec}`);
   }
   const filters = buildVideoFilters(options);
-  // Any video filter forces a re-encode — silently upgrade copy → accurate.
-  const mode = filters.length > 0 ? "accurate" : (options.mode ?? "accurate");
+  // Any video filter — or loudness normalization (an audio filter) — forces a
+  // re-encode, so silently upgrade copy → accurate.
+  const mode = filters.length > 0 || options.normalizeLoudness ? "accurate" : (options.mode ?? "accurate");
   const start = Math.max(0, startSec);
   const duration = endSec - start;
 
@@ -113,6 +131,7 @@ export function buildCutArgs(
     "-preset", preset,
     "-crf", crf,
     "-pix_fmt", "yuv420p",
+    ...(options.normalizeLoudness ? ["-af", LOUDNORM_FILTER, "-ar", LOUDNORM_OUT_RATE] : []),
     "-c:a", "aac",
     "-b:a", "192k",
     "-movflags", "+faststart",
@@ -149,8 +168,12 @@ export function buildJumpCutArgs(
   });
   const post = buildVideoFilters(options);
   const concatOut = post.length > 0 ? "[vc]" : "[vout]";
-  parts.push(`${labels.join("")}concat=n=${segments.length}:v=1:a=1${concatOut}[aout]`);
+  // Normalize the *spliced* audio (loudnorm must see the final concatenated
+  // stream, not each segment) — concat into a raw label, then loudnorm → [aout].
+  const audioOut = options.normalizeLoudness ? "[araw]" : "[aout]";
+  parts.push(`${labels.join("")}concat=n=${segments.length}:v=1:a=1${concatOut}${audioOut}`);
   if (post.length > 0) parts.push(`[vc]${post.join(",")}[vout]`);
+  if (options.normalizeLoudness) parts.push(`[araw]${LOUDNORM_FILTER}[aout]`);
 
   const crf = Number.isFinite(options.crf) ? String(options.crf) : "18";
   const preset = options.preset ?? "veryfast";
@@ -166,6 +189,7 @@ export function buildJumpCutArgs(
     "-preset", preset,
     "-crf", crf,
     "-pix_fmt", "yuv420p",
+    ...(options.normalizeLoudness ? ["-ar", LOUDNORM_OUT_RATE] : []),
     "-c:a", "aac",
     "-b:a", "192k",
     "-movflags", "+faststart",

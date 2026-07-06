@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCutArgs, buildVideoFilters, escapeFilterPath } from "../cut";
+import { buildCutArgs, buildJumpCutArgs, buildVideoFilters, escapeFilterPath, LOUDNORM_FILTER, LOUDNORM_OUT_RATE } from "../cut";
 
 describe("buildCutArgs", () => {
   it("accurate mode: fast seek before -i, re-encode, faststart", () => {
@@ -67,5 +67,57 @@ describe("buildCutArgs", () => {
 
   it("escapes windows drive colons and backslashes for the filter graph", () => {
     expect(escapeFilterPath("C:\\Users\\我\\a.ass")).toBe("C\\:/Users/我/a.ass");
+  });
+});
+
+describe("loudness normalization", () => {
+  it("targets -14 LUFS; the 192kHz leak is capped by the -ar output option, not an in-graph resampler", () => {
+    expect(LOUDNORM_FILTER).toContain("loudnorm=I=-14");
+    expect(LOUDNORM_FILTER).toContain("TP=-1.5");
+    // in-graph aresample breaks channel-layout negotiation with the AAC encoder
+    expect(LOUDNORM_FILTER).not.toContain("aresample");
+    expect(LOUDNORM_OUT_RATE).toBe("48000");
+  });
+
+  it("plain cut: inserts -af loudnorm + -ar before the audio codec when enabled", () => {
+    const args = buildCutArgs("/v/in.mp4", "/v/out.mp4", 0, 5, { normalizeLoudness: true });
+    const af = args.indexOf("-af");
+    expect(af).toBeGreaterThan(-1);
+    expect(args[af + 1]).toBe(LOUDNORM_FILTER);
+    expect(args[args.indexOf("-ar") + 1]).toBe(LOUDNORM_OUT_RATE);
+    expect(af).toBeLessThan(args.indexOf("-c:a")); // filter precedes the encoder
+  });
+
+  it("plain cut: no audio filter when disabled", () => {
+    const args = buildCutArgs("/v/in.mp4", "/v/out.mp4", 0, 5);
+    expect(args).not.toContain("-af");
+    expect(args.join(" ")).not.toContain("loudnorm");
+  });
+
+  it("plain cut: loudnorm alone forces accurate mode even if copy requested", () => {
+    const args = buildCutArgs("/v/in.mp4", "/v/out.mp4", 0, 5, { mode: "copy", normalizeLoudness: true });
+    expect(args).toContain("libx264");
+    expect(args).toContain("-af");
+    expect(args).not.toContain("make_zero");
+  });
+
+  it("jump cut: normalizes the spliced stream (concat → [araw] → loudnorm → [aout])", () => {
+    const segs = [{ startSec: 10, endSec: 12 }, { startSec: 15, endSec: 17 }];
+    const args = buildJumpCutArgs("/v/in.mp4", "/v/out.mp4", 10, segs, { normalizeLoudness: true });
+    const fc = args[args.indexOf("-filter_complex") + 1];
+    expect(fc).toContain(":a=1[vout][araw]"); // concat audio → raw label
+    expect(fc).toContain(`[araw]${LOUDNORM_FILTER}[aout]`); // then normalize
+    expect(args[args.indexOf("-map") + 1]).toBe("[vout]");
+    expect(args).toContain("[aout]"); // final audio map unchanged
+    expect(args[args.indexOf("-ar") + 1]).toBe(LOUDNORM_OUT_RATE); // cap the 192kHz output
+  });
+
+  it("jump cut: concat maps straight to [aout] when disabled", () => {
+    const segs = [{ startSec: 10, endSec: 12 }, { startSec: 15, endSec: 17 }];
+    const fc = buildJumpCutArgs("/v/in.mp4", "/v/out.mp4", 10, segs)[
+      buildJumpCutArgs("/v/in.mp4", "/v/out.mp4", 10, segs).indexOf("-filter_complex") + 1
+    ];
+    expect(fc).toContain(":a=1[vout][aout]");
+    expect(fc).not.toContain("loudnorm");
   });
 });

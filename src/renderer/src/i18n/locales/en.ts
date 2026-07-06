@@ -113,6 +113,8 @@ export const en = {
     optJumpCutHint: "Splice out pauses between speech — hand-edited rhythm, automatically",
     optCleanFillers: "Cut fillers",
     optCleanFillersHint: "Remove um/uh hesitations and stutter repeats; removals are listed in clips.json",
+    optLoudness: "Match loudness",
+    optLoudnessHint: "Normalize audio to the -14 LUFS social target (TikTok/Reels/Shorts) so a batch of clips plays at one consistent, not-too-quiet volume",
     optDiarize: "Multi-speaker",
     optDiarizeHint: "Label who is speaking so the AI picks per-speaker clips and avoids cross-speaker quote-mining; captions color by speaker (first use downloads ~47MB speaker models)",
     optTitleCard: "Title card",

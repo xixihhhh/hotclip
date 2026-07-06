@@ -74,6 +74,8 @@ export interface ClipRenderOutcome {
   edit: { splices: number; keptSec: number; removedSec: number; cutRatio: number } | null;
   /** Number of filler/stutter words removed. */
   fillersRemoved: number;
+  /** True when audio was matched to the -14 LUFS social loudness target. */
+  loudnessNormalized: boolean;
 }
 
 export interface ExportRenderOptions {
@@ -97,6 +99,8 @@ export interface ExportRenderOptions {
   titleCard?: boolean;
   /** Bundled-font directory handed to libass so CJK renders identically everywhere. */
   fontsDir?: string;
+  /** Match audio to the -14 LUFS social loudness target (EBU R128 loudnorm). */
+  normalizeLoudness?: boolean;
 }
 
 export interface ExportedClip {
@@ -252,12 +256,13 @@ export async function exportClips(
       // Web captions: cut to a base file first, then composite words on top.
       const cutTarget = webStyle ? outPath.replace(/\.mp4$/, ".base.mp4") : outPath;
       const cutOptions = trackPlan
-        ? { trackPlan, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined }
+        ? { trackPlan, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness }
         : {
             uiCrop,
             vertical: options.vertical,
             subtitlePath,
             fontsDir: subtitlePath ? options.fontsDir : undefined,
+            normalizeLoudness: options.normalizeLoudness,
           };
       if (plan && plan.segments.length > 1) {
         await cutJumpClip(inputPath, cutTarget, clip.startSec, plan.segments, cutOptions);
@@ -331,6 +336,7 @@ export async function exportClips(
         reframe: options.vertical ? (trackPlan ? "face-track" : "center-crop") : "none",
         edit: summarizeEdit(origDur, plan),
         fillersRemoved: fillerHits.length,
+        loudnessNormalized: Boolean(options.normalizeLoudness),
       });
       onProgress?.({ current: i + 1, total: clips.length, clipId: clip.id, stage: "done" });
     }
@@ -346,6 +352,7 @@ export async function exportClips(
         cleanFillers: Boolean(options.cleanFillers),
         trimUi: Boolean(options.trimUi),
         titleCard: Boolean(options.titleCard),
+        normalizeLoudness: Boolean(options.normalizeLoudness),
       },
       clips: results.map((r) => {
         const spec = clips.find((c) => c.id === r.id);

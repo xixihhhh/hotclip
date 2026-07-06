@@ -259,6 +259,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       cleanFillers,
       trimUi: Boolean(opts.trimUi),
       titleCard: Boolean(opts.titleCard),
+      normalizeLoudness: Boolean(opts.normalizeLoudness),
       faceTrack: true,
       modelsRoot: modelsRoot(),
       fontsDir,

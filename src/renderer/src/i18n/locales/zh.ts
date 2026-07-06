@@ -108,6 +108,8 @@ export const zh = {
     optJumpCutHint: "自动剪掉说话间的停顿静音,成片节奏像人剪的",
     optCleanFillers: "剪口头禅",
     optCleanFillersHint: "自动剪掉 嗯/呃 等语气词和结巴重复,剪了什么会列进 clips.json",
+    optLoudness: "响度标准化",
+    optLoudnessHint: "把音量统一到 -14 LUFS 社媒标准(抖音/TikTok/视频号 同款),整批切片音量一致、不再忽大忽小或太小声",
     optDiarize: "多人对谈",
     optDiarizeHint: "标注谁在说话:让 AI 按说话人挑段、避免把两个人的话拼成断章取义,字幕也按人上色(首次需下载约47MB说话人模型)",
     optTitleCard: "标题贴片",

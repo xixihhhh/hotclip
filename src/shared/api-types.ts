@@ -129,6 +129,8 @@ export interface ExportOptions {
   trimUi: boolean;
   /** Burn each clip's title into the top safe zone. */
   titleCard: boolean;
+  /** Match audio to the -14 LUFS social loudness target (EBU R128). */
+  normalizeLoudness?: boolean;
   /** Needed for captions/jump-cut: source of word-level timestamps. */
   transcript?: Transcript;
 }
