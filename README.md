@@ -12,18 +12,41 @@
 
 ---
 
+## 界面预览 / Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/04-highlights.png" width="840" alt="AI 爆点候选:四维打分 + 钩子 + 逐句边界微调 / AI highlight candidates with four-dimension virality scoring">
+</p>
+<p align="center"><sub><b>AI 通读全文挑爆点</b> —— 每条候选附爆款分、钩子、四维分项(钩子 / 结构 / 价值 / 热点)、悬念句与逐字精确切点;弱片自动标「不建议发布」,勾选取舍全在你手。<br/><i>AI reads the whole transcript and nominates highlights — each with a virality score, hook, four-dimension breakdown, a teaser line, and word-accurate cut points; weak picks are auto-flagged, you make the call.</i></sub></p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/01-import.png" alt="导入长视频 / Import a long video"><br/><sub>① <b>导入</b> 播客 / 直播回放 / 课程 —— 全程本地处理,素材不上传</sub></td>
+    <td width="50%"><img src="docs/screenshots/02-engines.png" alt="选择转写引擎 / Pick a transcription engine"><br/><sub>② <b>选转写引擎</b> —— 三档本地(SenseVoice / Paraformer / FireRedASR2)+ 可选云端,隐私分级明标</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/03-transcript.png" alt="逐字转写 / Word-level transcript"><br/><sub>③ <b>逐字转写</b> —— 带时间戳的逐句稿,是找爆点和字幕的地基</sub></td>
+    <td width="50%"><img src="docs/screenshots/05-export.png" alt="一键出片 / One-click export"><br/><sub>④ <b>一键出片</b> —— 竖屏成片直接发,附封面图与 clips.json 元数据</sub></td>
+  </tr>
+</table>
+
+> 截图为真实界面(演示素材:一段带货直播回放)。The screenshots above are the real UI, driven with a sample livestream-selling replay.
+
+---
+
 ## 🚧 项目状态 / Status
 
-**v0.1.0 已发布**——「导入 → AI 找爆点 → 竖屏+逐字字幕成片」三步全流程可下载可用,[去下载](https://github.com/xixihhhh/hotclip/releases/latest):
+**v0.4.3 已发布**——「导入 → AI 找爆点 → 竖屏+逐字字幕成片」三步全流程可下载可用,并已长出**说话人分离、气泡特效字幕、气口跳剪、一键全托管**等能力,[去下载](https://github.com/xixihhhh/hotclip/releases/latest):
 
 | 里程碑 Milestone | 状态 Status |
 |---|---|
 | 桌面客户端(Electron,中英双语,导入+媒体探测) | ✅ 已完成 |
-| M2 本地转写(SenseVoice,中/英/日/韩/粤,逐字时间戳,模型首启自动下载·国内镜像优先) | ✅ 已完成 |
-| M3 AI 找爆点(LLM 只引原文不猜时间戳,逐字反向对齐 → 切点精确到词) | ✅ 已完成 |
-| M4 出片(帧精确切割 + 竖屏 9:16 重构 + 卡拉OK逐字字幕烧录) | ✅ 已完成 |
-| 人脸追踪智能取景(现为居中裁剪) | 🔨 进行中 |
-| M5 安装包发布(Windows exe + 绿色版 zip + macOS dmg) | ✅ [v0.1.0 已发布](https://github.com/xixihhhh/hotclip/releases/latest) |
+| 本地转写(SenseVoice / Paraformer / FireRedASR2 三档 + 云端 ElevenLabs,逐字时间戳,首启自动下载·国内镜像优先) | ✅ 已完成 |
+| AI 找爆点(LLM 只引原文不猜时间戳,逐字反向对齐 → 切点精确到词,四维复评打分) | ✅ 已完成 |
+| 出片(帧精确切割 + 竖屏 9:16 重构 + 卡拉OK逐字字幕烧录) | ✅ 已完成 |
+| 人脸跟随智能取景(镜头级三模式,无人脸自动回退居中裁剪) | ✅ 已完成 |
+| 说话人分离 · 气泡特效字幕 · 气口跳剪 · 剪口头禅 · 转写缓存 · 一键全托管 | ✅ 已完成 |
+| 安装包发布(Windows exe + 绿色版 zip + macOS dmg) | ✅ [v0.4.3 已发布](https://github.com/xixihhhh/hotclip/releases/latest) |
 | 平台规格预设 · 剪映草稿导出 · Web 平台版 · 更多界面语言 | 🗺️ 规划中 |
 
 ## 三步出片 / How It Works
@@ -87,7 +110,7 @@ Every commercial clipper meters your source minutes, forces cloud uploads, or bo
 
 - **字幕样式预设**:大字关键词 / 极简白字等多套模板
 - **平台规格预设与剪映草稿导出**:切完直接进剪映精修,工作流无断层
-- **画面信号融合**:场景切换/响度/人脸/音频事件参与爆点判断(纯文本之外的证据)
+- **更多画面信号**:响度峰值与镜头切换密度已并入爆点判断,后续接入场景切换检测(TransNetV2)与更多音频事件
 - **合规内建**:AIGC 标识(显式+隐式,对齐 2025-09 生效的国家标识办法);仅面向**自有内容与已授权切片**,不做搬运工具
 
 ## 下载安装 / Download
@@ -114,7 +137,7 @@ pnpm test       # 跑单元测试
 
 ## 技术栈 / Tech Stack
 
-Electron + React + TypeScript + Tailwind · ffmpeg(打包内置,无需自装)· sherpa-onnx + SenseVoice 本地转写 · libass 卡拉OK逐字字幕 · LLM 爆点检测(Atlas Cloud / 本地 Ollama / 任意 OpenAI 兼容接口,BYO Key)
+Electron + React 19 + TypeScript + Tailwind 4 · ffmpeg(打包内置,无需自装)· sherpa-onnx 本地转写(SenseVoice / Paraformer / FireRedASR2)+ 说话人分离(pyannote seg-3.0 + 3D-Speaker)· libass 卡拉OK逐字字幕 + 离屏 Chromium 气泡特效字幕引擎 · LLM 爆点检测(Atlas Cloud / 本地 Ollama / 任意 OpenAI 兼容接口,BYO Key)
 
 ## 常见问题 / FAQ
 
