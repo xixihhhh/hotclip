@@ -1,0 +1,57 @@
+name: 🐛 Bug 反馈 / Bug Report
+description: 报告一个问题(闪退、切错、装不上…) / Report a problem
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈!请尽量填全,能贴报错原文最好——这样别人搜索同样的报错也能找到答案。
+        Thanks for reporting! Please paste the exact error text if you have one.
+  - type: input
+    id: version
+    attributes:
+      label: HotClip 版本 / Version
+      placeholder: 例如 v0.4.3(在「设置」或安装包文件名里能看到)
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: 操作系统 / OS
+      options:
+        - Windows 10
+        - Windows 11
+        - macOS (Apple 芯片)
+        - macOS (Intel)
+        - 其他 / Other
+    validations:
+      required: true
+  - type: dropdown
+    id: stage
+    attributes:
+      label: 出问题的环节 / Which stage
+      options:
+        - 安装/启动 Install & launch
+        - 导入 Import
+        - 转写 Transcription
+        - AI 找爆点 Highlight detection
+        - 导出成片 Export
+        - 其他 Other
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 发生了什么 / What happened
+      description: 做了什么操作、期望看到什么、实际看到什么。有报错请贴**完整原文**,有截图更好。
+      placeholder: |
+        1. 导入了一个 2 小时的 FLV 直播回放
+        2. 选了 SenseVoice 引擎点开始
+        3. 进度到 40% 时报错:(贴完整报错)
+    validations:
+      required: true
+  - type: textarea
+    id: media-info
+    attributes:
+      label: 素材信息 / Source media(可选)
+      description: 视频格式/时长/来源(如 OBS 录制、手机录屏、B站下载),方便复现。

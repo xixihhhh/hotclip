@@ -1,44 +1,60 @@
-# HotClip 爆款切片 — 长视频/直播回放,一键切出爆款竖屏短视频 | AI Clip Generator: Long Video to Viral Shorts
+# HotClip 爆款切片 — 长视频/直播回放，一键切出爆款竖屏短视频
 
-> **把几个小时的长视频,筛成能上热门的短视频。** 播客 · 直播回放 · 课程 · Vlog → AI 自动找爆点(金句/冲突/高能瞬间) → 竖屏 9:16 重构 + 逐字动态字幕 → 直接发**抖音 / 快手 / B站 / 视频号 / 小红书 / TikTok / Reels / Shorts**。
+**简体中文** | [English](README.en.md)
+
+> **把几个小时的长视频，筛成能上热门的短视频。** 播客 · 直播回放 · 课程 · Vlog → AI 自动找爆点（金句/冲突/高能瞬间）→ 竖屏 9:16 重构 + 逐字动态字幕 → 直接发**抖音 / 快手 / B站 / 视频号 / 小红书 / TikTok / Reels / Shorts**。
 >
-> **无积分制 · 无水印 · 不上传 · 不限时长——因为它就跑在你自己的电脑上。** 提供 Windows / macOS 桌面客户端,不会代码也能用。AI 负责找爆点,最终哪条能发、切在哪里,由你定夺。
+> **无积分制 · 无水印 · 不上传 · 不限时长——因为它就跑在你自己的电脑上。** 提供 Windows / macOS 桌面客户端，不会代码也能用。AI 负责找爆点，最终哪条能发、切在哪里，由你定夺。
 
-> **Pan hours of long-form video for gold.** Podcasts · livestream replays · lectures · vlogs → AI highlight detection (quotables, conflict, peak moments) → 9:16 auto-reframe + word-level animated captions → ready to post on TikTok / Reels / Shorts / Douyin / Bilibili.
->
-> **No credits, no watermark, no uploads, no length caps — it runs on your machine.** Ships as a beginner-friendly Windows / macOS desktop app. Human-in-the-loop by design: AI nominates the highlights with evidence, you make the call.
+<p>
+  <a href="https://github.com/xixihhhh/hotclip/releases/latest"><img src="https://img.shields.io/github/v/release/xixihhhh/hotclip?label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC&color=ff5722" alt="最新版本"></a>
+  <a href="https://github.com/xixihhhh/hotclip/releases"><img src="https://img.shields.io/github/downloads/xixihhhh/hotclip/total?label=%E4%B8%8B%E8%BD%BD%E9%87%8F&color=ff9800" alt="下载量"></a>
+  <img src="https://img.shields.io/badge/%E5%B9%B3%E5%8F%B0-Windows%20%7C%20macOS-blue" alt="平台">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/xixihhhh/hotclip?label=%E5%BC%80%E6%BA%90%E5%8D%8F%E8%AE%AE" alt="License"></a>
+  <a href="https://github.com/xixihhhh/hotclip/stargazers"><img src="https://img.shields.io/github/stars/xixihhhh/hotclip?style=social" alt="GitHub stars"></a>
+</p>
 
-<p align="right"><strong>中文</strong> · English (bilingual README)</p>
+<!-- TODO(P0): 在此处放 30-60 秒实操 demo mp4（README 网页编辑器直接拖入 mp4 生成 user-attachments 页内播放器）：
+     内容：拖入直播回放 → 爆点候选卡片弹出 → 一键导出 → 竖屏成片带卡拉OK字幕播放 2 秒 -->
+
+<!-- TODO(P0): 在此处放「成片效果」表格：<table> 并排 2-3 个竖屏成片 <video>（中文播客金句 / 带货直播高能 / 中英混说），每个配一行标题 -->
 
 ---
 
-## 界面预览 / Screenshots
+## 界面预览
 
 <p align="center">
-  <img src="docs/screenshots/04-highlights.png" width="840" alt="AI 爆点候选:四维打分 + 钩子 + 逐句边界微调 / AI highlight candidates with four-dimension virality scoring">
+  <img src="docs/screenshots/04-highlights.png" width="840" alt="AI 爆点候选:四维打分 + 钩子 + 逐句边界微调">
 </p>
-<p align="center"><sub><b>AI 通读全文挑爆点</b> —— 每条候选附爆款分、钩子、四维分项(钩子 / 结构 / 价值 / 热点)、悬念句与逐字精确切点;弱片自动标「不建议发布」,勾选取舍全在你手。<br/><i>AI reads the whole transcript and nominates highlights — each with a virality score, hook, four-dimension breakdown, a teaser line, and word-accurate cut points; weak picks are auto-flagged, you make the call.</i></sub></p>
+<p align="center"><sub><b>AI 通读全文挑爆点</b> —— 每条候选附爆款分、钩子、四维分项（钩子 / 结构 / 价值 / 热点）、悬念句与逐字精确切点;弱片自动标「不建议发布」,勾选取舍全在你手。</sub></p>
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/01-import.png" alt="导入长视频 / Import a long video"><br/><sub>① <b>导入</b> 播客 / 直播回放 / 课程 —— 全程本地处理,素材不上传</sub></td>
-    <td width="50%"><img src="docs/screenshots/02-engines.png" alt="选择转写引擎 / Pick a transcription engine"><br/><sub>② <b>选转写引擎</b> —— 三档本地(SenseVoice / Paraformer / FireRedASR2)+ 可选云端,隐私分级明标</sub></td>
+    <td width="50%"><img src="docs/screenshots/01-import.png" alt="导入长视频"><br/><sub>① <b>导入</b> 播客 / 直播回放 / 课程 —— 全程本地处理,素材不上传</sub></td>
+    <td width="50%"><img src="docs/screenshots/02-engines.png" alt="选择转写引擎"><br/><sub>② <b>选转写引擎</b> —— 三档本地(SenseVoice / Paraformer / FireRedASR2)+ 可选云端,隐私分级明标</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/screenshots/03-transcript.png" alt="逐字转写 / Word-level transcript"><br/><sub>③ <b>逐字转写</b> —— 带时间戳的逐句稿,是找爆点和字幕的地基</sub></td>
-    <td width="50%"><img src="docs/screenshots/05-export.png" alt="一键出片 / One-click export"><br/><sub>④ <b>一键出片</b> —— 竖屏成片直接发,附封面图与 clips.json 元数据</sub></td>
+    <td width="50%"><img src="docs/screenshots/03-transcript.png" alt="逐字转写"><br/><sub>③ <b>逐字转写</b> —— 带时间戳的逐句稿,是找爆点和字幕的地基</sub></td>
+    <td width="50%"><img src="docs/screenshots/05-export.png" alt="一键出片"><br/><sub>④ <b>一键出片</b> —— 竖屏成片直接发,附封面图与 clips.json 元数据</sub></td>
   </tr>
 </table>
 
-> 截图为真实界面(演示素材:一段带货直播回放)。The screenshots above are the real UI, driven with a sample livestream-selling replay.
+> 截图为真实界面（演示素材:一段带货直播回放）。**觉得切得准，就点个 ⭐——每颗星都是让更多人不用再给积分制付费的一票。**
 
----
+## 最近更新
 
-## 🚧 项目状态 / Status
+- **[v0.4.3](https://github.com/xixihhhh/hotclip/releases/tag/v0.4.3)**（2026-07-06）工程底座:转写结果本地缓存（同文件重开秒进挑爆点）+ clips.json 处理产出回执（AI 对每条片做了什么，可审计）
+- **[v0.4.2](https://github.com/xixihhhh/hotclip/releases/tag/v0.4.2)**（2026-07-05）字幕可读性:语义断行（顺标点/结构助词换行，不再拦腰截断）+ 防闪烁
+- **[v0.4.1](https://github.com/xixihhhh/hotclip/releases/tag/v0.4.1)**（2026-07-05）多人对谈:说话人分离字幕按人上色端到端打通
+- 开发中（已进主干,随下个版本发布）:开场钩子黄金3秒烧录、响度标准化 -14 LUFS 社媒标准
 
-**v0.4.3 已发布**——「导入 → AI 找爆点 → 竖屏+逐字字幕成片」三步全流程可下载可用,并已长出**说话人分离、气泡特效字幕、气口跳剪、一键全托管**等能力,[去下载](https://github.com/xixihhhh/hotclip/releases/latest):
+完整更新历史见 [Releases](https://github.com/xixihhhh/hotclip/releases)。
 
-| 里程碑 Milestone | 状态 Status |
+## 🚧 项目状态
+
+**「导入 → AI 找爆点 → 竖屏+逐字字幕成片」三步全流程可下载可用**,并已长出说话人分离、气泡特效字幕、气口跳剪、一键全托管等能力,[去下载](https://github.com/xixihhhh/hotclip/releases/latest):
+
+| 里程碑 | 状态 |
 |---|---|
 | 桌面客户端(Electron,中英双语,导入+媒体探测) | ✅ 已完成 |
 | 本地转写(SenseVoice / Paraformer / FireRedASR2 三档 + 云端 ElevenLabs,逐字时间戳,首启自动下载·国内镜像优先) | ✅ 已完成 |
@@ -46,18 +62,18 @@
 | 出片(帧精确切割 + 竖屏 9:16 重构 + 卡拉OK逐字字幕烧录) | ✅ 已完成 |
 | 人脸跟随智能取景(镜头级三模式,无人脸自动回退居中裁剪) | ✅ 已完成 |
 | 说话人分离 · 气泡特效字幕 · 开场钩子 · 气口跳剪 · 剪口头禅 · 响度标准化 · 转写缓存 · 一键全托管 | ✅ 已完成 |
-| 安装包发布(Windows exe + 绿色版 zip + macOS dmg) | ✅ [v0.4.3 已发布](https://github.com/xixihhhh/hotclip/releases/latest) |
-| 平台规格预设 · 剪映草稿导出 · Web 平台版 · 更多界面语言 | 🗺️ 规划中 |
+| 安装包发布(Windows exe + 绿色版 zip + macOS dmg) | ✅ [已发布](https://github.com/xixihhhh/hotclip/releases/latest) |
+| 候选审阅台 · 镜头边界检测 · 样式模板 · 多平台发布 · MCP Server | 🗺️ [规划中](docs/PRODUCT-PLAN.md) |
 
-## 三步出片 / How It Works
+## 三步出片
 
 1. **导入**:把播客、直播回放、课程、Vlog 丢进来(MP4 / MKV / MOV / FLV / TS,也支持纯音频)
 2. **挑爆点**:本地逐字转写 → AI 通读全文挑出金句/冲突/高能片段,每条附爆款分、开场钩子和推荐理由,切点精确到词;看不顺眼的取消勾选即可
 3. **出片**:一键切出竖屏 9:16 成片,卡拉OK逐字点亮字幕直接烧进画面,文件落在「影片/HotClip」里,打开就能发
 
-## 为什么做 HotClip / Why
+## 为什么做 HotClip
 
-市面上的 AI 切片工具,要么**按分钟扣积分**(一期 2 小时播客烧光整月额度),要么**必须上传云端**(未发布的素材/客户内容不敢传),要么切点稀烂(句子切一半、没上下文),要么**中文支持名不副实**。开源侧则几乎全是命令行/自部署,小白装不起来。
+市面上的 AI 切片工具,要么**按分钟扣积分**(一期 2 小时播客烧光整月额度,积分月底还清零),要么**必须上传云端**(未发布的素材/客户内容不敢传——参考 2025 年 CapCut 用户协议风波),要么切点稀烂(句子切一半、没上下文),要么**中文支持名不副实**。开源侧则几乎全是命令行/自部署,小白装不起来。
 
 HotClip 的答案:
 
@@ -68,22 +84,20 @@ HotClip 的答案:
 - 🇨🇳 **中文原生**:中文语音识别走专门引擎(SenseVoice,兼顾粤语),界面中英双语,爆点判断的提示词也按内容语言分流——不是英文产品硬翻
 - 🤖 **模型自带干粮也行**:默认本地免费模型;要更强的爆点判断,可一键接 [Atlas Cloud](https://www.atlascloud.ai)(一个 Key 用齐中外主流大模型)、fal.ai 或任意 OpenAI 兼容接口
 
-Every commercial clipper meters your source minutes, forces cloud uploads, or botches clip boundaries; every open-source one is CLI/Docker-only. HotClip is the missing piece: an installable, local-first, bilingual desktop clipper with accurate text-aligned cuts — bring your own AI provider (Atlas Cloud recommended, fal.ai and any OpenAI-compatible endpoint supported).
-
-## 对比 / How it compares
+## 对比
 
 | | HotClip | OpusClip / Klap / Vizard 等 SaaS | 剪映/CapCut 智能切片 | FunClip / autoclip 等开源 |
 |---|---|---|---|---|
-| 价格 | **免费开源** | $29+/月,按源视频分钟扣积分,重生成再扣,退订积分作废 | 核心功能进会员/Pro | 免费 |
+| 价格 | **免费开源** | $15-29+/月,按源视频分钟扣积分,重生成再扣,积分月底清零,退订删项目 | 核心功能进会员/Pro | 免费 |
 | 素材去向 | **全程本地,不上传** | 必须上传云端 | 云端处理为主 | 本地 |
-| 水印/时长限制 | **无** | 免费档有水印、限时长 | 部分模板有限制 | 无 |
+| 水印/时长限制 | **无** | 免费档有水印、限时长、项目 3 天过期 | 部分模板有限制 | 无 |
 | 小白可用 | **双击安装即用** | 网页版,易用 | 易用 | 命令行/Docker/自部署 |
 | 切点质量 | **逐字对齐,精确到词,附理由可否决** | 黑盒打分,常被抱怨断章取义 | 黑盒 | 按句切,无爆点排序 |
 | 竖屏字幕 | **9:16 重构 + 逐字点亮字幕内置** | 有(付费档) | 自动字幕已进付费 | 多数无竖屏重构 |
 
 > 一句话:SaaS 的积分制和黑盒是最大怨气来源;开源工具装不起来。HotClip 把两边的坑同时填上。
 
-## 已实现 / Shipped
+## 已实现
 
 - **本地逐字转写(三档可选)**:快速 SenseVoice(五语种,170MB)/ 均衡 Paraformer(中文更准,230MB)/ 最准 FireRedASR2(普通话/方言/中英混说,小红书开源,520MB)——全部本地运行、逐字时间戳、首次自动下载(国内镜像优先),模型不带标点的档位自动用标点模型回补;另有**云端档 ElevenLabs**(自带 Key,90+ 语种,只上传提取的音轨、绝不上传视频)
 - **AI 找爆点**:LLM 只负责«挑哪段»并引用原文,时间戳由逐字转写反向对齐(逐字精确/首尾锚定/按句对齐三级降级,UI 明示切点质量)——不让 AI 猜时间
@@ -108,26 +122,31 @@ Every commercial clipper meters your source minutes, forces cloud uploads, or bo
 - **帧精确切割**:快速定位 + 重编码,爆点第一秒不糊不偏;直播回放数小时 FLV/TS 直接进
 - **中英双语界面**,新增语言只需一个语言文件
 
-## 规划中 / Planned
+## 规划中
 
-- **字幕样式预设**:大字关键词 / 极简白字等多套模板
-- **平台规格预设与剪映草稿导出**:切完直接进剪映精修,工作流无断层
-- **更多画面信号**:响度峰值与镜头切换密度已并入爆点判断,后续接入场景切换检测(TransNetV2)与更多音频事件
+完整规划见 [产品规划文档](docs/PRODUCT-PLAN.md),要点:
+
+- **v0.5 选得准**:候选切片审阅台(拖拽微调边界、一键重生成)· 镜头边界检测(切点吸附镜头边界)· 字幕样式模板/品牌预设 · 端侧小模型初筛降本
+- **v0.6 看得见画面**:视觉爆点信号(端侧多模态模型看表情/动作/画面梗)· 多语言翻译字幕 · 英文转写引擎升级
+- **v0.7 切完直接发**:多平台一键发布/排期 · 平台规格预设 · 剪映草稿导出
+- **v0.8 被 Agent 调用**:本地 MCP Server(让 Claude 等直接驱动切片流水线)· 录播监听全自动 · 弹幕热度爆点信号
 - **合规内建**:AIGC 标识(显式+隐式,对齐 2025-09 生效的国家标识办法);仅面向**自有内容与已授权切片**,不做搬运工具
 
-## 下载安装 / Download
+想投票决定先做哪个?到 [Discussions](https://github.com/xixihhhh/hotclip/discussions) 留言。
+
+## 下载安装
 
 **[⬇️ 去 Releases 页下载最新版](https://github.com/xixihhhh/hotclip/releases/latest)**
 
-| 平台 Platform | 文件 File |
+| 平台 | 文件 |
 |---|---|
 | Windows 安装版 | `HotClip-x.y.z-win-x64.exe` |
 | Windows 绿色版(免安装,解压即用)| `HotClip-x.y.z-win-x64.zip` |
 | macOS(Apple 芯片)| `HotClip-x.y.z-mac-arm64.dmg` |
 
-> ⚠️ 当前版本未做代码签名:Windows SmartScreen 提示时点「更多信息 → 仍要运行」;macOS 首次打开用右键 → 打开(或到「系统设置 → 隐私与安全性」允许)。Unsigned builds: on Windows choose "More info → Run anyway"; on macOS right-click → Open on first launch.
+> ⚠️ 当前版本未做代码签名:Windows SmartScreen 提示时点「更多信息 → 仍要运行」;macOS 首次打开用右键 → 打开(或到「系统设置 → 隐私与安全性」允许)。代码签名已在规划中。
 
-## 快速开始 / Quick Start(开发者 dev)
+## 快速开始(开发者)
 
 ```bash
 git clone https://github.com/xixihhhh/hotclip.git
@@ -137,29 +156,51 @@ pnpm dev        # 启动桌面应用(开发模式)
 pnpm test       # 跑单元测试
 ```
 
-## 技术栈 / Tech Stack
+## 技术栈
 
-Electron + React 19 + TypeScript + Tailwind 4 · ffmpeg(打包内置,无需自装)· sherpa-onnx 本地转写(SenseVoice / Paraformer / FireRedASR2)+ 说话人分离(pyannote seg-3.0 + 3D-Speaker)· libass 卡拉OK逐字字幕 + 离屏 Chromium 气泡特效字幕引擎 · LLM 爆点检测(Atlas Cloud / 本地 Ollama / 任意 OpenAI 兼容接口,BYO Key)
+Electron + React 19 + TypeScript + Tailwind 4 · ffmpeg(打包内置,无需自装)· sherpa-onnx 本地转写 + 说话人分离 · libass 卡拉OK逐字字幕 + 离屏 Chromium 气泡特效字幕引擎 · LLM 爆点检测(Atlas Cloud / 本地 Ollama / 任意 OpenAI 兼容接口,BYO Key)
 
-## 常见问题 / FAQ
+### 站在这些开源项目的肩膀上
 
-**HotClip 是免费的吗?/ Is it free?**
-是。开源(AGPL-3.0)、本地运行、无水印、无积分制。可选的云端大模型按你自己的 Key 计费。Yes — open source, local, no watermark, no credits. Optional cloud LLMs bill your own key.
+| 项目 | 在 HotClip 中的角色 |
+|---|---|
+| [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) | 本地语音识别运行时(纯 CPU 可跑) |
+| [SenseVoice](https://github.com/FunAudioLLM/SenseVoice) / [FunASR](https://github.com/modelscope/FunASR) | 五语种快速转写 / Paraformer 中文转写与标点 |
+| [FireRedASR](https://github.com/FireRedTeam/FireRedASR) | 最高精度档:普通话/方言/中英混说 |
+| [pyannote-audio](https://github.com/pyannote/pyannote-audio) + [3D-Speaker](https://github.com/modelscope/3D-Speaker) | 说话人分离(本地零上传) |
+| [FFmpeg](https://ffmpeg.org/) + [libass](https://github.com/libass/libass) | 帧精确切割 / 字幕烧录 |
+| [onnxruntime](https://github.com/microsoft/onnxruntime) | 端侧模型推理 |
 
-**怎么把播客/直播回放变成短视频?/ How do I turn a podcast or livestream replay into shorts?**
-导入文件 → AI 转写并标出爆点(可手动增删调边界)→ 一键导出竖屏成片。Import → AI transcribes & flags highlights (fully editable) → export vertical clips.
+## 常见问题
 
-**支持中文视频吗?/ Does it work for Chinese video?**
-支持。中文识别走专用引擎(SenseVoice/Paraformer 一类),准确率显著高于通用模型;界面、字幕、prompt 都针对中文内容做了适配。Yes — Chinese speech goes through a dedicated ASR engine with noticeably better accuracy than general-purpose models.
+**HotClip 是免费的吗?**
+是。开源(AGPL-3.0)、本地运行、无水印、无积分制。可选的云端大模型按你自己的 Key 计费。
 
-**需要显卡吗?/ Do I need a GPU?**
-不需要。本地转写用的是 int8 量化的 SenseVoice 小模型,普通 CPU 就能跑;找爆点的大模型在云端(或你本机的 Ollama)。No GPU needed — the local ASR model is int8-quantized and runs fine on CPU; the LLM runs in the cloud (or your local Ollama).
+**HotClip 和 OpusClip/Klap 这类工具的区别?**
+最大区别是素材不出你的电脑:OpusClip 等 SaaS 必须上传云端、按源视频分钟扣积分(积分月底清零),免费档带水印。HotClip 开源免费、本地处理、无水印、不限时长,AI 切点还附理由可审计。详见上方[对比表](#对比)。
 
-## 授权与边界 / License & Boundaries
+**需要联网吗?**
+转写、字幕、切片、导出全程离线。只有「AI 找爆点」这一步默认调用云端大模型(用你自己的 Key),不想联网可以接本机 Ollama——那就 100% 离线。
+
+**怎么把播客/直播回放变成短视频?**
+导入文件 → AI 转写并标出爆点(可手动增删调边界)→ 一键导出竖屏成片。
+
+**支持中文视频吗?**
+支持。中文识别走专用引擎(SenseVoice/Paraformer 一类),准确率显著高于通用模型;界面、字幕、prompt 都针对中文内容做了适配。
+
+**需要显卡吗?**
+不需要。本地转写用的是 int8 量化的 SenseVoice 小模型,普通 CPU 就能跑;找爆点的大模型在云端(或你本机的 Ollama)。
+
+## 授权与边界
 
 - 代码:**AGPL-3.0-only**
 - HotClip 面向**你自己的内容**或**已获授权的切片**(如主播切片授权计划)。请遵守各平台二创与授权规则——未经授权的影视/直播搬运不受支持,也不欢迎。
 
----
+## 社区
 
-**⭐ 觉得有用就点个 Star——首个安装包发布时你会第一时间看到。 / Star to catch the first release.**
+- 🐛 [提 Bug / 安装求助](https://github.com/xixihhhh/hotclip/issues)
+- 💡 [功能建议与 Roadmap 讨论](https://github.com/xixihhhh/hotclip/discussions)
+
+[![Star History Chart](https://api.star-history.com/svg?repos=xixihhhh/hotclip&type=Date)](https://star-history.com/#xixihhhh/hotclip&Date)
+
+**⭐ 觉得有用就点个 Star——新版本发布时你会第一时间看到。**
