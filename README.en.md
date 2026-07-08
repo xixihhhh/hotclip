@@ -46,7 +46,7 @@
 - **[v0.4.3](https://github.com/xixihhhh/hotclip/releases/tag/v0.4.3)** (2026-07-06) Engineering base: local transcript cache (reopen the same file and jump straight to highlight picking) + clips.json processing receipt (auditable record of what the AI did to each clip)
 - **[v0.4.2](https://github.com/xixihhhh/hotclip/releases/tag/v0.4.2)** (2026-07-05) Caption readability: semantic line breaking (wraps at real clause boundaries instead of chopping mid-phrase) + anti-flicker
 - **[v0.4.1](https://github.com/xixihhhh/hotclip/releases/tag/v0.4.1)** (2026-07-05) Multi-speaker: diarization-colored captions working end to end
-- In main, shipping with the next release: opening-hook burn-in (first 3 golden seconds) and loudness normalization to the -14 LUFS social standard
+- In main, shipping with the next release: opening-hook burn-in (first 3 golden seconds), loudness normalization to the -14 LUFS social standard, and **shot-snapped cut points** (TransNetV2 shot-boundary detection — cuts land on real shot changes)
 
 Full history in [Releases](https://github.com/xixihhhh/hotclip/releases).
 
@@ -102,6 +102,7 @@ HotClip fills the gap from both sides:
 - **Loudness normalization**: every clip is normalized to **-14 LUFS (EBU R128)**, the social-platform standard — a whole batch exports at consistent volume; jump-cut clips are measured on the spliced audio, not per segment
 - **Cover image + metadata export**: every clip ships with a cover JPG (captions and title card included, ready for direct upload) and clips.json (title / hook / scores / review notes / timecodes / keywords) — plug straight into a CMS for multi-account operations; plus a **processing receipt** (effective caption style, face-track vs center-crop fallback, jump-cut ratio and segment count, filler words removed) — fully auditable
 - **Audio-visual evidence**: loudness peaks and shot-change density are collected locally and injected into highlight judgment — no more text-only picking
+- **Shot-snapped cut points**: TransNetV2 shot-boundary detection (31MB ONNX, local inference, MIT) finds real shot changes frame by frame, and clip boundaries snap to the nearest one (extending outward first, ≤0.8s) — clips no longer open mid-action or mid-transition; a **word-boundary guard** guarantees snapping never clips speech, detection failures silently fall back to no snapping, and every snap is logged in the clips.json receipt
 - **Local transcript cache**: transcription is the slowest stage; results are cached per (file + engine), so reopening the same file skips straight to highlight picking (and saves a cloud API call); invalidated automatically when the file or engine changes
 - **One-click hands-off mode**: import, press one button — transcribe → find highlights → reframe + captions + jump cuts, all automatic; you only review the output
 - **Frame-accurate cutting**: fast seek + re-encode, so the first second of a highlight is never blurry or misaligned; hours-long FLV/TS livestream replays go straight in

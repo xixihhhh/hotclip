@@ -20,6 +20,7 @@ import { detectHighlights } from "@core/highlight/detect";
 import { collectSignals } from "@core/signals";
 import { exportClips, sanitizeFilename } from "@core/export";
 import { sliceWords } from "@core/subtitle";
+import { snapContextAround } from "@core/shots";
 import { renderCaptionOverlay } from "./overlay-renderer";
 import type { Transcript, LlmConfig, HighlightCandidate, ExportOptions } from "../shared/api-types";
 
@@ -231,6 +232,11 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
   const fontsDir = app.isPackaged
     ? join(process.resourcesPath, "fonts")
     : join(app.getAppPath(), "resources", "fonts");
+  // 镜头吸附的外扩守卫:片外紧邻词的时刻(有转写才算得出;没有则 undefined,
+  // 吸附退化为「只信片内词」的保守模式)
+  const allWords = opts.transcript
+    ? opts.transcript.segments.flatMap((s) => s.words).sort((a, b) => a.startSec - b.startSec)
+    : null;
   return exportClips(
     filePath,
     list.map((c) => ({
@@ -238,6 +244,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       title: c.title,
       startSec: c.startSec,
       endSec: c.endSec,
+      snapContext: allWords ? snapContextAround(allWords, c.startSec, c.endSec) : undefined,
       words: needWords ? sliceWords(opts.transcript!, c.startSec, c.endSec) : undefined,
       keywords: c.keywords,
       meta: {
@@ -262,6 +269,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       openingHook: Boolean(opts.openingHook),
       normalizeLoudness: Boolean(opts.normalizeLoudness),
       faceTrack: true,
+      snapToShots: true,
       modelsRoot: modelsRoot(),
       fontsDir,
       renderOverlay: renderCaptionOverlay,

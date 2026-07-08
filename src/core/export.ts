@@ -17,6 +17,7 @@ import { findFillerWords, dropFillerWords, fillerCutSpans, type FillerHit } from
 import { extractPeaks } from "./audio-peaks";
 import { detectUiCrop, type UiCrop } from "./uicrop";
 import { generateCropPlan, renderCropXExpr, mapToOutputTime } from "./reframe";
+import { detectShotBoundaries, snapClipToShots, SNAP_MAX_OUT_SEC } from "./shots";
 import { buildCaptionAss, VERTICAL_LAYOUT, HORIZONTAL_LAYOUT, type CaptionStyle } from "./subtitle";
 import { buildOverlayPayload, isWebCaptionStyle, type OverlayRenderFn, type WebCaptionStyle } from "./caption-overlay/payload";
 import { probeMedia } from "./probe";
@@ -31,6 +32,8 @@ export interface ExportClipSpec {
   words?: TranscriptWord[];
   /** Verbatim keywords to emphasize (keyword caption style). */
   keywords?: string[];
+  /** 片外紧邻词的时刻(全量转写里算好传入)——镜头吸附外扩的守卫。 */
+  snapContext?: { prevWordEndSec: number | null; nextWordStartSec: number | null };
   /** Evidence-chain fields carried into clips.json for CMS/matrix pipelines. */
   meta?: {
     hook: string;
@@ -81,6 +84,8 @@ export interface ClipRenderOutcome {
   loudnessNormalized: boolean;
   /** True when the AI teaser was burned in as an opening hook. */
   openingHookBurned: boolean;
+  /** 切点吸附到镜头边界的实际位移(秒);没吸附(或检测失败)为 null。 */
+  shotSnap: { startDeltaSec: number; endDeltaSec: number } | null;
 }
 
 export interface ExportRenderOptions {
@@ -108,6 +113,8 @@ export interface ExportRenderOptions {
   fontsDir?: string;
   /** Match audio to the -14 LUFS social loudness target (EBU R128 loudnorm). */
   normalizeLoudness?: boolean;
+  /** 切点吸附镜头边界(TransNetV2,需 modelsRoot);检测失败静默回退不吸附。 */
+  snapToShots?: boolean;
 }
 
 export interface ExportedClip {
@@ -173,10 +180,37 @@ export async function exportClips(
     // Per-clip processing outcomes for clips.json — what the pipeline actually
     // did (and where it fell back), so "fully managed" stays inspectable.
     const renderByClip = new Map<number, ClipRenderOutcome>();
+    // 吸附后的实际切点(clips.json 的 sourceStart/End 要报真实值)
+    const snappedRange = new Map<number, { startSec: number; endSec: number }>();
     for (let i = 0; i < clips.length; i++) {
-      const clip = clips[i];
+      let clip = clips[i];
       if (signal?.aborted) throw new Error("export cancelled");
       onProgress?.({ current: i + 1, total: clips.length, clipId: clip.id, stage: "cutting" });
+
+      // 切点吸附:起止点吸到最近的镜头边界(词边界守卫,检测失败回退不吸附)。
+      // 必须在跳剪/字幕/取景之前调整——下游全部消费 clip.startSec/endSec。
+      let shotSnap: ClipRenderOutcome["shotSnap"] = null;
+      if (options.snapToShots && options.modelsRoot) {
+        const pad = SNAP_MAX_OUT_SEC + 0.4;
+        const boundaries = await detectShotBoundaries(
+          inputPath, clip.startSec - pad, clip.endSec + pad, options.modelsRoot
+        ).catch(() => [] as number[]);
+        const w = clip.words;
+        const snap = snapClipToShots(clip.startSec, clip.endSec, boundaries, {
+          firstWordStartSec: w?.[0]?.startSec,
+          lastWordEndSec: w && w.length > 0 ? w[w.length - 1].endSec : undefined,
+          prevWordEndSec: clip.snapContext?.prevWordEndSec,
+          nextWordStartSec: clip.snapContext?.nextWordStartSec,
+        });
+        if (snap.snapped) {
+          clip = { ...clip, startSec: snap.startSec, endSec: snap.endSec };
+          snappedRange.set(clip.id, { startSec: snap.startSec, endSec: snap.endSec });
+          shotSnap = {
+            startDeltaSec: Number(snap.startDeltaSec.toFixed(3)),
+            endDeltaSec: Number(snap.endDeltaSec.toFixed(3)),
+          };
+        }
+      }
 
       // Jump cut: plan kept segments + words remapped to the output timeline.
       // Peaks gate the cuts so wordless-but-loud moments (laughter, applause,
@@ -352,6 +386,7 @@ export async function exportClips(
         fillersRemoved: fillerHits.length,
         loudnessNormalized: Boolean(options.normalizeLoudness),
         openingHookBurned: Boolean(openingHook),
+        shotSnap,
       });
       onProgress?.({ current: i + 1, total: clips.length, clipId: clip.id, stage: "done" });
     }
@@ -369,16 +404,18 @@ export async function exportClips(
         titleCard: Boolean(options.titleCard),
         openingHook: Boolean(options.openingHook),
         normalizeLoudness: Boolean(options.normalizeLoudness),
+        snapToShots: Boolean(options.snapToShots),
       },
       clips: results.map((r) => {
         const spec = clips.find((c) => c.id === r.id);
+        const range = snappedRange.get(r.id);
         return {
           file: basename(r.path),
           cover: r.coverPath ? basename(r.coverPath) : null,
           title: r.title,
           durationSec: Number(r.durationSec.toFixed(3)),
-          sourceStartSec: spec?.startSec ?? null,
-          sourceEndSec: spec?.endSec ?? null,
+          sourceStartSec: range?.startSec ?? spec?.startSec ?? null,
+          sourceEndSec: range?.endSec ?? spec?.endSec ?? null,
           keywords: spec?.keywords ?? [],
           removedFillers: removedFillersByClip.get(r.id) ?? [],
           render: renderByClip.get(r.id) ?? null,

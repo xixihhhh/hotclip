@@ -31,6 +31,12 @@ export interface ModelAsset {
    * `<modelsRoot>/<extractedDir>/<singleFile>`.
    */
   singleFile?: string;
+  /**
+   * 完整替代 URL(整条换 host 的镜像,如 hf-mirror.com)——`mirrors` 只能做
+   * 前缀代理,对 HuggingFace 这类换域名镜像不适用;altUrls 排在主 URL 之前
+   * 尝试,保持「国内源优先」的下载顺序。
+   */
+  altUrls?: string[];
 }
 
 /**
@@ -127,6 +133,21 @@ export const SPEAKER_EMBEDDING_MODEL: ModelAsset = {
   singleFile: "model.onnx",
 };
 
+/**
+ * TransNetV2 镜头边界检测 ONNX(MIT,~31MB)——逐帧输出镜头切换概率,
+ * 驱动「切点吸附镜头边界」。输入 float32 [1,100,27,48,3](RGB 0-255),
+ * 输出 "534" 为已过 sigmoid 的单帧切换概率(实测硬切 0.98,阈值 0.5)。
+ */
+export const TRANSNETV2_MODEL: ModelAsset = {
+  id: "transnetv2-onnx",
+  url: "https://huggingface.co/elya5/transnetv2/resolve/main/transnetv2.onnx",
+  mirrors: [],
+  altUrls: ["https://hf-mirror.com/elya5/transnetv2/resolve/main/transnetv2.onnx"],
+  extractedDir: "transnetv2-onnx",
+  approxBytes: 31_250_929,
+  singleFile: "model.onnx",
+};
+
 export interface DownloadProgress {
   downloadedBytes: number;
   totalBytes: number;
@@ -134,7 +155,7 @@ export interface DownloadProgress {
 
 /** Candidate URLs in retry order: mirrors first (domestic-first), then origin. */
 export function candidateUrls(asset: ModelAsset): string[] {
-  return [...asset.mirrors.map((m) => `${m}${asset.url}`), asset.url];
+  return [...asset.mirrors.map((m) => `${m}${asset.url}`), ...(asset.altUrls ?? []), asset.url];
 }
 
 /** Absolute path a model extracts to under the given models root. */
