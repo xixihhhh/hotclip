@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HotClip 爆款切片 — 免费开源的本地 AI 切片工具:长视频/直播回放一键切爆款竖屏短视频</title>
+<meta name="description" content="HotClip 是免费开源、本地运行的 AI 视频切片软件(Windows/macOS):AI 自动找爆点、竖屏 9:16 重构、逐字卡拉OK字幕。无积分制、无水印、素材不上传、不限时长,OpusClip/剪映切片的本地免费替代。">
+<link rel="canonical" href="https://xixihhhh.github.io/hotclip/">
+<link rel="alternate" hreflang="zh-CN" href="https://xixihhhh.github.io/hotclip/">
+<link rel="alternate" hreflang="en" href="https://xixihhhh.github.io/hotclip/en.html">
+<link rel="icon" href="icon.png">
+<link rel="stylesheet" href="site.css">
+<meta property="og:type" content="website">
+<meta property="og:title" content="HotClip 爆款切片 — 长视频/直播回放,一键切出爆款竖屏短视频">
+<meta property="og:description" content="免费开源 · 本地运行 · 无水印 · 不限时长。AI 找爆点 + 竖屏重构 + 逐字字幕,Windows/macOS 双击即用。">
+<meta property="og:image" content="https://xixihhhh.github.io/hotclip/social-preview.png">
+<meta property="og:url" content="https://xixihhhh.github.io/hotclip/">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "HotClip",
+  "alternateName": "HotClip 爆款切片",
+  "operatingSystem": "Windows, macOS",
+  "applicationCategory": "MultimediaApplication",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
+  "description": "免费开源、本地运行的 AI 视频切片软件:长视频/直播回放一键切成爆款竖屏短视频。AI 找爆点、9:16 竖屏重构、逐字卡拉OK字幕,无积分制、无水印、素材不上传。",
+  "url": "https://xixihhhh.github.io/hotclip/",
+  "downloadUrl": "https://github.com/xixihhhh/hotclip/releases/latest",
+  "screenshot": "https://xixihhhh.github.io/hotclip/screenshots/04-highlights.png",
+  "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+  "sameAs": ["https://github.com/xixihhhh/hotclip"]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    { "@type": "Question", "name": "HotClip 是免费的吗?", "acceptedAnswer": { "@type": "Answer", "text": "是。HotClip 开源(AGPL-3.0)、本地运行、无水印、无积分制、不限视频时长。可选的云端大模型按你自己的 API Key 计费,也可以接本机 Ollama 做到完全免费。" } },
+    { "@type": "Question", "name": "HotClip 和 OpusClip、剪映切片有什么区别?", "acceptedAnswer": { "@type": "Answer", "text": "最大区别是素材不出你的电脑:OpusClip 等 SaaS 必须上传云端、按源视频分钟扣积分且积分月底清零,免费档带水印;剪映的切片核心功能在会员里。HotClip 免费开源、全程本地处理、无水印、不限时长,每条 AI 切点都附理由可审计。" } },
+    { "@type": "Question", "name": "需要联网吗?", "acceptedAnswer": { "@type": "Answer", "text": "转写、字幕、切片、导出全程离线。只有 AI 找爆点这一步默认调用云端大模型(用你自己的 Key),接本机 Ollama 后整条流水线 100% 离线。" } },
+    { "@type": "Question", "name": "支持中文视频吗?", "acceptedAnswer": { "@type": "Answer", "text": "支持且是强项。中文识别走专用引擎(SenseVoice/Paraformer/FireRedASR2),准确率显著高于通用模型;界面、字幕、爆点判断提示词都针对中文内容做了适配,粤语、方言、中英混说也覆盖。" } },
+    { "@type": "Question", "name": "需要显卡吗?配置要求高吗?", "acceptedAnswer": { "@type": "Answer", "text": "不需要显卡。本地转写用 int8 量化的小模型,普通 CPU 就能跑;找爆点的大模型在云端或你本机的 Ollama。" } },
+    { "@type": "Question", "name": "怎么把直播回放/播客变成短视频?", "acceptedAnswer": { "@type": "Answer", "text": "三步:导入文件(MP4/MKV/MOV/FLV/TS)→ AI 转写并标出爆点(每条附爆款分和理由,可手动取舍)→ 一键导出竖屏 9:16 成片,逐字字幕已烧进画面,直接发抖音/B站/视频号/TikTok。" } }
+  ]
+}
+</script>
+</head>
+<body>
+<div class="container">
+
+<nav>
+  <img src="icon.png" alt="HotClip logo">
+  <span class="name">HotClip <em>爆款切片</em></span>
+  <span class="spacer"></span>
+  <a class="plain" href="#compare">对比</a>
+  <a class="plain" href="#faq">FAQ</a>
+  <a class="plain" href="en.html">English</a>
+  <a class="plain" href="https://github.com/xixihhhh/hotclip">GitHub ★</a>
+</nav>
+
+<header class="hero">
+  <h1>长视频 · 直播回放<br>一键切出<span class="hl">爆款竖屏短视频</span></h1>
+  <p class="sub">播客、直播回放、课程、Vlog → AI 自动找爆点(金句/冲突/高能瞬间)→ 竖屏 9:16 重构 + 逐字动态字幕 → 直接发抖音 / 快手 / B站 / 视频号 / 小红书 / TikTok。</p>
+  <div class="chips">
+    <span class="chip">本地运行·不上传</span>
+    <span class="chip">免费开源</span>
+    <span class="chip">无水印</span>
+    <span class="chip">无积分制</span>
+    <span class="chip">不限时长</span>
+  </div>
+  <div class="cta">
+    <a class="btn btn-primary" href="https://github.com/xixihhhh/hotclip/releases/latest">⬇️ 免费下载(Windows / macOS)</a>
+    <a class="btn btn-ghost" href="https://github.com/xixihhhh/hotclip">GitHub 源码</a>
+  </div>
+  <p class="note">开源 AGPL-3.0 · 不用 Python、不用 Docker,双击安装即用</p>
+  <div class="shot">
+    <img src="screenshots/04-highlights.png" alt="HotClip AI 爆点候选界面:每条切片附爆款分、钩子与四维打分" loading="eager">
+    <p class="cap">AI 通读全文挑爆点——每条候选附爆款分、开场钩子、四维分项与逐字精确切点,取舍全在你手</p>
+  </div>
+</header>
+
+<section id="how">
+  <h2>三步出片</h2>
+  <div class="grid grid-3">
+    <div class="card">
+      <div class="step">STEP 1</div>
+      <h3>导入</h3>
+      <p>把播客、直播回放、课程、Vlog 丢进来(MP4 / MKV / MOV / FLV / TS,纯音频也行)。数小时的直播回放直接进,全程本地处理。</p>
+    </div>
+    <div class="card">
+      <div class="step">STEP 2</div>
+      <h3>挑爆点</h3>
+      <p>本地逐字转写 → AI 通读全文挑出金句、冲突、高能片段,每条附爆款分、开场钩子和推荐理由,切点精确到词。看不顺眼的取消勾选即可。</p>
+    </div>
+    <div class="card">
+      <div class="step">STEP 3</div>
+      <h3>出片</h3>
+      <p>一键切出竖屏 9:16 成片:人脸跟随取景、卡拉OK逐字字幕、标题贴片、响度归一,附封面图和元数据,打开就能发。</p>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <h2>为什么选 <span class="hl">HotClip</span></h2>
+  <div class="grid grid-2">
+    <div class="card"><h3>🔒 素材不出你的电脑</h3><p>转写、找爆点、切片全在本机跑。未发布的素材、客户内容、带 NDA 的商单,不用交给任何云端服务器。</p></div>
+    <div class="card"><h3>🎯 切点准,而且讲得出理由</h3><p>大模型只负责«挑哪段»,时间戳由逐字转写反向对齐——不让 AI 猜时间。每条候选附四维打分与推荐理由,可审计可否决。</p></div>
+    <div class="card"><h3>🇨🇳 中文原生</h3><p>中文识别走 SenseVoice / Paraformer / FireRedASR2 专用引擎,方言、粤语、中英混说都稳;不是英文产品硬翻。</p></div>
+    <div class="card"><h3>✂️ 成片像人剪的</h3><p>气口跳剪、剪口头禅、语义断行字幕、说话人分离上色、开场钩子黄金3秒、-14 LUFS 响度标准——制作链一步到位。</p></div>
+    <div class="card"><h3>🤖 一键全托管</h3><p>导入后点一个按钮,转写 → 找爆点 → 成片全自动跑完,人只做最后审片;每条片子 AI 动了什么,回执里写得明明白白。</p></div>
+    <div class="card"><h3>🆓 真免费,没有套路</h3><p>无积分制、无水印、不限时长、不锁功能。可选云端大模型用你自己的 Key,或接本机 Ollama 完全离线。</p></div>
+  </div>
+</section>
+
+<section id="compare">
+  <h2>和其他切片工具的<span class="hl">区别</span></h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th></th><th>HotClip</th><th>OpusClip / Klap / Vizard</th><th>剪映智能切片</th><th>FunClip 等开源</th></tr></thead>
+      <tbody>
+        <tr><td>价格</td><td class="win">免费开源</td><td>$15-29+/月,按分钟扣积分,月底清零</td><td>核心功能进会员</td><td>免费</td></tr>
+        <tr><td>素材去向</td><td class="win">全程本地,不上传</td><td>必须上传云端</td><td>云端为主</td><td>本地</td></tr>
+        <tr><td>水印/限制</td><td class="win">无</td><td>免费档水印+限时长,项目3天过期</td><td>部分功能受限</td><td>无</td></tr>
+        <tr><td>安装门槛</td><td class="win">双击安装即用</td><td>网页版</td><td>易用</td><td>命令行/Docker</td></tr>
+        <tr><td>切点质量</td><td class="win">逐字对齐,附理由可否决</td><td>黑盒打分,常断章取义</td><td>黑盒</td><td>按句切,无排序</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="text-align:center; margin-top:16px; color:var(--fg-dim); font-size:15px">详细英文对比:<a href="alternatives/opus-clip.html">HotClip vs OpusClip</a></p>
+</section>
+
+<section id="faq">
+  <h2>常见问题</h2>
+  <details open><summary>HotClip 是免费的吗?</summary><p>是。开源(AGPL-3.0)、本地运行、无水印、无积分制、不限时长。可选的云端大模型按你自己的 Key 计费,接本机 Ollama 则完全免费。</p></details>
+  <details><summary>和 OpusClip、剪映切片有什么区别?</summary><p>最大区别是素材不出你的电脑:OpusClip 等必须上传云端、按源视频分钟扣积分(月底清零),免费档带水印;剪映切片核心功能在会员里。HotClip 免费开源、本地处理、无水印、不限时长,AI 切点附理由可审计。</p></details>
+  <details><summary>需要联网吗?</summary><p>转写、字幕、切片、导出全程离线。只有「AI 找爆点」默认调云端大模型(你自己的 Key);接本机 Ollama 后整条流水线 100% 离线。</p></details>
+  <details><summary>支持中文视频吗?</summary><p>支持且是强项:SenseVoice / Paraformer / FireRedASR2 专用引擎,方言、粤语、中英混说覆盖;界面、字幕、提示词都为中文内容适配。</p></details>
+  <details><summary>需要显卡吗?</summary><p>不需要。本地转写用 int8 量化小模型,普通 CPU 就能跑。</p></details>
+  <details><summary>可以商用/切别人的直播吗?</summary><p>HotClip 面向你自己的内容或已获授权的切片(如主播切片授权计划)。未经授权的影视/直播搬运不受支持,也不欢迎。</p></details>
+</section>
+
+<footer>
+  <p>HotClip · 开源 AGPL-3.0 · <a href="https://github.com/xixihhhh/hotclip">GitHub</a> · <a href="https://github.com/xixihhhh/hotclip/releases/latest">下载</a> · <a href="en.html">English</a></p>
+  <p style="margin-top:8px">仅面向自有内容与已授权切片,请遵守各平台二创与授权规则。</p>
+</footer>
+
+</div>
+</body>
+</html>

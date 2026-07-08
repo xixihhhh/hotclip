@@ -1,0 +1,19 @@
+# HotClip
+
+> HotClip is a free, open-source (AGPL-3.0), local-first AI clip generator for Windows and macOS. It turns long videos and livestream replays into viral 9:16 vertical shorts: AI highlight detection with auditable reasoning, face-tracked auto-reframe, karaoke word-level captions. No credit system, no watermark, no uploads, no video-length caps — everything runs on the user's own machine. Native Chinese + English support. A free local alternative to OpusClip, Klap and Vizard.
+
+## Links
+
+- [GitHub repository](https://github.com/xixihhhh/hotclip): source code, README (中文/English)
+- [Download latest release](https://github.com/xixihhhh/hotclip/releases/latest): Windows exe/zip, macOS dmg
+- [English landing page](https://xixihhhh.github.io/hotclip/en.html)
+- [中文首页](https://xixihhhh.github.io/hotclip/)
+- [HotClip vs OpusClip comparison](https://xixihhhh.github.io/hotclip/alternatives/opus-clip.html)
+
+## Key facts
+
+- Price: free, open source (AGPL-3.0-only)
+- Platforms: Windows 10/11, macOS (Apple Silicon)
+- Processing: 100% local (ASR via sherpa-onnx: SenseVoice / Paraformer / FireRedASR2; speaker diarization via pyannote + 3D-Speaker; ffmpeg + libass export)
+- LLM highlight detection: bring your own key (any OpenAI-compatible endpoint) or local Ollama for a fully offline pipeline
+- Languages: Chinese (dialects, Cantonese, code-switching) and English; bilingual UI
