@@ -54,6 +54,50 @@ export interface CutOptions {
   fontsDir?: string;
   /** Normalize output audio to the -14 LUFS social target (EBU R128 loudnorm). */
   normalizeLoudness?: boolean;
+  /** 品牌水印:PNG 烧进画面一角(在字幕之上)。 */
+  watermark?: WatermarkSpec;
+}
+
+/** 水印参数(widthPx 由调用方按输出宽度算好传入)。 */
+export interface WatermarkSpec {
+  path: string;
+  corner: "top-left" | "top-right" | "bottom-left" | "bottom-right";
+  /** 0..1。 */
+  opacity: number;
+  /** 缩放到的目标宽度(像素)。 */
+  widthPx: number;
+}
+
+/** 水印距画面边缘的像素间距。 */
+const WM_MARGIN = 44;
+
+/**
+ * 水印的两段 filter:source(movie 源读 PNG + 透明度 + 缩放)与 overlay
+ * (按角落定位)。拆开返回,方便 -vf 与 filter_complex 两条路径各自组装。
+ */
+export function watermarkStages(wm: WatermarkSpec): { source: string; overlay: string } {
+  const alpha = wm.opacity < 1 ? `,colorchannelmixer=aa=${wm.opacity.toFixed(3)}` : "";
+  const pos = {
+    "top-left": `${WM_MARGIN}:${WM_MARGIN}`,
+    "top-right": `W-w-${WM_MARGIN}:${WM_MARGIN}`,
+    "bottom-left": `${WM_MARGIN}:H-h-${WM_MARGIN}`,
+    "bottom-right": `W-w-${WM_MARGIN}:H-h-${WM_MARGIN}`,
+  }[wm.corner];
+  return {
+    source: `movie='${escapeFilterPath(wm.path)}',format=rgba${alpha},scale=${wm.widthPx}:-1`,
+    overlay: `overlay=${pos}:format=auto`,
+  };
+}
+
+/**
+ * 把线性 -vf 链与水印合成为最终 -vf 表达式。无水印时保持原样;有水印时
+ * 用 movie 源在 -vf 内部起第二路输入(字幕之后叠加,logo 永远在最上层)。
+ */
+export function composeVideoFilter(filters: string[], wm?: WatermarkSpec): string {
+  if (!wm) return filters.join(",");
+  const main = filters.length > 0 ? filters.join(",") : "copy";
+  const s = watermarkStages(wm);
+  return `${main}[main];${s.source}[wm];[main][wm]${s.overlay}`;
 }
 
 /**
@@ -108,7 +152,8 @@ export function buildCutArgs(
   const filters = buildVideoFilters(options);
   // Any video filter — or loudness normalization (an audio filter) — forces a
   // re-encode, so silently upgrade copy → accurate.
-  const mode = filters.length > 0 || options.normalizeLoudness ? "accurate" : (options.mode ?? "accurate");
+  const mode =
+    filters.length > 0 || options.watermark || options.normalizeLoudness ? "accurate" : (options.mode ?? "accurate");
   const start = Math.max(0, startSec);
   const duration = endSec - start;
 
@@ -126,7 +171,7 @@ export function buildCutArgs(
   const preset = options.preset ?? "veryfast";
   return [
     ...common,
-    ...(filters.length > 0 ? ["-vf", filters.join(",")] : []),
+    ...(filters.length > 0 || options.watermark ? ["-vf", composeVideoFilter(filters, options.watermark)] : []),
     "-c:v", "libx264",
     "-preset", preset,
     "-crf", crf,
@@ -167,12 +212,22 @@ export function buildJumpCutArgs(
     labels.push(`[v${i}][a${i}]`);
   });
   const post = buildVideoFilters(options);
-  const concatOut = post.length > 0 ? "[vc]" : "[vout]";
+  const wm = options.watermark;
+  const concatOut = post.length > 0 || wm ? "[vc]" : "[vout]";
   // Normalize the *spliced* audio (loudnorm must see the final concatenated
   // stream, not each segment) — concat into a raw label, then loudnorm → [aout].
   const audioOut = options.normalizeLoudness ? "[araw]" : "[aout]";
   parts.push(`${labels.join("")}concat=n=${segments.length}:v=1:a=1${concatOut}${audioOut}`);
-  if (post.length > 0) parts.push(`[vc]${post.join(",")}[vout]`);
+  if (wm) {
+    // 水印永远最后叠(在字幕之上):后处理链 → [vmain],movie 源 → [wm],overlay 收口
+    const s = watermarkStages(wm);
+    const mainLabel = post.length > 0 ? "[vmain]" : "[vc]";
+    if (post.length > 0) parts.push(`[vc]${post.join(",")}[vmain]`);
+    parts.push(`${s.source}[wm]`);
+    parts.push(`${mainLabel}[wm]${s.overlay}[vout]`);
+  } else if (post.length > 0) {
+    parts.push(`[vc]${post.join(",")}[vout]`);
+  }
   if (options.normalizeLoudness) parts.push(`[araw]${LOUDNORM_FILTER}[aout]`);
 
   const crf = Number.isFinite(options.crf) ? String(options.crf) : "18";

@@ -5,6 +5,7 @@
  * without ffmpeg; only the caller touches the filesystem.
  */
 import type { Transcript, TranscriptWord } from "../shared/api-types";
+import { hexToAssColor, hexToAssInline, isValidHex } from "./brand";
 
 export interface AssLayout {
   playResX: number;
@@ -295,6 +296,8 @@ export interface CaptionOptions {
    * clip's first seconds — the 黄金3秒 text hook the teaser was written for.
    */
   openingHook?: { text: string; durationSec: number };
+  /** 品牌主高亮色 "#RRGGBB"(卡拉OK点亮/关键词强调/钩子文字);缺省火焰橙。 */
+  highlightHex?: string;
 }
 
 /** Title block sits below platform top overlays (~8% of height) with air. */
@@ -307,9 +310,11 @@ function hookMarginV(layout: AssLayout): number {
   return Math.round(layout.playResY * 0.3);
 }
 
-function assHeader(style: CaptionStyle, layout: AssLayout, fontName: string): string[] {
+function assHeader(style: CaptionStyle, layout: AssLayout, fontName: string, highlightHex?: string): string[] {
+  // 品牌高亮色覆盖默认火焰橙(卡拉OK点亮色 + 开场钩子文字色同源)
+  const highlight = (highlightHex && hexToAssColor(highlightHex)) || EMBER_COLOR;
   // karaoke: Primary = sung color, Secondary = not-yet-sung; others: plain white
-  const primary = style === "karaoke" ? EMBER_COLOR : WHITE_COLOR;
+  const primary = style === "karaoke" ? highlight : WHITE_COLOR;
   const fontSize = style === "pop" ? Math.round(layout.fontSize * 1.45) : layout.fontSize;
   const titleSize = Math.round(layout.fontSize * 0.82);
   const hookSize = Math.round(layout.fontSize * 1.25);
@@ -327,7 +332,7 @@ function assHeader(style: CaptionStyle, layout: AssLayout, fontName: string): st
     // title card: opaque-box style (BorderStyle=3) → soft dark plate behind text
     `Style: Title,${fontName},${titleSize},${WHITE_COLOR},${WHITE_COLOR},&H73000000,&H73000000,-1,0,0,0,100,100,0,0,3,12,0,8,${layout.marginH},${layout.marginH},${titleMarginV(layout)},1`,
     // opening hook: ember text on a dark plate, big, upper-third (Alignment 8 + high MarginV)
-    `Style: Hook,${fontName},${hookSize},${EMBER_COLOR},${WHITE_COLOR},&H73000000,&H73000000,-1,0,0,0,100,100,0,0,3,14,0,8,${layout.marginH},${layout.marginH},${hookMarginV(layout)},1`,
+    `Style: Hook,${fontName},${hookSize},${highlight},${WHITE_COLOR},&H73000000,&H73000000,-1,0,0,0,100,100,0,0,3,14,0,8,${layout.marginH},${layout.marginH},${hookMarginV(layout)},1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -356,7 +361,9 @@ function dialogue(startSec: number, endSec: number, text: string): string {
  * wrap those runs with a color+scale override. Matching runs on the joined
  * line text (same spacing rules as display), case-insensitive.
  */
-export function keywordText(line: TranscriptWord[], keywords: string[]): string {
+export function keywordText(line: TranscriptWord[], keywords: string[], highlightHex?: string): string {
+  // 品牌高亮色覆盖默认火焰橙(行内 \c 覆写形式)
+  const highlightInline = (highlightHex && hexToAssInline(highlightHex)) || EMBER_INLINE;
   // joined text + each word's [start,end) position inside it
   const spans: Array<{ from: number; to: number }> = [];
   let joined = "";
@@ -380,7 +387,7 @@ export function keywordText(line: TranscriptWord[], keywords: string[]): string 
   }
   const parts: string[] = [];
   for (let i = 0; i < line.length; i++) {
-    if (covered[i] && (i === 0 || !covered[i - 1])) parts.push(`{\\c${EMBER_INLINE}\\fscx108\\fscy108}`);
+    if (covered[i] && (i === 0 || !covered[i - 1])) parts.push(`{\\c${highlightInline}\\fscx108\\fscy108}`);
     if (!covered[i] && i > 0 && covered[i - 1]) parts.push(`{\\c${WHITE_INLINE}\\fscx100\\fscy100}`);
     parts.push(escapeAssText(line[i].text));
     if (needsSpaceAfter(line[i].text, line[i + 1]?.text)) parts.push(" ");
@@ -406,6 +413,7 @@ export function buildCaptionAss(
   options: CaptionOptions = {}
 ): string {
   const fontName = options.fontName ?? defaultFontName();
+  const highlightHex = isValidHex(options.highlightHex) ? options.highlightHex : undefined;
   const events: string[] = [];
 
   if (options.titleCard && options.titleCard.text.trim()) {
@@ -450,12 +458,12 @@ export function buildCaptionAss(
       const nextStart = lines[i + 1]?.[0].startSec;
       const end =
         (nextStart !== undefined ? Math.min(nextStart, lastEnd + CAPTION_HOLD_MAX_SEC) : lastEnd) - clipStartSec;
-      const text = style === "karaoke" ? karaokeText(line) : keywordText(line, options.keywords ?? []);
+      const text = style === "karaoke" ? karaokeText(line) : keywordText(line, options.keywords ?? [], highlightHex);
       events.push(dialogue(start, end, text));
     }
   }
 
-  return [...assHeader(style, layout, fontName), ...events, ""].join("\n");
+  return [...assHeader(style, layout, fontName, highlightHex), ...events, ""].join("\n");
 }
 
 /** Back-compat wrapper (karaoke style). */

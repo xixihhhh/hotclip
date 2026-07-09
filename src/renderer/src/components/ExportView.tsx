@@ -11,7 +11,7 @@ import type {
   HighlightCandidate,
   ExportedClip,
   ExportProgressEvent,
-  ExportOptions,
+  RenderToggles,
   Transcript,
 } from "../../../shared/api-types";
 
@@ -30,7 +30,7 @@ export function ExportView({
 }: {
   filePath: string;
   clips: HighlightCandidate[];
-  options: Pick<ExportOptions, "vertical" | "captionStyle" | "jumpCut" | "cleanFillers" | "trimUi" | "titleCard" | "openingHook" | "normalizeLoudness">;
+  options: RenderToggles;
   transcript: Transcript;
   onBack: () => void;
   onRestart: () => void;

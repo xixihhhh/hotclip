@@ -5,6 +5,7 @@
  * captions break identically. Pure — the Electron renderer lives in main/.
  */
 import { groupWordsIntoLines, mergeKeywordWords, CAPTION_HOLD_MAX_SEC, type AssLayout } from "../subtitle";
+import { isValidHex, lightenHex, DEFAULT_HIGHLIGHT_HEX } from "../brand";
 import type { TranscriptWord } from "../../shared/api-types";
 
 /** Caption styles rendered by the web overlay engine (name = template file). */
@@ -50,6 +51,10 @@ export interface OverlayPayload {
   baselineFrac: number;
   /** Base font size in CSS pixels (frame pixels — the window is 1:1). */
   fontSize: number;
+  /** 关键词渐变的起始色(品牌高亮色);缺省火焰橙。 */
+  highlightColor: string;
+  /** 渐变第二停靠色(高亮色向白提亮),模板直接用。 */
+  highlightColor2: string;
   lines: OverlayLine[];
 }
 
@@ -59,7 +64,7 @@ const LINE_LINGER_MS = 350;
 export function buildOverlayPayload(
   words: TranscriptWord[],
   layout: AssLayout,
-  options: { keywords?: string[]; forcedBreaks?: number[] } = {}
+  options: { keywords?: string[]; forcedBreaks?: number[]; highlightHex?: string } = {}
 ): OverlayPayload {
   const fused = mergeKeywordWords(words, options.keywords ?? []);
   const keywordSet = new Set(
@@ -93,11 +98,14 @@ export function buildOverlayPayload(
 
   // marginV is measured from the frame bottom to the caption baseline
   const baselineFrac = (layout.playResY - layout.marginV) / layout.playResY;
+  const highlightColor = isValidHex(options.highlightHex) ? options.highlightHex : DEFAULT_HIGHLIGHT_HEX;
   return {
     width: layout.playResX,
     height: layout.playResY,
     baselineFrac,
     fontSize: layout.fontSize,
+    highlightColor,
+    highlightColor2: lightenHex(highlightColor, 0.55),
     lines,
   };
 }

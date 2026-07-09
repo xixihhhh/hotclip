@@ -26,13 +26,16 @@ import {
   LuChevronLeft,
   LuChevronRight,
   LuPlay,
+  LuPalette,
 } from "react-icons/lu";
 import { useT } from "../i18n/store";
 import { getApi, isElectron } from "../api/provider";
 import { useLlmStore, isLlmReady, LLM_PRESETS } from "../stores/llm-store";
+import { useBrandStore, activeBrandStyle } from "../stores/brand-store";
 import { adjustClipBoundary } from "../../../shared/boundary";
 import { ClipReviewModal } from "./ClipReviewModal";
-import type { Transcript, HighlightCandidate, ExportOptions, CaptionStyleChoice } from "../../../shared/api-types";
+import { BrandStyleModal } from "./BrandStyleModal";
+import type { Transcript, HighlightCandidate, RenderToggles, CaptionStyleChoice } from "../../../shared/api-types";
 
 /** Click-to-cycle order for the caption style chip. */
 const CAPTION_CYCLE: CaptionStyleChoice[] = ["karaoke", "keyword", "pop", "bubble", "none"];
@@ -71,7 +74,7 @@ export function HighlightsView({
   /** Source path — lets the backend add audiovisual-signal evidence. */
   filePath?: string;
   onBack: () => void;
-  onExport?: (clips: HighlightCandidate[], options: Pick<ExportOptions, "vertical" | "captionStyle" | "jumpCut" | "cleanFillers" | "trimUi" | "titleCard" | "openingHook" | "normalizeLoudness">) => void;
+  onExport?: (clips: HighlightCandidate[], options: RenderToggles) => void;
   /** Lift the diarization-labeled transcript up so export colors captions by speaker. */
   onTranscriptLabeled?: (t: Transcript) => void;
   /** 托管 mode: export every candidate with default render options as soon as they land. */
@@ -98,6 +101,9 @@ export function HighlightsView({
   const [normalizeLoudness, setNormalizeLoudness] = useState(true);
   /** 审阅台当前打开的候选 id;null = 关闭。 */
   const [reviewId, setReviewId] = useState<number | null>(null);
+  /** 品牌样式模板弹窗。 */
+  const [showBrand, setShowBrand] = useState(false);
+  const brandState = useBrandStore();
   const startedRef = useRef(false);
 
   const run = useCallback(async (useDiarize: boolean): Promise<void> => {
@@ -160,9 +166,10 @@ export function HighlightsView({
     const publishable = candidates?.filter((c) => c.recommended) ?? [];
     if (auto && onExport && publishable.length > 0 && !autoExported.current) {
       autoExported.current = true;
-      onExport(publishable, { vertical: true, captionStyle: "karaoke", jumpCut: true, cleanFillers: true, trimUi: true, titleCard: true, openingHook: true, normalizeLoudness: true });
+      // 托管出片同样吃品牌预设——一次配置,全自动也长自己的样子
+      onExport(publishable, { vertical: true, captionStyle: "karaoke", jumpCut: true, cleanFillers: true, trimUi: true, titleCard: true, openingHook: true, normalizeLoudness: true, brand: activeBrandStyle(brandState) });
     }
-  }, [auto, candidates, onExport]);
+  }, [auto, candidates, onExport, brandState]);
 
   return (
     <div className="rise-in flex w-full max-w-2xl flex-col items-center">
@@ -443,6 +450,17 @@ export function HighlightsView({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
+                  title={t("optBrandHint")}
+                  onClick={() => setShowBrand(true)}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                    activeBrandStyle(brandState) ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
+                  }`}
+                >
+                  <LuPalette className={`h-3.5 w-3.5 ${activeBrandStyle(brandState) ? "text-ember" : ""}`} />
+                  {t("optBrand")}
+                </button>
+                <button
+                  type="button"
                   title={t("optVerticalHint")}
                   onClick={() => setVertical(!vertical)}
                   className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
@@ -536,7 +554,7 @@ export function HighlightsView({
                 type="button"
                 disabled={selected.size === 0}
                 onClick={() =>
-                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, cleanFillers, trimUi, titleCard, openingHook, normalizeLoudness })
+                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, cleanFillers, trimUi, titleCard, openingHook, normalizeLoudness, brand: activeBrandStyle(brandState) })
                 }
                 className="btn-flame inline-flex items-center gap-1.5 rounded-lg px-6 py-2.5 text-[14px] font-bold text-white disabled:opacity-40"
               >
@@ -545,6 +563,9 @@ export function HighlightsView({
               </button>
             </div>
           )}
+
+          {/* ---- 品牌样式模板 ---- */}
+          {showBrand && <BrandStyleModal onClose={() => setShowBrand(false)} />}
 
           {/* ---- 审阅台:视频预览 + 波形时间轴,拖拽定切点 ---- */}
           {(() => {

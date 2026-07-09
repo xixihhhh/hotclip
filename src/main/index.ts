@@ -11,6 +11,7 @@ import { createReadStream } from "fs";
 import { Readable } from "stream";
 import { extractPeaks } from "@core/audio-peaks";
 import { resolveByteRange } from "@core/media-range";
+import { sanitizeBrand } from "@core/brand";
 import { probeMedia } from "@core/probe";
 import { SenseVoiceEngine } from "@core/transcribe/sensevoice";
 import { ParaformerEngine } from "@core/transcribe/paraformer";
@@ -124,6 +125,16 @@ ipcMain.handle("hotclip:select-media", async () => {
       { name: "Video / Audio", extensions: [...VIDEO_EXTENSIONS, ...AUDIO_EXTENSIONS] },
       { name: "All Files", extensions: ["*"] },
     ],
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
+});
+
+// 水印 logo 选择(品牌预设)
+ipcMain.handle("hotclip:select-image", async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ["openFile"],
+    filters: [{ name: "Image", extensions: ["png", "jpg", "jpeg", "webp"] }],
   });
   if (result.canceled || result.filePaths.length === 0) return null;
   return result.filePaths[0];
@@ -341,6 +352,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       normalizeLoudness: Boolean(opts.normalizeLoudness),
       faceTrack: true,
       snapToShots: true,
+      brand: sanitizeBrand(opts.brand),
       modelsRoot: modelsRoot(),
       fontsDir,
       renderOverlay: renderCaptionOverlay,

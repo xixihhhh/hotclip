@@ -117,6 +117,30 @@ export interface HighlightCandidate {
 /** Burned-in caption style choices (none = no captions; bubble = web-rendered). */
 export type CaptionStyleChoice = "none" | "karaoke" | "keyword" | "pop" | "bubble";
 
+/** 水印配置:PNG 烧进画面一角。 */
+export interface BrandWatermark {
+  /** 图片绝对路径(建议透明底 PNG)。 */
+  path: string;
+  corner: "top-left" | "top-right" | "bottom-left" | "bottom-right";
+  /** 不透明度 0..1。 */
+  opacity: number;
+}
+
+/**
+ * 品牌样式预设:一次配置,每条切片复用——竞品把这个锁在付费墙后。
+ * 全部可选;缺省字段走内置默认,输出与未配置时逐字节一致。
+ */
+export interface BrandStyle {
+  /** 主高亮色 "#RRGGBB":卡拉OK点亮/关键词强调/开场钩子/气泡渐变同源。 */
+  highlightColor?: string;
+  /** 字号缩放(三档 0.85/1/1.18,自由数值也接受)。 */
+  fontScale?: number;
+  /** 字幕高低位置(安全区内三档)。 */
+  captionPosition?: "low" | "standard" | "high";
+  /** logo 水印;不设则不烧。 */
+  watermark?: BrandWatermark;
+}
+
 /** Render options for the export step (UI toggles on the highlight list). */
 export interface ExportOptions {
   /** Center-crop reframe to 9:16 vertical (1080×1920) — short-video ready. */
@@ -135,9 +159,14 @@ export interface ExportOptions {
   openingHook?: boolean;
   /** Match audio to the -14 LUFS social loudness target (EBU R128). */
   normalizeLoudness?: boolean;
+  /** 品牌样式预设(高亮色/字号/位置/水印);缺省走内置默认。 */
+  brand?: BrandStyle;
   /** Needed for captions/jump-cut: source of word-level timestamps. */
   transcript?: Transcript;
 }
+
+/** UI 选出的渲染开关(ExportOptions 去掉 transcript 的可序列化子集)。 */
+export type RenderToggles = Omit<ExportOptions, "transcript">;
 
 /**
  * Detection result: the ranked candidates, plus the diarization-labeled
@@ -199,6 +228,8 @@ export interface HotClipApi {
   revealClip: (path: string) => void;
   /** 本地媒体的可播放 URL(审阅台 <video> 用);空串 = 当前环境不支持预览。 */
   mediaUrl: (filePath: string) => string;
+  /** 选择一张图片(水印 logo 用);取消返回 null。 */
+  selectImage: () => Promise<string | null>;
   /** 取 [startSec, endSec] 的音频峰值轨——审阅台时间轴的波形。 */
   getAudioPeaks: (filePath: string, startSec: number, endSec: number) => Promise<AudioPeaks>;
 }

@@ -124,6 +124,10 @@ const browserMock: HotClipApi = {
   },
   // 浏览器预览拿不到本地文件——审阅台的视频区退化为提示,时间轴仍可用
   mediaUrl: () => "",
+  async selectImage() {
+    await sleep(300);
+    return "/demo/brand-logo.png"; // 浏览器预览:返回假路径让 UI 流程可走通
+  },
   async getAudioPeaks(_filePath, startSec, endSec) {
     await sleep(250);
     const hopSec = 1 / 30;

@@ -21,7 +21,9 @@ import { detectShotBoundaries, snapClipToShots, SNAP_MAX_OUT_SEC } from "./shots
 import { buildCaptionAss, VERTICAL_LAYOUT, HORIZONTAL_LAYOUT, type CaptionStyle } from "./subtitle";
 import { buildOverlayPayload, isWebCaptionStyle, type OverlayRenderFn, type WebCaptionStyle } from "./caption-overlay/payload";
 import { probeMedia } from "./probe";
-import type { TranscriptWord } from "../shared/api-types";
+import { applyBrandToLayout } from "./brand";
+import type { TranscriptWord, BrandStyle } from "../shared/api-types";
+import type { WatermarkSpec } from "./cut";
 
 export interface ExportClipSpec {
   id: number;
@@ -117,6 +119,8 @@ export interface ExportRenderOptions {
   normalizeLoudness?: boolean;
   /** 切点吸附镜头边界(TransNetV2,需 modelsRoot);检测失败静默回退不吸附。 */
   snapToShots?: boolean;
+  /** 品牌样式预设(高亮色/字号/位置/水印);缺省走内置默认,输出不变。 */
+  brand?: BrandStyle;
 }
 
 export interface ExportedClip {
@@ -165,7 +169,17 @@ export async function exportClips(
   // ASS files live in a throwaway temp dir for the duration of the run.
   const needAss = Boolean(options.captionStyle) || Boolean(options.titleCard) || Boolean(options.openingHook);
   const assDir = needAss ? await mkdtemp(join(tmpdir(), "hotclip-ass-")) : null;
-  const layout = options.vertical ? VERTICAL_LAYOUT : HORIZONTAL_LAYOUT;
+  // 品牌预设:字号/位置作用于布局,高亮色传给字幕构建,水印挂进 filter 链
+  const layout = applyBrandToLayout(options.vertical ? VERTICAL_LAYOUT : HORIZONTAL_LAYOUT, options.brand);
+  const watermark: WatermarkSpec | undefined = options.brand?.watermark
+    ? {
+        path: options.brand.watermark.path,
+        corner: options.brand.watermark.corner,
+        opacity: options.brand.watermark.opacity,
+        // 竖屏输出恒为 1080 宽,logo 占 16%;横屏输出宽度=源宽(未知),用固定 300px
+        widthPx: options.vertical ? Math.round(1080 * 0.16) : 300,
+      }
+    : undefined;
 
   // one UI-chrome detection pass for the whole source (bands don't move)
   let uiCrop: UiCrop | undefined;
@@ -267,6 +281,7 @@ export async function exportClips(
             forcedBreaks: plan?.breaks,
             titleCard: options.titleCard ? { text: clip.title, durationSec: clipDuration } : undefined,
             openingHook,
+            highlightHex: options.brand?.highlightColor,
           }
         );
         await writeFile(subtitlePath, ass, "utf8");
@@ -306,13 +321,14 @@ export async function exportClips(
       // Web captions: cut to a base file first, then composite words on top.
       const cutTarget = webStyle ? outPath.replace(/\.mp4$/, ".base.mp4") : outPath;
       const cutOptions = trackPlan
-        ? { trackPlan, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness }
+        ? { trackPlan, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, watermark }
         : {
             uiCrop,
             vertical: options.vertical,
             subtitlePath,
             fontsDir: subtitlePath ? options.fontsDir : undefined,
             normalizeLoudness: options.normalizeLoudness,
+            watermark,
           };
       if (plan && plan.segments.length > 1) {
         await cutJumpClip(inputPath, cutTarget, clip.startSec, plan.segments, cutOptions);
@@ -344,6 +360,7 @@ export async function exportClips(
           const payload = buildOverlayPayload(relWords, overlayLayout, {
             keywords: clip.keywords,
             forcedBreaks: plan?.breaks,
+            highlightHex: options.brand?.highlightColor,
           });
           await options.renderOverlay!(cutTarget, outPath, payload, clipDuration, webStyle);
           await rm(cutTarget, { force: true });
@@ -407,6 +424,17 @@ export async function exportClips(
         openingHook: Boolean(options.openingHook),
         normalizeLoudness: Boolean(options.normalizeLoudness),
         snapToShots: Boolean(options.snapToShots),
+        // 品牌预设回执:用了什么色/档位/水印,矩阵管线可核对品牌一致性
+        brand: options.brand
+          ? {
+              highlightColor: options.brand.highlightColor ?? null,
+              fontScale: options.brand.fontScale ?? 1,
+              captionPosition: options.brand.captionPosition ?? "standard",
+              watermark: options.brand.watermark
+                ? { corner: options.brand.watermark.corner, opacity: options.brand.watermark.opacity }
+                : null,
+            }
+          : null,
       },
       clips: results.map((r) => {
         const spec = clips.find((c) => c.id === r.id);

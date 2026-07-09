@@ -27,7 +27,7 @@ import { LogoMark, LogoWordmark } from "./components/Logo";
 import { TranscribeView } from "./components/TranscribeView";
 import { HighlightsView } from "./components/HighlightsView";
 import { ExportView } from "./components/ExportView";
-import type { Transcript, HighlightCandidate, ExportOptions } from "../../shared/api-types";
+import type { Transcript, HighlightCandidate, RenderToggles } from "../../shared/api-types";
 import "./app.css";
 
 interface ProbedFile extends MediaInfo {
@@ -70,7 +70,7 @@ export default function App(): React.JSX.Element {
   /** Clips + render toggles chosen for export (moves the wizard to step 2). */
   const [exporting, setExporting] = useState<{
     clips: HighlightCandidate[];
-    options: Pick<ExportOptions, "vertical" | "captionStyle" | "jumpCut" | "cleanFillers" | "trimUi" | "titleCard" | "openingHook" | "normalizeLoudness">;
+    options: RenderToggles;
   } | null>(null);
 
   const restart = (): void => {

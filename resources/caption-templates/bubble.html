@@ -35,7 +35,8 @@
     background-clip: padding-box;
   }
   .word.kw .t {
-    background: linear-gradient(135deg, #ff6e0d 0%, #ffd34d 100%);
+    /* 渐变色由品牌高亮色驱动(载入 payload 时写入变量),缺省火焰橙 */
+    background: linear-gradient(135deg, var(--hl, #ff6e0d) 0%, var(--hl2, #ffd34d) 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
@@ -89,6 +90,10 @@
 
   window.__hotclip_load = function (data) {
     payload = data;
+    if (data.highlightColor) {
+      document.documentElement.style.setProperty("--hl", data.highlightColor);
+      document.documentElement.style.setProperty("--hl2", data.highlightColor2 || data.highlightColor);
+    }
     lineEl.style.top = data.height * data.baselineFrac + "px";
     lineEl.style.fontSize = data.fontSize + "px";
     currentLine = -1;
