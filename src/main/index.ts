@@ -258,7 +258,7 @@ ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: 
 
 ipcMain.handle(
   "hotclip:detect-highlights",
-  async (_event, transcript: unknown, llm: unknown, filePath: unknown, diarize: unknown) => {
+  async (_event, transcript: unknown, llm: unknown, filePath: unknown, diarize: unknown, prefilter: unknown) => {
     let t = transcript as Transcript;
     const config = llm as LlmConfig;
     if (!t || !Array.isArray(t.segments)) throw new Error("detect-highlights requires a transcript");
@@ -280,8 +280,14 @@ ipcMain.handle(
       t = await diarizeTranscript(t, filePath).catch(() => t);
       labeled = t; // surface the labeled transcript so export can color captions by speaker
     }
-    const candidates = await detectHighlights(t, config, undefined, signals);
-    return { candidates, transcript: labeled };
+    // 两级漏斗第一级(可选):本地小模型初筛;字段不合法直接不启用
+    const pf = prefilter as { baseUrl?: unknown; model?: unknown } | null | undefined;
+    const localFilter =
+      pf && typeof pf.baseUrl === "string" && pf.baseUrl.trim() && typeof pf.model === "string" && pf.model.trim()
+        ? { baseUrl: pf.baseUrl, model: pf.model }
+        : null;
+    const outcome = await detectHighlights(t, config, undefined, signals, localFilter);
+    return { candidates: outcome.candidates, transcript: labeled, funnel: outcome.funnel };
   }
 );
 

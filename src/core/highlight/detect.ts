@@ -4,7 +4,7 @@
  */
 import type { Transcript } from "../transcribe/types";
 import type { MediaSignals } from "../signals";
-import type { HighlightCandidate, LlmConfig } from "../../shared/api-types";
+import type { HighlightCandidate, LlmConfig, PrefilterConfig, FunnelStats } from "../../shared/api-types";
 import {
   highlightSystemPrompt,
   buildHighlightPrompt,
@@ -13,6 +13,7 @@ import {
   extractJson,
 } from "./prompt";
 import { resolveSelection, type RawSelection } from "./match";
+import { prefilterTranscript } from "./prefilter";
 
 const MIN_CLIP_SEC = 5;
 const MAX_CLIP_SEC = 75;
@@ -221,18 +222,43 @@ export function dropOverlaps(candidates: HighlightCandidate[]): HighlightCandida
   return kept.sort((a, b) => a.startSec - b.startSec).map((c, i) => ({ ...c, id: i + 1 }));
 }
 
+export interface DetectOutcome {
+  candidates: HighlightCandidate[];
+  /** 本地初筛生效时的漏斗统计;未启用或回退全文时缺省。 */
+  funnel?: FunnelStats;
+}
+
 /** Full detection pass. */
 export async function detectHighlights(
   transcript: Transcript,
   llm: LlmConfig,
   signal?: AbortSignal,
-  signals?: MediaSignals
-): Promise<HighlightCandidate[]> {
-  if (transcript.segments.length === 0) return [];
+  signals?: MediaSignals,
+  prefilter?: PrefilterConfig | null
+): Promise<DetectOutcome> {
+  if (transcript.segments.length === 0) return { candidates: [] };
+
+  // 两级漏斗第一级:本地小模型圈入围区间,云端只精读入围部分。
+  // 任何失败静默回退全文(反查仍然用全量转写,所以下游完全无感)。
+  let promptTranscript = transcript;
+  let funnel: FunnelStats | undefined;
+  if (prefilter?.baseUrl && prefilter.model) {
+    const local: LlmConfig = { baseUrl: prefilter.baseUrl, apiKey: "ollama", model: prefilter.model };
+    const outcome = await prefilterTranscript(transcript, local, chatComplete, signal).catch((e) => {
+      // 上游主动取消要中断整个检测;其余错误回退全文
+      if (signal?.aborted) throw e;
+      return null;
+    });
+    if (outcome) {
+      promptTranscript = outcome.transcript;
+      funnel = outcome.funnel;
+    }
+  }
+
   const content = await chatComplete(
     llm,
-    highlightSystemPrompt(transcript),
-    buildHighlightPrompt(transcript, 6, signals),
+    highlightSystemPrompt(promptTranscript),
+    buildHighlightPrompt(promptTranscript, 6, signals),
     signal
   );
   const selections = parseSelections(content);
@@ -261,12 +287,13 @@ export async function detectHighlights(
     });
   }
   const kept = dropOverlaps(candidates);
-  if (kept.length === 0) return kept;
+  if (kept.length === 0) return { candidates: kept, funnel };
 
   // Stage 2: adversarial review — a stricter pass judges each clip's hook,
   // completeness and standalone value; weak clips get flagged (not silently
   // dropped) so the UI can default-deselect them and hands-off mode skips
   // them. Fail-open: a broken review call must never take down detection.
+  // 复评的上下文用全量转写(不是漏斗后的)——评审要看片段前后文防断章取义。
   try {
     const reviewContent = await chatComplete(
       llm,
@@ -274,8 +301,8 @@ export async function detectHighlights(
       buildReviewPrompt(transcript, kept),
       signal
     );
-    return normalizeScores(applyReviews(kept, parseReviews(reviewContent)));
+    return { candidates: normalizeScores(applyReviews(kept, parseReviews(reviewContent))), funnel };
   } catch {
-    return kept;
+    return { candidates: kept, funnel };
   }
 }

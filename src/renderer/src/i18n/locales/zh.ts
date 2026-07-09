@@ -148,6 +148,9 @@ export const zh = {
     llmModel: "模型",
     llmGetKey: "没有 Key?免费注册 →",
     llmStart: "保存并开始找爆点",
+    prefilterTitle: "本地初筛(两级漏斗,省钱)",
+    prefilterDesc: "先用本机 Ollama 小模型(如 qwen3:4b)通读全文圈出候选段,云端大模型只精读入围部分——长视频的云端花费降一个量级。本地端点不可用时自动回退全文直发,绝不影响结果。",
+    funnelSaved: "本地初筛生效:全文 {total} 千字 → 入围 {kept} 千字,云端输入省 {pct}%",
   },
   brand: {
     title: "品牌样式模板",

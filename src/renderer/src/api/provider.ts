@@ -141,8 +141,12 @@ const browserMock: HotClipApi = {
     });
     return { values, startSec, hopSec };
   },
-  async detectHighlights(transcript, _llm, _filePath, diarize): Promise<DetectHighlightsResult> {
+  async detectHighlights(transcript, _llm, _filePath, diarize, prefilter): Promise<DetectHighlightsResult> {
     await sleep(1500);
+    // 浏览器预览:开了本地初筛就演示一份漏斗统计
+    const funnel = prefilter
+      ? { totalSegments: 220, keptSegments: 41, totalChars: 12800, keptChars: 2400 }
+      : undefined;
     const segs = transcript.segments;
     const pick = (from: number, to: number, id: number, title: string, hook: string, score: number, reason: string): HighlightCandidate => ({
       id,
@@ -185,9 +189,9 @@ const browserMock: HotClipApi = {
           words: (s.words ?? []).map((w) => ({ ...w, speaker: i % 2 })),
         })),
       };
-      return { candidates, transcript: labeled };
+      return { candidates, transcript: labeled, funnel };
     }
-    return { candidates };
+    return { candidates, funnel };
   },
 };
 

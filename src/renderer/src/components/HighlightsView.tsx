@@ -35,7 +35,7 @@ import { useBrandStore, activeBrandStyle } from "../stores/brand-store";
 import { adjustClipBoundary } from "../../../shared/boundary";
 import { ClipReviewModal } from "./ClipReviewModal";
 import { BrandStyleModal } from "./BrandStyleModal";
-import type { Transcript, HighlightCandidate, RenderToggles, CaptionStyleChoice } from "../../../shared/api-types";
+import type { Transcript, HighlightCandidate, RenderToggles, CaptionStyleChoice, FunnelStats } from "../../../shared/api-types";
 
 /** Click-to-cycle order for the caption style chip. */
 const CAPTION_CYCLE: CaptionStyleChoice[] = ["karaoke", "keyword", "pop", "bubble", "none"];
@@ -81,13 +81,15 @@ export function HighlightsView({
   auto?: boolean;
 }): React.JSX.Element {
   const t = useT("highlights");
-  const { config, setConfig } = useLlmStore();
+  const { config, setConfig, prefilter, setPrefilter } = useLlmStore();
   // browser preview (mock) needs no key; Electron needs a real endpoint
   const gateOpen = !isElectron() || isLlmReady(config);
   const [showGate, setShowGate] = useState(!gateOpen);
   const [detecting, setDetecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<HighlightCandidate[] | null>(null);
+  /** 本地初筛生效时的漏斗统计(结果页展示省了多少)。 */
+  const [funnel, setFunnel] = useState<FunnelStats | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   // Vertical + karaoke + jump-cut ON by default — publish-ready clips out of the box.
   const [vertical, setVertical] = useState(true);
@@ -110,8 +112,15 @@ export function HighlightsView({
     setDetecting(true);
     setError(null);
     try {
-      const result = await getApi().detectHighlights(transcript, config, filePath, useDiarize);
+      const result = await getApi().detectHighlights(
+        transcript,
+        config,
+        filePath,
+        useDiarize,
+        prefilter.enabled ? { baseUrl: prefilter.baseUrl, model: prefilter.model } : null
+      );
       setCandidates(result.candidates);
+      setFunnel(result.funnel ?? null);
       // reviewer-approved clips are pre-selected; flagged ones start unchecked
       setSelected(new Set(result.candidates.filter((c) => c.recommended).map((c) => c.id)));
       // Lift the speaker-labeled transcript so export can color captions by speaker.
@@ -121,7 +130,7 @@ export function HighlightsView({
     } finally {
       setDetecting(false);
     }
-  }, [transcript, config, filePath, onTranscriptLabeled]);
+  }, [transcript, config, filePath, onTranscriptLabeled, prefilter]);
 
   // Multi-speaker attribution: re-detect with diarization when toggled on.
   const toggleDiarize = useCallback((): void => {
@@ -230,6 +239,49 @@ export function HighlightsView({
             </label>
           </div>
 
+          {/* 两级漏斗:本地小模型初筛(省云端 token) */}
+          <div className="mt-4 rounded-xl border border-dashed border-line p-3.5">
+            <button
+              type="button"
+              onClick={() => setPrefilter({ enabled: !prefilter.enabled })}
+              className="flex w-full items-center justify-between text-left"
+            >
+              <span className="text-[12.5px] font-bold">{t("prefilterTitle")}</span>
+              <span
+                className={`relative h-4.5 w-8 shrink-0 rounded-full transition-colors ${
+                  prefilter.enabled ? "flame-gradient" : "bg-line"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 h-3.5 w-3.5 rounded-full bg-white shadow transition-all ${
+                    prefilter.enabled ? "left-4" : "left-0.5"
+                  }`}
+                />
+              </span>
+            </button>
+            <p className="mt-1.5 text-[11.5px] leading-relaxed text-mut">{t("prefilterDesc")}</p>
+            {prefilter.enabled && (
+              <div className="mt-2.5 grid grid-cols-2 gap-2.5">
+                <label className="block">
+                  <span className="text-[11px] font-semibold text-mut">{t("llmBaseUrl")}</span>
+                  <input
+                    value={prefilter.baseUrl}
+                    onChange={(e) => setPrefilter({ baseUrl: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-line bg-panel-2 px-3 py-2 text-[13px] outline-none focus:border-ember/60"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[11px] font-semibold text-mut">{t("llmModel")}</span>
+                  <input
+                    value={prefilter.model}
+                    onChange={(e) => setPrefilter({ model: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-line bg-panel-2 px-3 py-2 text-[13px] outline-none focus:border-ember/60"
+                  />
+                </label>
+              </div>
+            )}
+          </div>
+
           <div className="mt-5 flex items-center justify-between">
             <a
               href={LLM_PRESETS.atlas.keyUrl}
@@ -289,6 +341,15 @@ export function HighlightsView({
                 {t("title")}
               </h1>
               <p className="mt-1.5 text-[13px] text-mut">{t("resultCount", { n: candidates.length })}</p>
+              {funnel && (
+                <p className="mt-1 text-[11.5px] text-emerald-400/90">
+                  {t("funnelSaved", {
+                    total: (funnel.totalChars / 1000).toFixed(1),
+                    kept: (funnel.keptChars / 1000).toFixed(1),
+                    pct: Math.round((1 - funnel.keptChars / Math.max(1, funnel.totalChars)) * 100),
+                  })}
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <button

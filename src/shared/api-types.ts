@@ -81,6 +81,20 @@ export interface LlmConfig {
   model: string;
 }
 
+/** 两级漏斗第一级:本地小模型端点(Ollama 等 OpenAI 兼容接口,通常免 Key)。 */
+export interface PrefilterConfig {
+  baseUrl: string;
+  model: string;
+}
+
+/** 漏斗省了多少:全文 vs 入围云端的部分(UI 展示与审计)。 */
+export interface FunnelStats {
+  totalSegments: number;
+  keptSegments: number;
+  totalChars: number;
+  keptChars: number;
+}
+
 /** One AI-nominated clip candidate with frame-accurate boundaries. */
 export interface HighlightCandidate {
   id: number;
@@ -177,6 +191,8 @@ export interface DetectHighlightsResult {
   candidates: HighlightCandidate[];
   /** Present only when diarization labeled the transcript this run. */
   transcript?: Transcript;
+  /** 本地初筛生效时的漏斗统计;未启用/回退全文时缺省。 */
+  funnel?: FunnelStats;
 }
 
 /** One exported clip file on disk. */
@@ -219,7 +235,13 @@ export interface HotClipApi {
   /** Subscribe to transcription progress; returns an unsubscribe function. */
   onTranscribeProgress: (cb: (p: TranscribeProgressEvent) => void) => () => void;
   /** Detect highlight candidates via the configured LLM; filePath enables audiovisual-signal evidence. */
-  detectHighlights: (transcript: Transcript, llm: LlmConfig, filePath?: string, diarize?: boolean) => Promise<DetectHighlightsResult>;
+  detectHighlights: (
+    transcript: Transcript,
+    llm: LlmConfig,
+    filePath?: string,
+    diarize?: boolean,
+    prefilter?: PrefilterConfig | null
+  ) => Promise<DetectHighlightsResult>;
   /** Cut the selected highlights into mp4 files; resolves with the file list. */
   exportClips: (filePath: string, clips: HighlightCandidate[], options?: ExportOptions) => Promise<ExportedClip[]>;
   /** Subscribe to per-clip export progress; returns an unsubscribe function. */
