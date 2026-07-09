@@ -188,6 +188,10 @@ No. The local ASR models are int8-quantized and run fine on CPU; the highlight L
 - 🐛 [Report a bug / installation help](https://github.com/xixihhhh/hotclip/issues)
 - 💡 [Feature ideas & roadmap discussion](https://github.com/xixihhhh/hotclip/discussions)
 
+## From the same author
+
+🔨 **[ClipForge](https://github.com/xixihhhh/clipforge)** — open-source AI e-commerce short-video generator: upload one product photo and AI extracts selling points, writes the script, and assembles visuals/voiceover/captions into a ready-to-post shoppable video (TikTok Shop, Douyin, Kuaishou, RED). **HotClip clips highlights out of long videos; ClipForge builds short videos from a single image** — they pair well for e-commerce creators.
+
 [![Star History Chart](https://api.star-history.com/svg?repos=xixihhhh/hotclip&type=Date)](https://star-history.com/#xixihhhh/hotclip&Date)
 
 **⭐ Star the repo to catch new releases first.**

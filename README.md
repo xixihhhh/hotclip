@@ -205,6 +205,10 @@ Electron + React 19 + TypeScript + Tailwind 4 · ffmpeg(打包内置,无需自�
 - 🐛 [提 Bug / 安装求助](https://github.com/xixihhhh/hotclip/issues)
 - 💡 [功能建议与 Roadmap 讨论](https://github.com/xixihhhh/hotclip/discussions)
 
+## 同作者项目
+
+🔨 **[ClipForge](https://github.com/xixihhhh/clipforge)** — 开源 AI 带货短视频神器:上传一张商品图,AI 提炼卖点、写种草脚本、配画面配音字幕,一键产出抖音小店/快手/小红书/TikTok Shop 卖货视频。**HotClip 把长视频切成爆款,ClipForge 从一张图造出短视频**——做电商/带货的朋友可以配着用。
+
 [![Star History Chart](https://api.star-history.com/svg?repos=xixihhhh/hotclip&type=Date)](https://star-history.com/#xixihhhh/hotclip&Date)
 
 **⭐ 觉得有用就点个 Star——新版本发布时你会第一时间看到。**
