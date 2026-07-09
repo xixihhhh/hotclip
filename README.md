@@ -43,10 +43,9 @@
 
 ## 最近更新
 
+- **[v0.5.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.5.0)**（2026-07-09）「选得准、批量稳」:**切片审阅台**（导出前应用内看片,波形时间轴拖手柄逐词微调切点）+ **镜头切点吸附**（TransNetV2,切点吸到真实镜头切换）+ **品牌样式模板**（高亮色/字号/位置/logo水印）+ **端侧两级漏斗**（本地小模型初筛,长视频 LLM 成本降一个量级）;另含开场钩子黄金3秒烧录、响度标准化 -14 LUFS
 - **[v0.4.3](https://github.com/xixihhhh/hotclip/releases/tag/v0.4.3)**（2026-07-06）工程底座:转写结果本地缓存（同文件重开秒进挑爆点）+ clips.json 处理产出回执（AI 对每条片做了什么，可审计）
 - **[v0.4.2](https://github.com/xixihhhh/hotclip/releases/tag/v0.4.2)**（2026-07-05）字幕可读性:语义断行（顺标点/结构助词换行，不再拦腰截断）+ 防闪烁
-- **[v0.4.1](https://github.com/xixihhhh/hotclip/releases/tag/v0.4.1)**（2026-07-05）多人对谈:说话人分离字幕按人上色端到端打通
-- 开发中（已进主干,随下个版本发布）:开场钩子黄金3秒烧录、响度标准化 -14 LUFS 社媒标准、**镜头切点吸附**（TransNetV2 镜头边界检测,切点自动吸到真实镜头切换上）、**切片审阅台**（导出前看片:视频预览+波形时间轴,拖手柄逐词微调切点）、**品牌样式模板**（高亮色/字号/位置/logo水印,一次配置全局复用）、**端侧两级漏斗**（本地小模型初筛+云端精排,长视频 LLM 成本降一个量级）
 
 完整更新历史见 [Releases](https://github.com/xixihhhh/hotclip/releases)。
 
@@ -63,8 +62,8 @@
 | 人脸跟随智能取景(镜头级三模式,无人脸自动回退居中裁剪) | ✅ 已完成 |
 | 说话人分离 · 气泡特效字幕 · 开场钩子 · 气口跳剪 · 剪口头禅 · 响度标准化 · 转写缓存 · 一键全托管 | ✅ 已完成 |
 | 安装包发布(Windows exe + 绿色版 zip + macOS dmg) | ✅ [已发布](https://github.com/xixihhhh/hotclip/releases/latest) |
-| 镜头边界检测(切点吸附,TransNetV2 本地推理) | ✅ 已完成(随下版发布) |
-| 候选审阅台 · 样式模板 · 多平台发布 · MCP Server | 🗺️ [规划中](docs/PRODUCT-PLAN.md) |
+| v0.5「选得准、批量稳」(切片审阅台 · 镜头切点吸附 · 品牌样式模板 · 端侧两级漏斗) | ✅ [已发布](https://github.com/xixihhhh/hotclip/releases/tag/v0.5.0) |
+| 视觉爆点信号 · 翻译字幕 · 多平台发布 · MCP Server | 🗺️ [规划中](docs/PRODUCT-PLAN.md) |
 
 ## 三步出片
 

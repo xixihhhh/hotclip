@@ -43,10 +43,9 @@
 
 ## What's New
 
+- **[v0.5.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.5.0)** (2026-07-09) "Pick right, ship steady": a **clip review workbench** (preview clips in-app, drag cut points on a waveform timeline), **shot-snapped cut points** (TransNetV2 — cuts land on real shot changes), **brand style templates** (highlight color / size / position / logo watermark), and an **on-device two-stage funnel** (local small-LLM pre-filter — an order of magnitude less LLM cost on long videos); plus opening-hook burn-in and -14 LUFS loudness normalization
 - **[v0.4.3](https://github.com/xixihhhh/hotclip/releases/tag/v0.4.3)** (2026-07-06) Engineering base: local transcript cache (reopen the same file and jump straight to highlight picking) + clips.json processing receipt (auditable record of what the AI did to each clip)
 - **[v0.4.2](https://github.com/xixihhhh/hotclip/releases/tag/v0.4.2)** (2026-07-05) Caption readability: semantic line breaking (wraps at real clause boundaries instead of chopping mid-phrase) + anti-flicker
-- **[v0.4.1](https://github.com/xixihhhh/hotclip/releases/tag/v0.4.1)** (2026-07-05) Multi-speaker: diarization-colored captions working end to end
-- In main, shipping with the next release: opening-hook burn-in (first 3 golden seconds), loudness normalization to the -14 LUFS social standard, **shot-snapped cut points** (TransNetV2 shot-boundary detection — cuts land on real shot changes), a **clip review workbench** (preview each clip in-app and drag cut points on a waveform timeline before exporting), **brand style templates** (highlight color / font size / caption position / logo watermark — set once, applied to every clip), and an **on-device two-stage funnel** (local small-LLM pre-filter + cloud fine ranking — an order of magnitude less LLM cost on long videos)
 
 Full history in [Releases](https://github.com/xixihhhh/hotclip/releases).
 
