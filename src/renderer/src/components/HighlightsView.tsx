@@ -25,11 +25,13 @@ import {
   LuVolume2,
   LuChevronLeft,
   LuChevronRight,
+  LuPlay,
 } from "react-icons/lu";
 import { useT } from "../i18n/store";
 import { getApi, isElectron } from "../api/provider";
 import { useLlmStore, isLlmReady, LLM_PRESETS } from "../stores/llm-store";
 import { adjustClipBoundary } from "../../../shared/boundary";
+import { ClipReviewModal } from "./ClipReviewModal";
 import type { Transcript, HighlightCandidate, ExportOptions, CaptionStyleChoice } from "../../../shared/api-types";
 
 /** Click-to-cycle order for the caption style chip. */
@@ -94,6 +96,8 @@ export function HighlightsView({
   const [titleCard, setTitleCard] = useState(true);
   const [openingHook, setOpeningHook] = useState(true);
   const [normalizeLoudness, setNormalizeLoudness] = useState(true);
+  /** 审阅台当前打开的候选 id;null = 关闭。 */
+  const [reviewId, setReviewId] = useState<number | null>(null);
   const startedRef = useRef(false);
 
   const run = useCallback(async (useDiarize: boolean): Promise<void> => {
@@ -129,7 +133,7 @@ export function HighlightsView({
         if (c.id !== id) return c;
         const adjusted = adjustClipBoundary(transcript, c, edge, dir);
         // manual edits reset the boundary badge to sentence-aligned honesty
-        return adjusted ? { ...c, ...adjusted, boundary: "segment" as const } : c;
+        return adjusted ? { ...c, ...adjusted, boundary: "segment" as const, manualBounds: true } : c;
       });
     });
   };
@@ -379,6 +383,18 @@ export function HighlightsView({
                 )}
 
                 <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-dashed border-line pt-3.5 text-[11px] text-mut">
+                  <button
+                    type="button"
+                    title={t("reviewOpenHint")}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setReviewId(c.id);
+                    }}
+                    className="chip flex items-center gap-1 rounded-md px-2 py-0.5 font-semibold text-ember transition-colors hover:text-fg"
+                  >
+                    <LuPlay className="h-3 w-3" />
+                    {t("reviewOpen")}
+                  </button>
                   {([
                     ["start", -1, LuChevronLeft], ["start", 1, LuChevronRight],
                   ] as const).map(([edge, dir, Icon]) => (
@@ -529,6 +545,32 @@ export function HighlightsView({
               </button>
             </div>
           )}
+
+          {/* ---- 审阅台:视频预览 + 波形时间轴,拖拽定切点 ---- */}
+          {(() => {
+            const reviewing = reviewId !== null ? candidates.find((c) => c.id === reviewId) : undefined;
+            if (!reviewing) return null;
+            return (
+              <ClipReviewModal
+                clip={reviewing}
+                transcript={transcript}
+                filePath={filePath}
+                durationSec={transcript.durationSec}
+                onClose={() => setReviewId(null)}
+                onSave={(patch) => {
+                  setCandidates(
+                    (prev) =>
+                      prev?.map((c) =>
+                        c.id === reviewing.id
+                          ? { ...c, ...patch, boundary: "segment" as const, manualBounds: true }
+                          : c
+                      ) ?? prev
+                  );
+                  setReviewId(null);
+                }}
+              />
+            );
+          })()}
         </section>
       )}
     </div>

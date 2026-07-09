@@ -21,3 +21,6 @@ models/
 .env.*
 dist/
 build/icon-b64.txt
+
+# Claude Code 本地辅助(预览验收配置等,不入库)
+.claude/

@@ -34,6 +34,8 @@ export interface ExportClipSpec {
   keywords?: string[];
   /** 片外紧邻词的时刻(全量转写里算好传入)——镜头吸附外扩的守卫。 */
   snapContext?: { prevWordEndSec: number | null; nextWordStartSec: number | null };
+  /** 用户在审阅台手动定过切点:跳过镜头吸附,机器不再改人的决定。 */
+  manualBounds?: boolean;
   /** Evidence-chain fields carried into clips.json for CMS/matrix pipelines. */
   meta?: {
     hook: string;
@@ -190,7 +192,7 @@ export async function exportClips(
       // 切点吸附:起止点吸到最近的镜头边界(词边界守卫,检测失败回退不吸附)。
       // 必须在跳剪/字幕/取景之前调整——下游全部消费 clip.startSec/endSec。
       let shotSnap: ClipRenderOutcome["shotSnap"] = null;
-      if (options.snapToShots && options.modelsRoot) {
+      if (options.snapToShots && options.modelsRoot && !clip.manualBounds) {
         const pad = SNAP_MAX_OUT_SEC + 0.4;
         const boundaries = await detectShotBoundaries(
           inputPath, clip.startSec - pad, clip.endSec + pad, options.modelsRoot

@@ -24,6 +24,10 @@ const api: HotClipApi = {
     return () => ipcRenderer.removeListener("hotclip:export-progress", listener);
   },
   revealClip: (path) => ipcRenderer.send("hotclip:reveal", path),
+  // 路径整体编码进 pathname,主进程协议按同样规则解回
+  mediaUrl: (filePath) => `hotclip-media://local/${encodeURIComponent(filePath)}`,
+  getAudioPeaks: (filePath, startSec, endSec) =>
+    ipcRenderer.invoke("hotclip:audio-peaks", filePath, startSec, endSec),
 };
 
 contextBridge.exposeInMainWorld("hotclip", api);

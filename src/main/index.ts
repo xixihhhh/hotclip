@@ -3,10 +3,14 @@
  * All heavy pipeline work lives in src/core and is invoked from here,
  * never from the renderer directly.
  */
-import { app, shell, BrowserWindow, ipcMain, dialog } from "electron";
+import { app, shell, BrowserWindow, ipcMain, dialog, protocol } from "electron";
 import { join } from "path";
 import { basename, extname } from "path";
 import { stat } from "fs/promises";
+import { createReadStream } from "fs";
+import { Readable } from "stream";
+import { extractPeaks } from "@core/audio-peaks";
+import { resolveByteRange } from "@core/media-range";
 import { probeMedia } from "@core/probe";
 import { SenseVoiceEngine } from "@core/transcribe/sensevoice";
 import { ParaformerEngine } from "@core/transcribe/paraformer";
@@ -26,6 +30,58 @@ import type { Transcript, LlmConfig, HighlightCandidate, ExportOptions } from ".
 
 const VIDEO_EXTENSIONS = ["mp4", "mkv", "mov", "flv", "ts", "webm", "avi", "m4v"];
 const AUDIO_EXTENSIONS = ["mp3", "m4a", "wav", "aac", "flac"];
+
+// ---- 本地媒体预览协议(审阅台) ----
+// 渲染层的 <video> 通过 hotclip-media:// 流式读取源文件;必须在 app ready
+// 前注册特权,才能拿到 fetch/流/Range 能力(拖进度条依赖 206 分段响应)。
+protocol.registerSchemesAsPrivileged([
+  { scheme: "hotclip-media", privileges: { stream: true, supportFetchAPI: true } },
+]);
+
+// 只放行本会话里 probe 成功过的文件——协议不做任意路径读取
+const allowedMedia = new Set<string>();
+
+const MEDIA_MIME: Record<string, string> = {
+  mp4: "video/mp4",
+  m4v: "video/mp4",
+  mov: "video/quicktime",
+  mkv: "video/x-matroska",
+  webm: "video/webm",
+  ts: "video/mp2t",
+  avi: "video/x-msvideo",
+  flv: "video/x-flv",
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+  wav: "audio/wav",
+  aac: "audio/aac",
+  flac: "audio/flac",
+};
+
+/** hotclip-media://local/<encodeURIComponent(路径)> → 带 Range 的文件流响应。 */
+async function serveMedia(request: Request): Promise<Response> {
+  const filePath = decodeURIComponent(new URL(request.url).pathname.replace(/^\//, ""));
+  if (!allowedMedia.has(filePath)) return new Response("forbidden", { status: 403 });
+  let size: number;
+  try {
+    size = (await stat(filePath)).size;
+  } catch {
+    return new Response("not found", { status: 404 });
+  }
+  const range = resolveByteRange(request.headers.get("range"), size);
+  if (!range) {
+    return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${size}` } });
+  }
+  const headers: Record<string, string> = {
+    "Content-Type": MEDIA_MIME[extname(filePath).slice(1).toLowerCase()] ?? "application/octet-stream",
+    "Accept-Ranges": "bytes",
+    "Content-Length": String(range.end - range.start + 1),
+  };
+  if (range.status === 206) headers["Content-Range"] = `bytes ${range.start}-${range.end}/${size}`;
+  const body = Readable.toWeb(
+    createReadStream(filePath, { start: range.start, end: range.end })
+  ) as unknown as ReadableStream;
+  return new Response(body, { status: range.status, headers });
+}
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -77,7 +133,21 @@ ipcMain.handle("hotclip:probe-media", async (_event, filePath: unknown) => {
   if (typeof filePath !== "string" || !filePath.trim()) {
     throw new Error("probe-media requires a file path");
   }
-  return probeMedia(filePath);
+  const info = await probeMedia(filePath);
+  allowedMedia.add(filePath); // probe 成功的文件才可被预览协议读取
+  return info;
+});
+
+// ---- IPC: 审阅台波形(上下文窗口的音频峰值) ----
+
+ipcMain.handle("hotclip:audio-peaks", async (_event, filePath: unknown, startSec: unknown, endSec: unknown) => {
+  if (typeof filePath !== "string" || !filePath.trim()) throw new Error("audio-peaks requires a file path");
+  const from = typeof startSec === "number" && Number.isFinite(startSec) ? Math.max(0, startSec) : 0;
+  const to = typeof endSec === "number" && Number.isFinite(endSec) ? endSec : 0;
+  if (to <= from) throw new Error("audio-peaks requires a valid range");
+  // 窗口封顶 10 分钟,防误传超大区间把内存打爆
+  const track = await extractPeaks(filePath, from, Math.min(to, from + 600));
+  return { values: Array.from(track.values), startSec: track.startSec, hopSec: track.hopSec };
 });
 
 // ---- IPC: transcription (wizard step 2) ----
@@ -245,6 +315,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       startSec: c.startSec,
       endSec: c.endSec,
       snapContext: allWords ? snapContextAround(allWords, c.startSec, c.endSec) : undefined,
+      manualBounds: c.manualBounds === true,
       words: needWords ? sliceWords(opts.transcript!, c.startSec, c.endSec) : undefined,
       keywords: c.keywords,
       meta: {
@@ -285,6 +356,7 @@ ipcMain.on("hotclip:reveal", (_event, path: unknown) => {
 });
 
 app.whenReady().then(() => {
+  protocol.handle("hotclip-media", serveMedia);
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

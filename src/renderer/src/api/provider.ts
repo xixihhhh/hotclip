@@ -122,6 +122,21 @@ const browserMock: HotClipApi = {
   revealClip() {
     /* browser mock: nothing to reveal */
   },
+  // 浏览器预览拿不到本地文件——审阅台的视频区退化为提示,时间轴仍可用
+  mediaUrl: () => "",
+  async getAudioPeaks(_filePath, startSec, endSec) {
+    await sleep(250);
+    const hopSec = 1 / 30;
+    const n = Math.max(0, Math.floor((endSec - startSec) / hopSec));
+    // 确定性伪波形:说话/停顿交替的包络,让浏览器预览看得出时间轴长什么样
+    const values = Array.from({ length: n }, (_, i) => {
+      const t = startSec + i * hopSec;
+      const talking = (Math.sin(t * 0.9) + 1) / 2 > 0.25 ? 1 : 0.1;
+      const syllable = 0.3 + 0.7 * Math.abs(Math.sin(t * 7.3) * Math.sin(t * 2.1));
+      return Math.min(1, talking * syllable);
+    });
+    return { values, startSec, hopSec };
+  },
   async detectHighlights(transcript, _llm, _filePath, diarize): Promise<DetectHighlightsResult> {
     await sleep(1500);
     const segs = transcript.segments;

@@ -110,6 +110,8 @@ export interface HighlightCandidate {
   recommended: boolean;
   /** One-line reviewer note (why weak / why strong); may be empty. */
   reviewNote: string;
+  /** 用户手动调过切点(审阅台/微调按钮):导出时跳过镜头吸附,尊重人的决定。 */
+  manualBounds?: boolean;
 }
 
 /** Burned-in caption style choices (none = no captions; bubble = web-rendered). */
@@ -159,6 +161,15 @@ export interface ExportedClip {
   durationSec: number;
 }
 
+/** 审阅台时间轴的波形数据:每块的峰值振幅(0..1)。 */
+export interface AudioPeaks {
+  values: number[];
+  /** 首块对应的源片绝对时间。 */
+  startSec: number;
+  /** 每块的秒数。 */
+  hopSec: number;
+}
+
 export interface ExportProgressEvent {
   /** 1-based index of the clip currently being cut. */
   current: number;
@@ -186,4 +197,8 @@ export interface HotClipApi {
   onExportProgress: (cb: (p: ExportProgressEvent) => void) => () => void;
   /** Reveal an exported file in Finder / Explorer. */
   revealClip: (path: string) => void;
+  /** 本地媒体的可播放 URL(审阅台 <video> 用);空串 = 当前环境不支持预览。 */
+  mediaUrl: (filePath: string) => string;
+  /** 取 [startSec, endSec] 的音频峰值轨——审阅台时间轴的波形。 */
+  getAudioPeaks: (filePath: string, startSec: number, endSec: number) => Promise<AudioPeaks>;
 }
