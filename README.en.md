@@ -43,6 +43,7 @@
 
 ## What's New
 
+- **[v0.6.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.6.0)** (2026-07-10) "See the picture, join the ecosystem": a **six-signal evidence chain** (+on-device vision peaks · facial-emotion peaks · live-chat density), **bilingual caption burn-in**, a **local MCP server** (one sentence to Claude drives the whole pipeline), **24/7 recording watch folder**, a publish kit (post copy / SRT / EDL timeline) and clip-length presets / prefs memory / inline title editing
 - **[v0.5.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.5.0)** (2026-07-09) "Pick right, ship steady": a **clip review workbench** (preview clips in-app, drag cut points on a waveform timeline), **shot-snapped cut points** (TransNetV2 — cuts land on real shot changes), **brand style templates** (highlight color / size / position / logo watermark), and an **on-device two-stage funnel** (local small-LLM pre-filter — an order of magnitude less LLM cost on long videos); plus opening-hook burn-in and -14 LUFS loudness normalization
 - **[v0.4.3](https://github.com/xixihhhh/hotclip/releases/tag/v0.4.3)** (2026-07-06) Engineering base: local transcript cache (reopen the same file and jump straight to highlight picking) + clips.json processing receipt (auditable record of what the AI did to each clip)
 - **[v0.4.2](https://github.com/xixihhhh/hotclip/releases/tag/v0.4.2)** (2026-07-05) Caption readability: semantic line breaking (wraps at real clause boundaries instead of chopping mid-phrase) + anti-flicker
@@ -126,9 +127,8 @@ HotClip fills the gap from both sides:
 See the full [product plan](docs/PRODUCT-PLAN.md) (Chinese). Highlights:
 
 - **v0.5 — cut smarter**: candidate review workbench (drag to fine-tune boundaries, one-click regenerate) · shot-boundary detection (cuts snap to shot edges) · caption style templates / brand presets · on-device small-LLM pre-filtering
-- **v0.6 — see the frame**: visual highlight signals (on-device multimodal model reads expressions, actions, on-screen moments) · translated captions · English ASR upgrade
-- **v0.7 — publish from the app**: multi-platform one-click publishing & scheduling · per-platform specs presets · CapCut/JianYing draft export
-- **v0.8 — agent-native**: local MCP server (let Claude & friends drive the clipping pipeline) · watch-folder automation for stream recordings · chat/danmaku heat as a highlight signal
+- ~~**v0.6 — see the frame**: visual highlight signals · facial-emotion peaks · translated captions~~ ✅ shipped (plus MCP server / watch folder / danmaku signal pulled forward)
+- **v0.7 — publish from the app**: multi-platform one-click publishing & scheduling · CapCut/JianYing draft export · English ASR upgrade (Parakeet)
 
 Want a say in what ships first? Tell us in [Discussions](https://github.com/xixihhhh/hotclip/discussions).
 
