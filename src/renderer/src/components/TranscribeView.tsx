@@ -14,10 +14,12 @@ import {
   LuGauge,
   LuTarget,
   LuCloudUpload,
+  LuPencil,
 } from "react-icons/lu";
 import { useT } from "../i18n/store";
 import { getApi } from "../api/provider";
 import { useAsrStore } from "../stores/asr-store";
+import { editSegmentText } from "../../../shared/edit-transcript";
 import type { Transcript, TranscribeProgressEvent, AsrEngineInfo } from "../../../shared/api-types";
 
 function formatClock(totalSeconds: number): string {
@@ -55,6 +57,7 @@ export function TranscribeView({
   filePath,
   onBack,
   onDone,
+  onEdited,
   onFindHighlights,
   cached,
   autoStart,
@@ -62,6 +65,8 @@ export function TranscribeView({
   filePath: string;
   onBack: () => void;
   onDone?: (t: Transcript) => void;
+  /** 逐句稿纠错后的回传(仅更新状态,不推进向导)。 */
+  onEdited?: (t: Transcript) => void;
   onFindHighlights?: () => void;
   /** Already-produced transcript (returning from a later phase) — skip work. */
   cached?: Transcript | null;
@@ -75,6 +80,20 @@ export function TranscribeView({
   const [progress, setProgress] = useState<TranscribeProgressEvent>({ fraction: 0, stage: "preparing" });
   const [transcript, setTranscript] = useState<Transcript | null>(cached ?? null);
   const [error, setError] = useState<string | null>(null);
+  /** 逐句稿纠错:当前编辑中的句 id。 */
+  const [editingSeg, setEditingSeg] = useState<number | null>(null);
+
+  // ASR 错字当场改:替换句文本并按字符宽度重建该句词级时间轴。
+  // 两个 setState 平级调用——绝不能在 updater 里更新父组件(渲染期非法)。
+  const commitSegEdit = (segId: number, value: string): void => {
+    setEditingSeg(null);
+    if (!transcript) return;
+    const next = editSegmentText(transcript, segId, value);
+    if (next !== transcript) {
+      setTranscript(next);
+      onEdited?.(next);
+    }
+  };
   const unsubRef = useRef<(() => void) | null>(null);
 
   const autoStarted = useRef(false);
@@ -308,10 +327,33 @@ export function TranscribeView({
             {transcript.segments.map((seg) => (
               <div
                 key={seg.id}
-                className="flex items-baseline gap-4 rounded-xl px-4 py-2.5 transition-colors hover:bg-panel-2"
+                className="group/seg flex items-baseline gap-4 rounded-xl px-4 py-2.5 transition-colors hover:bg-panel-2"
               >
                 <span className="shrink-0 font-mono text-[11px] text-ember/90">{formatClock(seg.startSec)}</span>
-                <p className="text-[14px] leading-relaxed">{seg.text}</p>
+                {editingSeg === seg.id ? (
+                  <input
+                    autoFocus
+                    defaultValue={seg.text}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                      if (e.key === "Escape") setEditingSeg(null);
+                    }}
+                    onBlur={(e) => commitSegEdit(seg.id, e.target.value)}
+                    className="w-full rounded-lg border border-ember/60 bg-panel px-2 py-1 text-[14px] leading-relaxed outline-none"
+                  />
+                ) : (
+                  <p className="flex min-w-0 items-baseline gap-1.5 text-[14px] leading-relaxed">
+                    <span className="min-w-0">{seg.text}</span>
+                    <button
+                      type="button"
+                      title={t("editSegHint")}
+                      onClick={() => setEditingSeg(seg.id)}
+                      className="shrink-0 rounded p-0.5 text-mut opacity-0 transition-opacity group-hover/seg:opacity-100 hover:text-fg"
+                    >
+                      <LuPencil className="h-3 w-3" />
+                    </button>
+                  </p>
+                )}
               </div>
             ))}
           </div>

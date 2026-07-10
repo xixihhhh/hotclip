@@ -71,6 +71,7 @@ export const zh = {
     downloadHint: "模型约 170MB,存放在本机,以后不再下载",
     resultTitle: "逐句稿",
     resultCount: "{n} 句 · 语言 {lang}",
+    editSegHint: "改错字——字幕、翻译、发布文案都会用修正后的文本(该句卡拉OK时间轴按字宽重建)",
     engineLocal: "本地 SenseVoice 引擎",
     failed: "转写失败,请确认文件包含音轨后重试",
     back: "重新选文件",

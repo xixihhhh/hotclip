@@ -67,6 +67,7 @@ export const en = {
     downloadHint: "~170MB, stored locally — never downloaded again",
     resultTitle: "Transcript",
     resultCount: "{n} sentences · language {lang}",
+    editSegHint: "Fix a typo — captions, translation and post copy all use the corrected text (this sentence's karaoke timing is rebuilt by character width)",
     engineLocal: "Local SenseVoice engine",
     failed: "Transcription failed — make sure the file has an audio track and retry",
     back: "Choose another file",

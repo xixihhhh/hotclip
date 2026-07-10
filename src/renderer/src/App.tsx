@@ -190,6 +190,7 @@ export default function App(): React.JSX.Element {
               setTranscript(t);
               if (auto) setPhase("highlights");
             }}
+            onEdited={setTranscript}
             onFindHighlights={transcript ? () => setPhase("highlights") : undefined}
           />
         )}
