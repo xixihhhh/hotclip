@@ -81,6 +81,9 @@ export interface LlmConfig {
   model: string;
 }
 
+/** 切片时长档:不同平台/账号定位的节奏(短=快节奏竖屏,长=B站/播客金句段)。 */
+export type ClipLength = "short" | "standard" | "long";
+
 /** 两级漏斗第一级:本地小模型端点(Ollama 等 OpenAI 兼容接口,通常免 Key)。 */
 export interface PrefilterConfig {
   baseUrl: string;
@@ -287,7 +290,8 @@ export interface HotClipApi {
     filePath?: string,
     diarize?: boolean,
     prefilter?: PrefilterConfig | null,
-    vision?: PrefilterConfig | null
+    vision?: PrefilterConfig | null,
+    length?: ClipLength
   ) => Promise<DetectHighlightsResult>;
   /** Cut the selected highlights into mp4 files; resolves with the file list. */
   exportClips: (filePath: string, clips: HighlightCandidate[], options?: ExportOptions) => Promise<ExportedClip[]>;

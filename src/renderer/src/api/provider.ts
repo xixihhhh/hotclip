@@ -180,7 +180,7 @@ const browserMock: HotClipApi = {
     watchListeners.add(cb);
     return () => watchListeners.delete(cb);
   },
-  async detectHighlights(transcript, _llm, _filePath, diarize, prefilter, vision): Promise<DetectHighlightsResult> {
+  async detectHighlights(transcript, _llm, _filePath, diarize, prefilter, vision, _length): Promise<DetectHighlightsResult> {
     await sleep(1500);
     // 浏览器预览:开了本地初筛就演示一份漏斗统计
     const funnel = prefilter

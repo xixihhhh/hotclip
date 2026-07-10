@@ -4,19 +4,26 @@
  */
 import type { Transcript } from "../transcribe/types";
 import type { MediaSignals } from "../signals";
-import type { HighlightCandidate, LlmConfig, PrefilterConfig, FunnelStats } from "../../shared/api-types";
+import type { HighlightCandidate, LlmConfig, PrefilterConfig, FunnelStats, ClipLength } from "../../shared/api-types";
 import {
   highlightSystemPrompt,
   buildHighlightPrompt,
   reviewSystemPrompt,
   buildReviewPrompt,
   extractJson,
+  CLIP_LENGTH_RANGES,
 } from "./prompt";
 import { resolveSelection, type RawSelection } from "./match";
 import { prefilterTranscript } from "./prefilter";
 
-const MIN_CLIP_SEC = 5;
-const MAX_CLIP_SEC = 75;
+/**
+ * 时长档过滤界:目标范围外放容差(下 0.5×/上 1.5×)——LLM 轻微超标的候选
+ * 留给用户决定,离谱的直接丢;绝对下限 4 秒防碎片。
+ */
+export function clipLengthBounds(length: ClipLength = "standard"): { lo: number; hi: number } {
+  const r = CLIP_LENGTH_RANGES[length];
+  return { lo: Math.max(4, Math.round(r.minSec * 0.5)), hi: Math.round(r.maxSec * 1.5) };
+}
 
 /**
  * Pollinations' keyless tier serves a reasoning model with a small output
@@ -234,7 +241,8 @@ export async function detectHighlights(
   llm: LlmConfig,
   signal?: AbortSignal,
   signals?: MediaSignals,
-  prefilter?: PrefilterConfig | null
+  prefilter?: PrefilterConfig | null,
+  length?: ClipLength
 ): Promise<DetectOutcome> {
   if (transcript.segments.length === 0) return { candidates: [] };
 
@@ -257,18 +265,19 @@ export async function detectHighlights(
 
   const content = await chatComplete(
     llm,
-    highlightSystemPrompt(promptTranscript),
+    highlightSystemPrompt(promptTranscript, length),
     buildHighlightPrompt(promptTranscript, 6, signals),
     signal
   );
   const selections = parseSelections(content);
 
+  const { lo, hi } = clipLengthBounds(length);
   const candidates: HighlightCandidate[] = [];
   for (const sel of selections) {
     const resolved = resolveSelection(transcript, sel);
     if (!resolved) continue;
     const dur = resolved.endSec - resolved.startSec;
-    if (dur < MIN_CLIP_SEC || dur > MAX_CLIP_SEC) continue;
+    if (dur < lo || dur > hi) continue;
     candidates.push({
       id: candidates.length + 1,
       startSec: resolved.startSec,

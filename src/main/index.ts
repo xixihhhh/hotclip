@@ -272,7 +272,7 @@ ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: 
 
 ipcMain.handle(
   "hotclip:detect-highlights",
-  async (_event, transcript: unknown, llm: unknown, filePath: unknown, diarize: unknown, prefilter: unknown, vision: unknown) => {
+  async (_event, transcript: unknown, llm: unknown, filePath: unknown, diarize: unknown, prefilter: unknown, vision: unknown, length: unknown) => {
     let t = transcript as Transcript;
     const config = llm as LlmConfig;
     if (!t || !Array.isArray(t.segments)) throw new Error("detect-highlights requires a transcript");
@@ -344,7 +344,10 @@ ipcMain.handle(
         }
       }
     }
-    const outcome = await detectHighlights(t, config, undefined, signals, localFilter);
+    // 时长档:非法值回落标准档
+    const clipLength =
+      length === "short" || length === "long" || length === "standard" ? length : undefined;
+    const outcome = await detectHighlights(t, config, undefined, signals, localFilter, clipLength);
     return { candidates: outcome.candidates, transcript: labeled, funnel: outcome.funnel, vision: visionStats, emotion: emotionStats, danmaku: danmakuStats };
   }
 );

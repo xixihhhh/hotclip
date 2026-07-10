@@ -38,7 +38,7 @@ import { useBrandStore, activeBrandStyle } from "../stores/brand-store";
 import { adjustClipBoundary } from "../../../shared/boundary";
 import { ClipReviewModal } from "./ClipReviewModal";
 import { BrandStyleModal } from "./BrandStyleModal";
-import type { Transcript, HighlightCandidate, RenderToggles, CaptionStyleChoice, FunnelStats, VisionStats, EmotionStats, DanmakuStats } from "../../../shared/api-types";
+import type { Transcript, HighlightCandidate, RenderToggles, CaptionStyleChoice, FunnelStats, VisionStats, EmotionStats, DanmakuStats, ClipLength } from "../../../shared/api-types";
 
 /** Click-to-cycle order for the caption style chip. */
 const CAPTION_CYCLE: CaptionStyleChoice[] = ["karaoke", "keyword", "pop", "bubble", "none"];
@@ -118,6 +118,8 @@ export function HighlightsView({
   const [subtitleFile, setSubtitleFile] = useState(false);
   // 中文源译英,其余译中——短视频出海/引进的两个主方向
   const targetLang = (transcript.language || "").startsWith("zh") ? "en" : "zh";
+  /** 切片时长档(短=快节奏竖屏,长=B站/播客金句段);切换即重新检测。 */
+  const [clipLength, setClipLength] = useState<ClipLength>("standard");
   /** 审阅台当前打开的候选 id;null = 关闭。 */
   const [reviewId, setReviewId] = useState<number | null>(null);
   /** 品牌样式模板弹窗。 */
@@ -125,7 +127,7 @@ export function HighlightsView({
   const brandState = useBrandStore();
   const startedRef = useRef(false);
 
-  const run = useCallback(async (useDiarize: boolean): Promise<void> => {
+  const run = useCallback(async (useDiarize: boolean, lengthArg?: ClipLength): Promise<void> => {
     setDetecting(true);
     setError(null);
     try {
@@ -135,7 +137,8 @@ export function HighlightsView({
         filePath,
         useDiarize,
         prefilter.enabled ? { baseUrl: prefilter.baseUrl, model: prefilter.model } : null,
-        vision.enabled ? { baseUrl: vision.baseUrl, model: vision.model } : null
+        vision.enabled ? { baseUrl: vision.baseUrl, model: vision.model } : null,
+        lengthArg ?? clipLength
       );
       setCandidates(result.candidates);
       setFunnel(result.funnel ?? null);
@@ -151,7 +154,16 @@ export function HighlightsView({
     } finally {
       setDetecting(false);
     }
-  }, [transcript, config, filePath, onTranscriptLabeled, prefilter, vision]);
+  }, [transcript, config, filePath, onTranscriptLabeled, prefilter, vision, clipLength]);
+
+  // 时长档循环切换:短 → 标准 → 长,切换即按新档重新检测
+  const LENGTH_CYCLE: ClipLength[] = ["standard", "short", "long"];
+  const cycleLength = useCallback((): void => {
+    const next = LENGTH_CYCLE[(LENGTH_CYCLE.indexOf(clipLength) + 1) % LENGTH_CYCLE.length];
+    setClipLength(next);
+    void run(diarize, next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clipLength, diarize, run]);
 
   // Multi-speaker attribution: re-detect with diarization when toggled on.
   const toggleDiarize = useCallback((): void => {
@@ -440,6 +452,17 @@ export function HighlightsView({
               )}
             </div>
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                title={t("lengthHint")}
+                onClick={cycleLength}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                  clipLength !== "standard" ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut hover:text-fg"
+                }`}
+              >
+                <LuClock3 className={`h-3.5 w-3.5 ${clipLength !== "standard" ? "text-ember" : ""}`} />
+                {t(clipLength === "short" ? "lengthShort" : clipLength === "long" ? "lengthLong" : "lengthStandard")}
+              </button>
               <button
                 type="button"
                 title={t("optDiarizeHint")}

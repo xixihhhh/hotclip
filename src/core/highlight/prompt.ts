@@ -8,6 +8,7 @@
  * own language. Pure builders, testable.
  */
 import type { Transcript } from "../transcribe/types";
+import type { ClipLength } from "../../shared/api-types";
 import type { MediaSignals } from "../signals";
 
 export const HIGHLIGHT_SYSTEM_PROMPT_ZH = `你是一位顶级短视频切片操盘手。给你一份长视频的逐句稿,你要从中挑出最可能在抖音/快手/B站/TikTok 上爆的片段。
@@ -55,8 +56,21 @@ export function isChineseTranscript(transcript: Transcript): boolean {
   return sample.length > 0 && cjk / sample.length > 0.3;
 }
 
-export function highlightSystemPrompt(transcript: Transcript): string {
-  return isChineseTranscript(transcript) ? HIGHLIGHT_SYSTEM_PROMPT_ZH : HIGHLIGHT_SYSTEM_PROMPT_EN;
+/** 三档时长目标:短=快节奏竖屏(抖音/TikTok 完播友好),标准=现默认,长=B站/播客金句段。 */
+export const CLIP_LENGTH_RANGES: Record<ClipLength, { minSec: number; maxSec: number }> = {
+  short: { minSec: 10, maxSec: 30 },
+  standard: { minSec: 8, maxSec: 40 },
+  long: { minSec: 40, maxSec: 90 },
+};
+
+export function highlightSystemPrompt(transcript: Transcript, length: ClipLength = "standard"): string {
+  const base = isChineseTranscript(transcript) ? HIGHLIGHT_SYSTEM_PROMPT_ZH : HIGHLIGHT_SYSTEM_PROMPT_EN;
+  if (length === "standard") return base;
+  // 时长行按档改写(硬约束进 system prompt,选段时就按目标节奏挑)
+  const { minSec, maxSec } = CLIP_LENGTH_RANGES[length];
+  return base
+    .replace("时长 8~40 秒", `时长 ${minSec}~${maxSec} 秒(硬要求,宁短勿超)`)
+    .replace("Length 8–40 seconds", `Length ${minSec}–${maxSec} seconds (hard requirement)`);
 }
 
 /** True when the transcript carries diarization with more than one speaker. */

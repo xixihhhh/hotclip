@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { normalizeText, buildTokenIndex, matchQuote, resolveSelection } from "../highlight/match";
-import { parseSelections, dropOverlaps, parseReviews, applyReviews, normalizeScores } from "../highlight/detect";
+import { parseSelections, dropOverlaps, parseReviews, applyReviews, normalizeScores, clipLengthBounds } from "../highlight/detect";
 import {
   buildHighlightPrompt,
   renderTranscriptLines,
@@ -292,6 +292,25 @@ describe("prompt language routing（中英分流）", () => {
     expect(isChineseTranscript(autoTx)).toBe(true);
     const autoEn: Transcript = { ...enTx, language: "auto" };
     expect(isChineseTranscript(autoEn)).toBe(false);
+  });
+});
+
+describe("时长档 (clip length)", () => {
+  it("standard 保持原 system prompt;short/long 改写时长行(中英)", () => {
+    const zh = makeTranscript(["第一句话。", "第二句话。"]);
+    expect(highlightSystemPrompt(zh)).toContain("时长 8~40 秒");
+    expect(highlightSystemPrompt(zh, "short")).toContain("时长 10~30 秒(硬要求,宁短勿超)");
+    expect(highlightSystemPrompt(zh, "long")).toContain("时长 40~90 秒");
+    const en: Transcript = { ...makeTranscript(["First sentence here.", "Second sentence there."]), language: "en" };
+    expect(highlightSystemPrompt(en, "short")).toContain("Length 10–30 seconds (hard requirement)");
+    expect(highlightSystemPrompt(en, "long")).toContain("Length 40–90 seconds");
+  });
+
+  it("clipLengthBounds:目标外放容差,绝对下限 4 秒", () => {
+    expect(clipLengthBounds("standard")).toEqual({ lo: 4, hi: 60 });
+    expect(clipLengthBounds("short")).toEqual({ lo: 5, hi: 45 });
+    expect(clipLengthBounds("long")).toEqual({ lo: 20, hi: 135 });
+    expect(clipLengthBounds()).toEqual(clipLengthBounds("standard"));
   });
 });
 
