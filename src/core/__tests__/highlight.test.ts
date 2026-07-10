@@ -315,6 +315,15 @@ describe("renderSignals / signal injection", () => {
     expect(renderSignals(undefined, true)).toBe("");
   });
 
+  it("emotionPeaks 存在时渲染表情峰值行", () => {
+    const withEmotion = { ...signals, emotionPeaks: [{ startSec: 30, endSec: 42 }] };
+    const zh = renderSignals(withEmotion, true);
+    expect(zh).toContain("人脸表情峰值时段");
+    expect(zh).toContain("00:30-00:42");
+    expect(renderSignals(withEmotion, false)).toContain("Facial-emotion peaks");
+    expect(renderSignals(signals, true)).not.toContain("表情峰值");
+  });
+
   it("visualPeaks 存在时渲染视觉爆点行", () => {
     const withVision = { ...signals, visualPeaks: [{ startSec: 60, endSec: 72 }] };
     const zh = renderSignals(withVision, true);

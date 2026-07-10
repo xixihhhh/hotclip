@@ -22,6 +22,8 @@ export interface MediaSignals {
   cutDense: TimeRange[];
   /** 端侧视觉模型抽帧圈出的画面高能时段(可选,见 highlight/vision.ts)。 */
   visualPeaks?: TimeRange[];
+  /** 表情峰值时段(YuNet+FER+,零配置;可选,见 emotion.ts)。 */
+  emotionPeaks?: TimeRange[];
 }
 
 /** Parse `ebur128` stderr lines: "t: 12.5 ... M: -18.2 ..." → [t, M] samples. */

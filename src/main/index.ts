@@ -23,13 +23,14 @@ import { runDiarization, labelTranscript } from "@core/diarize";
 import { ASR_CATALOG } from "../shared/asr-catalog";
 import { detectHighlights, chatComplete } from "@core/highlight/detect";
 import { collectVisionSignal } from "@core/highlight/vision";
+import { collectEmotionSignal } from "@core/emotion";
 import { collectClipSegments, translateSegments, clipTranslationLines } from "@core/translate";
 import { collectSignals } from "@core/signals";
 import { exportClips, sanitizeFilename } from "@core/export";
 import { sliceWords } from "@core/subtitle";
 import { snapContextAround } from "@core/shots";
 import { renderCaptionOverlay } from "./overlay-renderer";
-import type { Transcript, LlmConfig, HighlightCandidate, ExportOptions, VisionStats } from "../shared/api-types";
+import type { Transcript, LlmConfig, HighlightCandidate, ExportOptions, VisionStats, EmotionStats } from "../shared/api-types";
 
 const VIDEO_EXTENSIONS = ["mp4", "mkv", "mov", "flv", "ts", "webm", "avi", "m4v"];
 const AUDIO_EXTENSIONS = ["mp3", "m4a", "wav", "aac", "flac"];
@@ -288,30 +289,43 @@ ipcMain.handle(
       pf && typeof pf.baseUrl === "string" && pf.baseUrl.trim() && typeof pf.model === "string" && pf.model.trim()
         ? { baseUrl: pf.baseUrl, model: pf.model }
         : null;
-    // 视觉爆点信号(可选):端侧 VL 抽帧圈画面高能时段,挂进 signals 随提示词进云端。
-    // fail-open——采集失败/证据太薄都退回纯文本检测,不影响主流程。
+    // 画面侧信号(并发采集,各自 fail-open——失败/证据太薄都退回纯文本检测):
+    // - 表情峰值:YuNet+FER+ 零配置自动跑(有画面就看,首次自动下载小模型);
+    // - 视觉爆点:端侧 VL 抽帧(可选,需用户配置 Ollama 视觉模型)。
     let visionStats: VisionStats | undefined;
-    const vc = vision as { baseUrl?: unknown; model?: unknown } | null | undefined;
-    if (
-      vc && typeof vc.baseUrl === "string" && vc.baseUrl.trim() && typeof vc.model === "string" && vc.model.trim() &&
-      typeof filePath === "string" && filePath.trim()
-    ) {
-      const durationSec = await probeMedia(filePath).then((m) => m.durationSec).catch(() => 0);
-      if (durationSec > 1) {
-        const outcome = await collectVisionSignal({
-          videoPath: filePath,
-          durationSec,
-          config: { baseUrl: vc.baseUrl, model: vc.model },
-          signals,
-        }).catch(() => null);
-        if (outcome) {
-          signals = { loudPeaks: [], cutDense: [], ...signals, visualPeaks: outcome.visualPeaks };
-          visionStats = outcome.stats;
+    let emotionStats: EmotionStats | undefined;
+    if (typeof filePath === "string" && filePath.trim()) {
+      const media = await probeMedia(filePath).catch(() => null);
+      if (media && media.hasVideo && media.durationSec > 1) {
+        const vc = vision as { baseUrl?: unknown; model?: unknown } | null | undefined;
+        const visionCfg =
+          vc && typeof vc.baseUrl === "string" && vc.baseUrl.trim() && typeof vc.model === "string" && vc.model.trim()
+            ? { baseUrl: vc.baseUrl, model: vc.model }
+            : null;
+        const [emotionOutcome, visionOutcome] = await Promise.all([
+          Promise.race([
+            collectEmotionSignal({ videoPath: filePath, durationSec: media.durationSec, modelsRoot: modelsRoot(), signals }),
+            new Promise<null>((r) => setTimeout(() => r(null), 120_000)),
+          ]).catch(() => null),
+          visionCfg
+            ? collectVisionSignal({ videoPath: filePath, durationSec: media.durationSec, config: visionCfg, signals }).catch(() => null)
+            : Promise.resolve(null),
+        ]);
+        if (emotionOutcome || visionOutcome) {
+          signals = {
+            loudPeaks: [],
+            cutDense: [],
+            ...signals,
+            ...(visionOutcome ? { visualPeaks: visionOutcome.visualPeaks } : {}),
+            ...(emotionOutcome ? { emotionPeaks: emotionOutcome.emotionPeaks } : {}),
+          };
+          visionStats = visionOutcome?.stats;
+          emotionStats = emotionOutcome?.stats;
         }
       }
     }
     const outcome = await detectHighlights(t, config, undefined, signals, localFilter);
-    return { candidates: outcome.candidates, transcript: labeled, funnel: outcome.funnel, vision: visionStats };
+    return { candidates: outcome.candidates, transcript: labeled, funnel: outcome.funnel, vision: visionStats, emotion: emotionStats };
   }
 );
 

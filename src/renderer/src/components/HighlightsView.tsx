@@ -36,7 +36,7 @@ import { useBrandStore, activeBrandStyle } from "../stores/brand-store";
 import { adjustClipBoundary } from "../../../shared/boundary";
 import { ClipReviewModal } from "./ClipReviewModal";
 import { BrandStyleModal } from "./BrandStyleModal";
-import type { Transcript, HighlightCandidate, RenderToggles, CaptionStyleChoice, FunnelStats, VisionStats } from "../../../shared/api-types";
+import type { Transcript, HighlightCandidate, RenderToggles, CaptionStyleChoice, FunnelStats, VisionStats, EmotionStats } from "../../../shared/api-types";
 
 /** Click-to-cycle order for the caption style chip. */
 const CAPTION_CYCLE: CaptionStyleChoice[] = ["karaoke", "keyword", "pop", "bubble", "none"];
@@ -93,6 +93,8 @@ export function HighlightsView({
   const [funnel, setFunnel] = useState<FunnelStats | null>(null);
   /** 视觉爆点信号生效时的抽帧统计(结果页展示看了多少帧)。 */
   const [visionStats, setVisionStats] = useState<VisionStats | null>(null);
+  /** 表情峰值信号统计(零配置自动跑,有人脸才有)。 */
+  const [emotionStats, setEmotionStats] = useState<EmotionStats | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   // Vertical + karaoke + jump-cut ON by default — publish-ready clips out of the box.
   const [vertical, setVertical] = useState(true);
@@ -130,6 +132,7 @@ export function HighlightsView({
       setCandidates(result.candidates);
       setFunnel(result.funnel ?? null);
       setVisionStats(result.vision ?? null);
+      setEmotionStats(result.emotion ?? null);
       // reviewer-approved clips are pre-selected; flagged ones start unchecked
       setSelected(new Set(result.candidates.filter((c) => c.recommended).map((c) => c.id)));
       // Lift the speaker-labeled transcript so export can color captions by speaker.
@@ -407,6 +410,14 @@ export function HighlightsView({
                   {t("visionScanned", {
                     frames: visionStats.framesScored,
                     peaks: visionStats.peakCount,
+                  })}
+                </p>
+              )}
+              {emotionStats && emotionStats.peakCount > 0 && (
+                <p className="mt-1 text-[11.5px] text-amber-300/90">
+                  {t("emotionScanned", {
+                    faces: emotionStats.facesScored,
+                    peaks: emotionStats.peakCount,
                   })}
                 </p>
               )}

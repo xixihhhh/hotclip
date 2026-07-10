@@ -121,6 +121,9 @@ export function renderSignals(signals: MediaSignals | undefined, zh: boolean): s
   if (signals.visualPeaks && signals.visualPeaks.length > 0) {
     lines.push(zh ? `- 视觉模型判定的画面爆点时刻(夸张表情/激烈动作/场面炸裂): ${fmt(signals.visualPeaks)}` : `- Vision-model visual peaks (expressions/action/spectacle): ${fmt(signals.visualPeaks)}`);
   }
+  if (signals.emotionPeaks && signals.emotionPeaks.length > 0) {
+    lines.push(zh ? `- 人脸表情峰值时段(大笑/惊讶/激动): ${fmt(signals.emotionPeaks)}` : `- Facial-emotion peaks (laughter/surprise/excitement): ${fmt(signals.emotionPeaks)}`);
+  }
   if (lines.length === 0) return "";
   return zh
     ? `\n【画面与声音信号】(辅助证据——与这些时段重合的内容更可能有真实的情绪/画面爆点,但仍以文本质量为准)\n${lines.join("\n")}\n`

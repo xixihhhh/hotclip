@@ -102,6 +102,13 @@ export interface VisionStats {
   peakCount: number;
 }
 
+/** 表情峰值信号统计(零配置自动跑;UI 展示"看了几张脸、圈出几段")。 */
+export interface EmotionStats {
+  framesTotal: number;
+  facesScored: number;
+  peakCount: number;
+}
+
 /** One AI-nominated clip candidate with frame-accurate boundaries. */
 export interface HighlightCandidate {
   id: number;
@@ -204,6 +211,8 @@ export interface DetectHighlightsResult {
   funnel?: FunnelStats;
   /** 视觉爆点信号生效时的抽帧统计;未启用/回退时缺省。 */
   vision?: VisionStats;
+  /** 表情峰值信号生效时的统计;无人脸/模型不可用时缺省。 */
+  emotion?: EmotionStats;
 }
 
 /** One exported clip file on disk. */

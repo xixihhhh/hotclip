@@ -96,6 +96,19 @@ export const YUNET_MODEL: ModelAsset = {
 };
 
 /**
+ * FER+ 表情识别(VGG13,MIT,onnx/models 官方 validated)——表情峰值信号用:
+ * 输入 1×1×64×64 灰度(0-255 原始值),输出 8 类情绪 logits。
+ */
+export const EMOTION_MODEL: ModelAsset = {
+  id: "emotion-ferplus-8",
+  url: "https://github.com/onnx/models/raw/main/validated/vision/body_analysis/emotion_ferplus/model/emotion-ferplus-8.onnx",
+  mirrors: ["https://ghfast.top/", "https://gh-proxy.com/"],
+  extractedDir: "emotion-ferplus-8",
+  approxBytes: 34 * 1024 * 1024,
+  singleFile: "model.onnx",
+};
+
+/**
  * CT-Transformer punctuation (zh/en, int8, Apache-2.0) — Paraformer/FireRed
  * emit no punctuation, which starves sentence segmentation; this restores it.
  */
