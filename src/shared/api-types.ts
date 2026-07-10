@@ -109,6 +109,12 @@ export interface EmotionStats {
   peakCount: number;
 }
 
+/** 弹幕热度信号统计(自动发现同名 .xml;UI 展示"读了几条、圈出几段")。 */
+export interface DanmakuStats {
+  count: number;
+  peakCount: number;
+}
+
 /** One AI-nominated clip candidate with frame-accurate boundaries. */
 export interface HighlightCandidate {
   id: number;
@@ -215,6 +221,8 @@ export interface DetectHighlightsResult {
   vision?: VisionStats;
   /** 表情峰值信号生效时的统计;无人脸/模型不可用时缺省。 */
   emotion?: EmotionStats;
+  /** 弹幕热度信号生效时的统计;视频旁没有同名弹幕 .xml 时缺省。 */
+  danmaku?: DanmakuStats;
 }
 
 /** One exported clip file on disk. */

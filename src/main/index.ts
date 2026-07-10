@@ -27,13 +27,14 @@ import { collectEmotionSignal } from "@core/emotion";
 import { collectClipSegments, translateSegments, clipTranslationLines } from "@core/translate";
 import { generatePublishCopies } from "@core/publish";
 import { FolderWatcher, isVideoFile, isSeen, type SeenMap, type WatchedFile } from "@core/watch";
+import { collectDanmakuSignal } from "@core/danmaku";
 import { autoClip } from "@core/pipeline";
 import { collectSignals } from "@core/signals";
 import { exportClips, sanitizeFilename } from "@core/export";
 import { sliceWords } from "@core/subtitle";
 import { snapContextAround } from "@core/shots";
 import { renderCaptionOverlay } from "./overlay-renderer";
-import type { Transcript, LlmConfig, HighlightCandidate, ExportOptions, VisionStats, EmotionStats, WatchEvent } from "../shared/api-types";
+import type { Transcript, LlmConfig, HighlightCandidate, ExportOptions, VisionStats, EmotionStats, DanmakuStats, WatchEvent } from "../shared/api-types";
 
 const VIDEO_EXTENSIONS = ["mp4", "mkv", "mov", "flv", "ts", "webm", "avi", "m4v"];
 const AUDIO_EXTENSIONS = ["mp3", "m4a", "wav", "aac", "flac"];
@@ -304,8 +305,17 @@ ipcMain.handle(
     // - 视觉爆点:端侧 VL 抽帧(可选,需用户配置 Ollama 视觉模型)。
     let visionStats: VisionStats | undefined;
     let emotionStats: EmotionStats | undefined;
+    let danmakuStats: DanmakuStats | undefined;
     if (typeof filePath === "string" && filePath.trim()) {
       const media = await probeMedia(filePath).catch(() => null);
+      // 弹幕热度(零配置):视频旁同名 .xml(录播姬约定)自动发现,纯音频也适用
+      if (media && media.durationSec > 1) {
+        const dm = await collectDanmakuSignal(filePath, media.durationSec);
+        if (dm) {
+          signals = { loudPeaks: [], cutDense: [], ...signals, danmakuPeaks: dm.danmakuPeaks };
+          danmakuStats = dm.stats;
+        }
+      }
       if (media && media.hasVideo && media.durationSec > 1) {
         const vc = vision as { baseUrl?: unknown; model?: unknown } | null | undefined;
         const visionCfg =
@@ -335,7 +345,7 @@ ipcMain.handle(
       }
     }
     const outcome = await detectHighlights(t, config, undefined, signals, localFilter);
-    return { candidates: outcome.candidates, transcript: labeled, funnel: outcome.funnel, vision: visionStats, emotion: emotionStats };
+    return { candidates: outcome.candidates, transcript: labeled, funnel: outcome.funnel, vision: visionStats, emotion: emotionStats, danmaku: danmakuStats };
   }
 );
 

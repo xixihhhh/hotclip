@@ -11,6 +11,7 @@ import { readTranscriptCache, writeTranscriptCache } from "./transcribe/cache";
 import { detectHighlights } from "./highlight/detect";
 import { collectSignals } from "./signals";
 import { collectEmotionSignal } from "./emotion";
+import { collectDanmakuSignal } from "./danmaku";
 import { exportClips, sanitizeFilename, type ExportedClip } from "./export";
 import { sliceWords } from "./subtitle";
 
@@ -64,7 +65,18 @@ export async function detectForPipeline(
     modelsRoot: cfg.modelsRoot,
     signals,
   }).catch(() => null);
-  const merged = emotion ? { loudPeaks: [], cutDense: [], ...signals, emotionPeaks: emotion.emotionPeaks } : signals;
+  // 弹幕热度(零配置):录播姬随录播落的同名 .xml 自动发现——录播监听场景的主证据
+  const danmaku = await collectDanmakuSignal(videoPath, transcript.durationSec);
+  const merged =
+    emotion || danmaku
+      ? {
+          loudPeaks: [],
+          cutDense: [],
+          ...signals,
+          ...(emotion ? { emotionPeaks: emotion.emotionPeaks } : {}),
+          ...(danmaku ? { danmakuPeaks: danmaku.danmakuPeaks } : {}),
+        }
+      : signals;
   const outcome = await detectHighlights(transcript, cfg.llm, cfg.signal, merged);
   const max = Math.max(1, Math.min(12, Math.round(cfg.maxClips ?? 6)));
   return outcome.candidates.slice(0, max);

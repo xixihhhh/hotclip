@@ -124,6 +124,7 @@ export const en = {
     visionDesc: "A local Ollama vision model (e.g. qwen3-vl:4b) samples frames to spot visually hot moments — big expressions, action, spectacle that transcripts can't see — and feeds them to the cloud model as evidence. Silently skipped if the endpoint is unavailable.",
     visionScanned: "Vision signal active: {frames} frames judged, {peaks} visual-peak windows found",
     emotionScanned: "Emotion signal active: {faces} faces read, {peaks} expression-peak windows (laughter/surprise/excitement)",
+    danmakuScanned: "Live-chat signal active: {count} messages read, {peaks} audience-hype windows found",
     llmStart: "Save & find highlights",
     selectedCount: "{n} selected",
     exportSelected: "Export clips",

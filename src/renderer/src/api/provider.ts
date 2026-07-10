@@ -190,6 +190,8 @@ const browserMock: HotClipApi = {
     const visionStats = vision ? { framesTotal: 20, framesScored: 18, peakCount: 3 } : undefined;
     // 表情峰值信号零配置自动跑,浏览器预览恒给演示统计
     const emotionStats = { framesTotal: 96, facesScored: 74, peakCount: 2 };
+    // 弹幕信号:演示"录播旁发现了同名弹幕 XML"的情况
+    const danmakuStats = { count: 4213, peakCount: 5 };
     const segs = transcript.segments;
     const pick = (from: number, to: number, id: number, title: string, hook: string, score: number, reason: string): HighlightCandidate => ({
       id,
@@ -232,9 +234,9 @@ const browserMock: HotClipApi = {
           words: (s.words ?? []).map((w) => ({ ...w, speaker: i % 2 })),
         })),
       };
-      return { candidates, transcript: labeled, funnel, vision: visionStats, emotion: emotionStats };
+      return { candidates, transcript: labeled, funnel, vision: visionStats, emotion: emotionStats, danmaku: danmakuStats };
     }
-    return { candidates, funnel, vision: visionStats, emotion: emotionStats };
+    return { candidates, funnel, vision: visionStats, emotion: emotionStats, danmaku: danmakuStats };
   },
 };
 

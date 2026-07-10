@@ -24,6 +24,8 @@ export interface MediaSignals {
   visualPeaks?: TimeRange[];
   /** 表情峰值时段(YuNet+FER+,零配置;可选,见 emotion.ts)。 */
   emotionPeaks?: TimeRange[];
+  /** 弹幕热度峰值时段(同名 .xml 自动发现;可选,见 danmaku.ts)。 */
+  danmakuPeaks?: TimeRange[];
 }
 
 /** Parse `ebur128` stderr lines: "t: 12.5 ... M: -18.2 ..." → [t, M] samples. */

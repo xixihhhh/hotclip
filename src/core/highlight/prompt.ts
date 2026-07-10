@@ -124,6 +124,9 @@ export function renderSignals(signals: MediaSignals | undefined, zh: boolean): s
   if (signals.emotionPeaks && signals.emotionPeaks.length > 0) {
     lines.push(zh ? `- 人脸表情峰值时段(大笑/惊讶/激动): ${fmt(signals.emotionPeaks)}` : `- Facial-emotion peaks (laughter/surprise/excitement): ${fmt(signals.emotionPeaks)}`);
   }
+  if (signals.danmakuPeaks && signals.danmakuPeaks.length > 0) {
+    lines.push(zh ? `- 弹幕热度峰值时段(观众实时高能反应,证据力最强): ${fmt(signals.danmakuPeaks)}` : `- Live-chat density peaks (real-time audience hype, strongest evidence): ${fmt(signals.danmakuPeaks)}`);
+  }
   if (lines.length === 0) return "";
   return zh
     ? `\n【画面与声音信号】(辅助证据——与这些时段重合的内容更可能有真实的情绪/画面爆点,但仍以文本质量为准)\n${lines.join("\n")}\n`
