@@ -17,6 +17,7 @@ import { clampTranslationLines, remapTranslationLines, type TranslationLine } fr
 import { postTextFile, type PublishCopy } from "./publish";
 import { buildSrt, srtLinesFromWords } from "./srt";
 import { buildEdl, type EdlClip } from "./edl";
+import { runAudiogram, audiogramSpec } from "./audiogram";
 import { findFillerWords, dropFillerWords, fillerCutSpans, type FillerHit } from "./fillers";
 import { extractPeaks } from "./audio-peaks";
 import { detectUiCrop, type UiCrop } from "./uicrop";
@@ -86,8 +87,8 @@ export interface ClipRenderOutcome {
   captionStyle: string;
   /** False when a web-overlay pass failed and the clip shipped without word captions. */
   captionsBurned: boolean;
-  /** "face-track" when the crop followed a face, "center-crop" on fallback, "none" for horizontal. */
-  reframe: "face-track" | "center-crop" | "none";
+  /** "face-track" when the crop followed a face, "center-crop" on fallback, "none" for horizontal, "audiogram" for audio-only sources. */
+  reframe: "face-track" | "center-crop" | "none" | "audiogram";
   /** Jump-cut / filler splice outcome; null when the clip was cut whole. */
   edit: { splices: number; keptSec: number; removedSec: number; cutRatio: number } | null;
   /** Number of filler/stutter words removed. */
@@ -199,9 +200,14 @@ export async function exportClips(
       }
     : undefined;
 
+  // 纯音频源(播客/录音)走 audiogram:深色底+品牌色波形自动合成画面,
+  // 视频专属阶段(去录屏UI/人脸取景/镜头吸附)整体跳过
+  const srcInfo = await probeMedia(inputPath).catch(() => null);
+  const audioOnly = srcInfo ? !srcInfo.hasVideo : false;
+
   // one UI-chrome detection pass for the whole source (bands don't move)
   let uiCrop: UiCrop | undefined;
-  if (options.trimUi && clips.length > 0) {
+  if (options.trimUi && clips.length > 0 && !audioOnly) {
     const spanEnd = Math.max(...clips.map((c) => c.endSec));
     uiCrop = await detectUiCrop(inputPath, spanEnd).catch(() => undefined);
     if (uiCrop && uiCrop.topFrac === 0 && uiCrop.bottomFrac === 0) uiCrop = undefined;
@@ -226,7 +232,7 @@ export async function exportClips(
       // 切点吸附:起止点吸到最近的镜头边界(词边界守卫,检测失败回退不吸附)。
       // 必须在跳剪/字幕/取景之前调整——下游全部消费 clip.startSec/endSec。
       let shotSnap: ClipRenderOutcome["shotSnap"] = null;
-      if (options.snapToShots && options.modelsRoot && !clip.manualBounds) {
+      if (options.snapToShots && options.modelsRoot && !clip.manualBounds && !audioOnly) {
         const pad = SNAP_MAX_OUT_SEC + 0.4;
         const boundaries = await detectShotBoundaries(
           inputPath, clip.startSec - pad, clip.endSec + pad, options.modelsRoot
@@ -316,7 +322,7 @@ export async function exportClips(
 
       // Face-aware reframe: plan per clip; any failure falls back to center.
       let trackPlan;
-      if (options.vertical && options.faceTrack && options.modelsRoot) {
+      if (options.vertical && options.faceTrack && options.modelsRoot && !audioOnly) {
         const cp = await generateCropPlan(
           inputPath, clip.startSec, clip.endSec, options.modelsRoot, uiCrop
         ).catch(() => null);
@@ -357,7 +363,22 @@ export async function exportClips(
             normalizeLoudness: options.normalizeLoudness,
             watermark,
           };
-      if (plan && plan.segments.length > 1) {
+      if (audioOnly) {
+        // audiogram:深色底+品牌色波形合成画面,单段/跳剪统一(波形随剪好的音频生成)
+        await runAudiogram(
+          inputPath,
+          cutTarget,
+          plan ? plan.segments : [{ startSec: clip.startSec, endSec: clip.endSec }],
+          {
+            // 与 ASS layout 的竖/横选择严格一致,playRes 才对得上
+            spec: audiogramSpec(Boolean(options.vertical), options.brand?.highlightColor),
+            subtitlePath,
+            fontsDir: subtitlePath ? options.fontsDir : undefined,
+            normalizeLoudness: options.normalizeLoudness,
+            watermark,
+          }
+        );
+      } else if (plan && plan.segments.length > 1) {
         await cutJumpClip(inputPath, cutTarget, clip.startSec, plan.segments, cutOptions);
       } else {
         // single kept segment → plain cut (honoring trimmed lead-in/tail)
@@ -455,7 +476,7 @@ export async function exportClips(
       renderByClip.set(clip.id, {
         captionStyle: wantCaptions ? (webStyle ?? assStyle) : "none",
         captionsBurned: wantCaptions && !webRenderFailed,
-        reframe: options.vertical ? (trackPlan ? "face-track" : "center-crop") : "none",
+        reframe: audioOnly ? "audiogram" : options.vertical ? (trackPlan ? "face-track" : "center-crop") : "none",
         edit: summarizeEdit(origDur, plan),
         fillersRemoved: fillerHits.length,
         loudnessNormalized: Boolean(options.normalizeLoudness),
@@ -468,7 +489,7 @@ export async function exportClips(
 
     // 时间线 EDL:切点(含跳剪内部剪)交给剪辑软件重链源片精修;失败不拖垮导出
     if (options.timeline && edlClips.length > 0) {
-      const fps = await probeMedia(inputPath).then((m) => (m.fps > 0 ? m.fps : 30)).catch(() => 30);
+      const fps = srcInfo && srcInfo.fps > 0 ? srcInfo.fps : 30;
       const edl = buildEdl({
         title: `${basename(inputPath)} - HotClip`,
         sourceName: basename(inputPath),
