@@ -27,6 +27,7 @@ import {
   LuChevronRight,
   LuPlay,
   LuPalette,
+  LuLanguages,
 } from "react-icons/lu";
 import { useT } from "../i18n/store";
 import { getApi, isElectron } from "../api/provider";
@@ -103,6 +104,10 @@ export function HighlightsView({
   const [titleCard, setTitleCard] = useState(true);
   const [openingHook, setOpeningHook] = useState(true);
   const [normalizeLoudness, setNormalizeLoudness] = useState(true);
+  /** 双语字幕:整句译文烧成主字幕下方的小号翻译轨(默认关,走云端 LLM)。 */
+  const [translate, setTranslate] = useState(false);
+  // 中文源译英,其余译中——短视频出海/引进的两个主方向
+  const targetLang = (transcript.language || "").startsWith("zh") ? "en" : "zh";
   /** 审阅台当前打开的候选 id;null = 关闭。 */
   const [reviewId, setReviewId] = useState<number | null>(null);
   /** 品牌样式模板弹窗。 */
@@ -654,6 +659,17 @@ export function HighlightsView({
                 </button>
                 <button
                   type="button"
+                  title={t("optTranslateHint")}
+                  onClick={() => setTranslate(!translate)}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                    translate ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
+                  }`}
+                >
+                  <LuLanguages className={`h-3.5 w-3.5 ${translate ? "text-ember" : ""}`} />
+                  {t(targetLang === "en" ? "optTranslateEn" : "optTranslateZh")}
+                </button>
+                <button
+                  type="button"
                   title={t("captionStyleHint")}
                   onClick={() =>
                     setCaptionStyle(CAPTION_CYCLE[(CAPTION_CYCLE.indexOf(captionStyle) + 1) % CAPTION_CYCLE.length])
@@ -670,7 +686,7 @@ export function HighlightsView({
                 type="button"
                 disabled={selected.size === 0}
                 onClick={() =>
-                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, cleanFillers, trimUi, titleCard, openingHook, normalizeLoudness, brand: activeBrandStyle(brandState) })
+                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, cleanFillers, trimUi, titleCard, openingHook, normalizeLoudness, brand: activeBrandStyle(brandState), translate: translate ? { targetLang, llm: config } : undefined })
                 }
                 className="btn-flame inline-flex items-center gap-1.5 rounded-lg px-6 py-2.5 text-[14px] font-bold text-white disabled:opacity-40"
               >

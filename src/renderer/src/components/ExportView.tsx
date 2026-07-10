@@ -51,7 +51,9 @@ export function ExportView({
       .exportClips(filePath, clips, {
         ...options,
         transcript:
-          options.captionStyle !== "none" || options.jumpCut || options.cleanFillers ? transcript : undefined,
+          options.captionStyle !== "none" || options.jumpCut || options.cleanFillers || Boolean(options.translate)
+            ? transcript
+            : undefined,
       })
       .then(setResults)
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))

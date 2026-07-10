@@ -282,3 +282,47 @@ describe("buildCaptionAss styles", () => {
     expect(ass).toContain("Dialogue: 0,0:00:04.00,");
   });
 });
+
+describe("双语译文轨 (Trans)", () => {
+  const words = [w("你", 10, 11), w("好", 11, 12)];
+
+  it("译文行渲染为 Trans 样式,时间被 clipStartSec 平移", () => {
+    const ass = buildCaptionAss(words, 10, VERTICAL_LAYOUT, "karaoke", {
+      translation: [{ startSec: 10, endSec: 12, text: "Hello there" }],
+    });
+    expect(ass).toContain("Style: Trans,");
+    expect(ass).toContain(",Trans,,0,0,0,,Hello there");
+    expect(ass).toContain("Dialogue: 0,0:00:00.00,0:00:02.00,Trans");
+    // 译文字号是主字幕的 0.6 倍
+    expect(ass).toContain(`Style: Trans,Source Han Sans SC,${Math.round(VERTICAL_LAYOUT.fontSize * 0.6)},`);
+  });
+
+  it("超长译文按小号阈值手动折行(WrapStyle 2 不自动换行)", () => {
+    const long = "This is a fairly long translated sentence that must wrap onto a second line";
+    const ass = buildCaptionAss(words, 10, VERTICAL_LAYOUT, "karaoke", {
+      translation: [{ startSec: 10, endSec: 12, text: long }],
+    });
+    const line = ass.split("\n").find((l) => l.includes(",Trans,"))!;
+    expect(line).toContain("\\N");
+  });
+
+  it("没传 translation 时不产生 Trans 事件;空文本/零时长行跳过", () => {
+    const plain = buildCaptionAss(words, 10, VERTICAL_LAYOUT, "karaoke", {});
+    expect(plain.split("\n").some((l) => l.startsWith("Dialogue:") && l.includes(",Trans,"))).toBe(false);
+    const ass = buildCaptionAss(words, 10, VERTICAL_LAYOUT, "karaoke", {
+      translation: [
+        { startSec: 10, endSec: 10, text: "zero" },
+        { startSec: 10, endSec: 11, text: "  " },
+      ],
+    });
+    expect(ass.split("\n").some((l) => l.startsWith("Dialogue:") && l.includes(",Trans,"))).toBe(false);
+  });
+
+  it("与卡拉OK主字幕同屏共存(双语两轨都在)", () => {
+    const ass = buildCaptionAss(words, 10, VERTICAL_LAYOUT, "karaoke", {
+      translation: [{ startSec: 10, endSec: 12, text: "Hi" }],
+    });
+    expect(ass).toContain("{\\k");
+    expect(ass).toContain(",Trans,,0,0,0,,Hi");
+  });
+});

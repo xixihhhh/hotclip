@@ -182,6 +182,8 @@ export interface ExportOptions {
   normalizeLoudness?: boolean;
   /** 品牌样式预设(高亮色/字号/位置/水印);缺省走内置默认。 */
   brand?: BrandStyle;
+  /** 双语字幕:整句译文烧成主字幕下方的小号翻译轨;翻译失败静默跳过。 */
+  translate?: { targetLang: string; llm: LlmConfig };
   /** Needed for captions/jump-cut: source of word-level timestamps. */
   transcript?: Transcript;
 }

@@ -21,8 +21,9 @@ import { readTranscriptCache, writeTranscriptCache } from "@core/transcribe/cach
 import { isModelInstalled, ensureModel, SENSEVOICE_MODEL, PARAFORMER_MODEL, FIRERED_MODEL, SEGMENTATION_MODEL, SPEAKER_EMBEDDING_MODEL } from "@core/models";
 import { runDiarization, labelTranscript } from "@core/diarize";
 import { ASR_CATALOG } from "../shared/asr-catalog";
-import { detectHighlights } from "@core/highlight/detect";
+import { detectHighlights, chatComplete } from "@core/highlight/detect";
 import { collectVisionSignal } from "@core/highlight/vision";
+import { collectClipSegments, translateSegments, clipTranslationLines } from "@core/translate";
 import { collectSignals } from "@core/signals";
 import { exportClips, sanitizeFilename } from "@core/export";
 import { sliceWords } from "@core/subtitle";
@@ -347,6 +348,18 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
   const allWords = opts.transcript
     ? opts.transcript.segments.flatMap((s) => s.words).sort((a, b) => a.startSec - b.startSec)
     : null;
+  // 双语字幕:导出前把所有选中切片覆盖的整句一次性批量翻译好(fail-open——
+  // 翻译失败/端点不可用只是没有译文轨,绝不拖垮导出)。
+  let translations: Map<number, string> | null = null;
+  let translatable: ReturnType<typeof collectClipSegments> = [];
+  const tr = opts.translate;
+  if (
+    tr && typeof tr.targetLang === "string" && tr.targetLang.trim() &&
+    tr.llm?.baseUrl && tr.llm?.model && opts.transcript
+  ) {
+    translatable = collectClipSegments(opts.transcript, list);
+    translations = await translateSegments(translatable, tr.targetLang, tr.llm, chatComplete).catch(() => null);
+  }
   return exportClips(
     filePath,
     list.map((c) => ({
@@ -357,6 +370,10 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       snapContext: allWords ? snapContextAround(allWords, c.startSec, c.endSec) : undefined,
       manualBounds: c.manualBounds === true,
       words: needWords ? sliceWords(opts.transcript!, c.startSec, c.endSec) : undefined,
+      // 多留 1.5s 余量:导出时镜头吸附最多外扩 0.8s,夹取在 export 里做
+      translation: translations
+        ? clipTranslationLines(translatable, translations, c.startSec - 1.5, c.endSec + 1.5)
+        : undefined,
       keywords: c.keywords,
       meta: {
         hook: c.hook,
@@ -382,6 +399,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       faceTrack: true,
       snapToShots: true,
       brand: sanitizeBrand(opts.brand),
+      translateLang: translations ? opts.translate!.targetLang : undefined,
       modelsRoot: modelsRoot(),
       fontsDir,
       renderOverlay: renderCaptionOverlay,

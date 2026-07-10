@@ -298,6 +298,11 @@ export interface CaptionOptions {
   openingHook?: { text: string; durationSec: number };
   /** 品牌主高亮色 "#RRGGBB"(卡拉OK点亮/关键词强调/钩子文字);缺省火焰橙。 */
   highlightHex?: string;
+  /**
+   * 双语字幕的译文行(整句级),时间基与 words 一致(clipStartSec 同样平移)。
+   * 渲染为主字幕下方的小号 Trans 轨。
+   */
+  translation?: Array<{ startSec: number; endSec: number; text: string }>;
 }
 
 /** Title block sits below platform top overlays (~8% of height) with air. */
@@ -308,6 +313,16 @@ function titleMarginV(layout: AssLayout): number {
 /** Opening hook sits in the upper third — below the title, clear of center faces. */
 function hookMarginV(layout: AssLayout): number {
   return Math.round(layout.playResY * 0.3);
+}
+
+/** 译文轨字号:主字幕的 0.6 倍——双语字幕的主从层级。 */
+export function transFontSize(layout: AssLayout): number {
+  return Math.round(layout.fontSize * 0.6);
+}
+
+/** 译文轨位置:主字幕块正下方(marginV 更小 = 更靠底边),保底不贴边。 */
+export function transMarginV(layout: AssLayout): number {
+  return Math.max(14, layout.marginV - Math.round(transFontSize(layout) * 1.7));
 }
 
 function assHeader(style: CaptionStyle, layout: AssLayout, fontName: string, highlightHex?: string): string[] {
@@ -333,6 +348,8 @@ function assHeader(style: CaptionStyle, layout: AssLayout, fontName: string, hig
     `Style: Title,${fontName},${titleSize},${WHITE_COLOR},${WHITE_COLOR},&H73000000,&H73000000,-1,0,0,0,100,100,0,0,3,12,0,8,${layout.marginH},${layout.marginH},${titleMarginV(layout)},1`,
     // opening hook: ember text on a dark plate, big, upper-third (Alignment 8 + high MarginV)
     `Style: Hook,${fontName},${hookSize},${highlight},${WHITE_COLOR},&H73000000,&H73000000,-1,0,0,0,100,100,0,0,3,14,0,8,${layout.marginH},${layout.marginH},${hookMarginV(layout)},1`,
+    // 双语译文轨:小号白字,主字幕块正下方(整句级,不参与卡拉OK)
+    `Style: Trans,${fontName},${transFontSize(layout)},${WHITE_COLOR},${WHITE_COLOR},${OUTLINE_COLOR},&H7F000000,-1,0,0,0,100,100,0,0,1,${Math.max(2, layout.outline - 1)},0,2,${layout.marginH},${layout.marginH},${transMarginV(layout)},1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -429,6 +446,19 @@ export function buildCaptionAss(
     events.push(
       `Dialogue: 2,${toAssTime(0)},${toAssTime(hk.durationSec)},Hook,,0,0,0,,{\\fad(220,300)}${wrapTitle(hk.text)}`
     );
+  }
+
+  // 双语译文轨:整句级 Dialogue,时间与 words 同基(同样被 clipStartSec 平移);
+  // WrapStyle=2 不自动换行,译文行手动折行(阈值按小号字换算)
+  if (options.translation) {
+    const transUnits = Math.round(layout.maxLineUnits / 0.6);
+    for (const line of options.translation) {
+      if (!line.text.trim() || line.endSec <= line.startSec) continue;
+      const start = Math.max(0, line.startSec - clipStartSec);
+      const end = Math.max(start, line.endSec - clipStartSec);
+      if (end <= start) continue;
+      events.push(`Dialogue: 0,${toAssTime(start)},${toAssTime(end)},Trans,,0,0,0,,${wrapTitle(line.text, transUnits)}`);
+    }
   }
 
   const forcedBreaks = options.forcedBreaks ?? [];

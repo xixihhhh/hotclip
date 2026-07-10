@@ -13,6 +13,7 @@ import { resolveFfmpegPath } from "./binaries";
 const execFileAsync = promisify(execFile);
 import { cutClip, cutJumpClip } from "./cut";
 import { computeJumpCut } from "./gaps";
+import { clampTranslationLines, remapTranslationLines, type TranslationLine } from "./translate";
 import { findFillerWords, dropFillerWords, fillerCutSpans, type FillerHit } from "./fillers";
 import { extractPeaks } from "./audio-peaks";
 import { detectUiCrop, type UiCrop } from "./uicrop";
@@ -38,6 +39,8 @@ export interface ExportClipSpec {
   snapContext?: { prevWordEndSec: number | null; nextWordStartSec: number | null };
   /** 用户在审阅台手动定过切点:跳过镜头吸附,机器不再改人的决定。 */
   manualBounds?: boolean;
+  /** 双语字幕的整句译文行(源片绝对时间,主进程预先翻译好传入)。 */
+  translation?: TranslationLine[];
   /** Evidence-chain fields carried into clips.json for CMS/matrix pipelines. */
   meta?: {
     hook: string;
@@ -88,6 +91,8 @@ export interface ClipRenderOutcome {
   loudnessNormalized: boolean;
   /** True when the AI teaser was burned in as an opening hook. */
   openingHookBurned: boolean;
+  /** 实际烧进画面的译文行数;没开双语/翻译失败为 0。 */
+  translatedLines: number;
   /** 切点吸附到镜头边界的实际位移(秒);没吸附(或检测失败)为 null。 */
   shotSnap: { startDeltaSec: number; endDeltaSec: number } | null;
 }
@@ -121,6 +126,8 @@ export interface ExportRenderOptions {
   snapToShots?: boolean;
   /** 品牌样式预设(高亮色/字号/位置/水印);缺省走内置默认,输出不变。 */
   brand?: BrandStyle;
+  /** 双语字幕的目标语言(回执用;译文本身随 ExportClipSpec.translation 传入)。 */
+  translateLang?: string;
 }
 
 export interface ExportedClip {
@@ -167,7 +174,9 @@ export async function exportClips(
 ): Promise<ExportedClip[]> {
   await mkdir(outDir, { recursive: true });
   // ASS files live in a throwaway temp dir for the duration of the run.
-  const needAss = Boolean(options.captionStyle) || Boolean(options.titleCard) || Boolean(options.openingHook);
+  const needAss =
+    Boolean(options.captionStyle) || Boolean(options.titleCard) || Boolean(options.openingHook) ||
+    clips.some((c) => (c.translation?.length ?? 0) > 0);
   const assDir = needAss ? await mkdtemp(join(tmpdir(), "hotclip-ass-")) : null;
   // 品牌预设:字号/位置作用于布局,高亮色传给字幕构建,水印挂进 filter 链
   const layout = applyBrandToLayout(options.vertical ? VERTICAL_LAYOUT : HORIZONTAL_LAYOUT, options.brand);
@@ -269,7 +278,13 @@ export async function exportClips(
       const openingHook = options.openingHook && teaser
         ? { text: teaser, durationSec: Math.min(OPENING_HOOK_SEC, clipDuration) }
         : undefined;
-      if (assDir && needAss && ((wantCaptions && !webStyle) || options.titleCard || openingHook)) {
+      // 双语译文行:先夹进(吸附后的)最终切片,跳剪时再映射到压缩时间轴。
+      // 时间基与 captionWords 保持一致,buildCaptionAss 用同一个 captionShift 平移。
+      let transLines = clip.translation && clip.translation.length > 0
+        ? clampTranslationLines(clip.translation, clip.startSec, clip.endSec)
+        : [];
+      if (plan && transLines.length > 0) transLines = remapTranslationLines(transLines, plan.segments);
+      if (assDir && needAss && ((wantCaptions && !webStyle) || options.titleCard || openingHook || transLines.length > 0)) {
         subtitlePath = join(assDir, `clip-${clip.id}.ass`);
         const ass = buildCaptionAss(
           wantCaptions && !webStyle ? captionWords! : [],
@@ -282,6 +297,7 @@ export async function exportClips(
             titleCard: options.titleCard ? { text: clip.title, durationSec: clipDuration } : undefined,
             openingHook,
             highlightHex: options.brand?.highlightColor,
+            translation: transLines.length > 0 ? transLines : undefined,
           }
         );
         await writeFile(subtitlePath, ass, "utf8");
@@ -405,6 +421,7 @@ export async function exportClips(
         fillersRemoved: fillerHits.length,
         loudnessNormalized: Boolean(options.normalizeLoudness),
         openingHookBurned: Boolean(openingHook),
+        translatedLines: transLines.length,
         shotSnap,
       });
       onProgress?.({ current: i + 1, total: clips.length, clipId: clip.id, stage: "done" });
@@ -424,6 +441,8 @@ export async function exportClips(
         openingHook: Boolean(options.openingHook),
         normalizeLoudness: Boolean(options.normalizeLoudness),
         snapToShots: Boolean(options.snapToShots),
+        // 双语字幕回执:目标语言;实际每条烧了几行见 clips[].render.translatedLines
+        translateLang: options.translateLang ?? null,
         // 品牌预设回执:用了什么色/档位/水印,矩阵管线可核对品牌一致性
         brand: options.brand
           ? {
