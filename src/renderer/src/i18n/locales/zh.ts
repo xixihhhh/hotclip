@@ -133,6 +133,8 @@ export const zh = {
     optSrtHint: "每条切片旁落同名 .srt 字幕文件——平台原生字幕上传(B站/YouTube)、剪辑器二次精修都用得上;跳剪/剪口头禅后的时间轴已对齐,开了双语还带译文行,纯本地零成本",
     optTimeline: "时间线 EDL",
     optTimelineHint: "输出目录落 timeline.edl(CMX3600)——AI 定的切点(含跳剪的每一刀)导入 DaVinci/Premiere 重链源片继续精修;AI 粗剪,最后一刀永远可以是你的",
+    optAigc: "AIGC 标识",
+    optAigcHint: "按《人工智能生成合成内容标识办法》打标:画面左上角「AI 生成」显式标识 + 文件元数据隐式标识(属性/工具/内容编号)——发布平台要求 AIGC 声明时开启",
     optDiarize: "多人对谈",
     optDiarizeHint: "标注谁在说话:让 AI 按说话人挑段、避免把两个人的话拼成断章取义,字幕也按人上色(首次需下载约47MB说话人模型)",
     optTitleCard: "标题贴片",

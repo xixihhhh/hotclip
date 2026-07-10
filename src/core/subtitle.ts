@@ -303,6 +303,8 @@ export interface CaptionOptions {
    * 渲染为主字幕下方的小号 Trans 轨。
    */
   translation?: Array<{ startSec: number; endSec: number; text: string }>;
+  /** AIGC 显式标识:左上角小字「AI 生成」全程可见(《标识办法》显式标识)。 */
+  aigcBadge?: { durationSec: number };
 }
 
 /** Title block sits below platform top overlays (~8% of height) with air. */
@@ -350,6 +352,8 @@ function assHeader(style: CaptionStyle, layout: AssLayout, fontName: string, hig
     `Style: Hook,${fontName},${hookSize},${highlight},${WHITE_COLOR},&H73000000,&H73000000,-1,0,0,0,100,100,0,0,3,14,0,8,${layout.marginH},${layout.marginH},${hookMarginV(layout)},1`,
     // 双语译文轨:小号白字,主字幕块正下方(整句级,不参与卡拉OK)
     `Style: Trans,${fontName},${transFontSize(layout)},${WHITE_COLOR},${WHITE_COLOR},${OUTLINE_COLOR},&H7F000000,-1,0,0,0,100,100,0,0,1,${Math.max(2, layout.outline - 1)},0,2,${layout.marginH},${layout.marginH},${transMarginV(layout)},1`,
+    // AIGC 显式标识:左上角半透明小字(Alignment 7;避开右上角默认水印位)
+    `Style: Aigc,${fontName},${Math.round(layout.fontSize * 0.42)},&H55FFFFFF,${WHITE_COLOR},&H55000000,&H7F000000,0,0,0,0,100,100,0,0,1,2,0,7,${Math.round(layout.marginH * 0.7)},${layout.marginH},${Math.round(layout.playResY * 0.035)},1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -446,6 +450,11 @@ export function buildCaptionAss(
     events.push(
       `Dialogue: 2,${toAssTime(0)},${toAssTime(hk.durationSec)},Hook,,0,0,0,,{\\fad(220,300)}${wrapTitle(hk.text)}`
     );
+  }
+
+  // AIGC 显式标识:左上角全程小字(layer 3,压在所有轨之上)
+  if (options.aigcBadge && options.aigcBadge.durationSec > 0) {
+    events.push(`Dialogue: 3,${toAssTime(0)},${toAssTime(options.aigcBadge.durationSec)},Aigc,,0,0,0,,AI 生成`);
   }
 
   // 双语译文轨:整句级 Dialogue,时间与 words 同基(同样被 clipStartSec 平移);

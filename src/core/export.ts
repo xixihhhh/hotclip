@@ -138,6 +138,8 @@ export interface ExportRenderOptions {
   subtitleFile?: boolean;
   /** 输出目录落 timeline.edl(CMX3600)——切点交给剪辑软件重链源片精修。 */
   timeline?: boolean;
+  /** AIGC 标识:左上角「AI 生成」显式标识 + 容器元数据隐式标识(《标识办法》)。 */
+  aigcLabel?: boolean;
 }
 
 export interface ExportedClip {
@@ -186,7 +188,7 @@ export async function exportClips(
   // ASS files live in a throwaway temp dir for the duration of the run.
   const needAss =
     Boolean(options.captionStyle) || Boolean(options.titleCard) || Boolean(options.openingHook) ||
-    clips.some((c) => (c.translation?.length ?? 0) > 0);
+    Boolean(options.aigcLabel) || clips.some((c) => (c.translation?.length ?? 0) > 0);
   const assDir = needAss ? await mkdtemp(join(tmpdir(), "hotclip-ass-")) : null;
   // 品牌预设:字号/位置作用于布局,高亮色传给字幕构建,水印挂进 filter 链
   const layout = applyBrandToLayout(options.vertical ? VERTICAL_LAYOUT : HORIZONTAL_LAYOUT, options.brand);
@@ -301,7 +303,7 @@ export async function exportClips(
         ? clampTranslationLines(clip.translation, clip.startSec, clip.endSec)
         : [];
       if (plan && transLines.length > 0) transLines = remapTranslationLines(transLines, plan.segments);
-      if (assDir && needAss && ((wantCaptions && !webStyle) || options.titleCard || openingHook || transLines.length > 0)) {
+      if (assDir && needAss && ((wantCaptions && !webStyle) || options.titleCard || openingHook || transLines.length > 0 || options.aigcLabel)) {
         subtitlePath = join(assDir, `clip-${clip.id}.ass`);
         const ass = buildCaptionAss(
           wantCaptions && !webStyle ? captionWords! : [],
@@ -315,6 +317,7 @@ export async function exportClips(
             openingHook,
             highlightHex: options.brand?.highlightColor,
             translation: transLines.length > 0 ? transLines : undefined,
+            aigcBadge: options.aigcLabel ? { durationSec: clipDuration } : undefined,
           }
         );
         await writeFile(subtitlePath, ass, "utf8");
@@ -353,8 +356,12 @@ export async function exportClips(
       let webRenderFailed = false;
       // Web captions: cut to a base file first, then composite words on top.
       const cutTarget = webStyle ? outPath.replace(/\.mp4$/, ".base.mp4") : outPath;
+      // AIGC 隐式标识:内容属性 + 服务者 + 内容编号写进容器元数据(《标识办法》)
+      const aigcMeta = options.aigcLabel
+        ? { comment: `AIGC=true; Label=AI-assisted-editing; Tool=HotClip; ContentId=${basename(outPath)}` }
+        : undefined;
       const cutOptions = trackPlan
-        ? { trackPlan, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, watermark }
+        ? { trackPlan, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, watermark, metadata: aigcMeta }
         : {
             uiCrop,
             vertical: options.vertical,
@@ -362,6 +369,7 @@ export async function exportClips(
             fontsDir: subtitlePath ? options.fontsDir : undefined,
             normalizeLoudness: options.normalizeLoudness,
             watermark,
+            metadata: aigcMeta,
           };
       if (audioOnly) {
         // audiogram:深色底+品牌色波形合成画面,单段/跳剪统一(波形随剪好的音频生成)
@@ -376,6 +384,7 @@ export async function exportClips(
             fontsDir: subtitlePath ? options.fontsDir : undefined,
             normalizeLoudness: options.normalizeLoudness,
             watermark,
+            metadata: aigcMeta,
           }
         );
       } else if (plan && plan.segments.length > 1) {
@@ -517,6 +526,7 @@ export async function exportClips(
         translateLang: options.translateLang ?? null,
         subtitleFile: Boolean(options.subtitleFile),
         timeline: Boolean(options.timeline),
+        aigcLabel: Boolean(options.aigcLabel),
         // 品牌预设回执:用了什么色/档位/水印,矩阵管线可核对品牌一致性
         brand: options.brand
           ? {

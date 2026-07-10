@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCutArgs, buildJumpCutArgs, buildVideoFilters, escapeFilterPath, LOUDNORM_FILTER, LOUDNORM_OUT_RATE } from "../cut";
+import { buildCutArgs, buildJumpCutArgs, buildVideoFilters, escapeFilterPath, metadataArgs, LOUDNORM_FILTER, LOUDNORM_OUT_RATE } from "../cut";
 
 describe("buildCutArgs", () => {
   it("accurate mode: fast seek before -i, re-encode, faststart", () => {
@@ -119,5 +119,22 @@ describe("loudness normalization", () => {
     ];
     expect(fc).toContain(":a=1[vout][aout]");
     expect(fc).not.toContain("loudnorm");
+  });
+});
+
+describe("metadataArgs (AIGC 隐式标识)", () => {
+  it("k=v 对展开;空缺省为空数组", () => {
+    expect(metadataArgs({ comment: "AIGC=true; Tool=HotClip" })).toEqual(["-metadata", "comment=AIGC=true; Tool=HotClip"]);
+    expect(metadataArgs(undefined)).toEqual([]);
+  });
+
+  it("三条出片路径都带 -metadata", () => {
+    const meta = { comment: "AIGC=true" };
+    const cut = buildCutArgs("/i.mp4", "/o.mp4", 0, 5, { metadata: meta, vertical: true });
+    expect(cut.join(" ")).toContain("-metadata comment=AIGC=true");
+    const jump = buildJumpCutArgs("/i.mp4", "/o.mp4", 0, [{ startSec: 0, endSec: 2 }, { startSec: 3, endSec: 5 }], { metadata: meta });
+    expect(jump.join(" ")).toContain("-metadata comment=AIGC=true");
+    const copy = buildCutArgs("/i.mp4", "/o.mp4", 0, 5, { metadata: meta, mode: "copy" });
+    expect(copy.join(" ")).toContain("-metadata comment=AIGC=true");
   });
 });

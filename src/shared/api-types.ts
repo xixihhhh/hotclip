@@ -206,6 +206,8 @@ export interface ExportOptions {
   subtitleFile?: boolean;
   /** 输出目录落 timeline.edl——AI 切点交给 DaVinci/Premiere 重链源片精修。 */
   timeline?: boolean;
+  /** AIGC 标识:画面显式标识 + 元数据隐式标识(发布平台要求 AIGC 声明时开启)。 */
+  aigcLabel?: boolean;
   /** Needed for captions/jump-cut: source of word-level timestamps. */
   transcript?: Transcript;
 }

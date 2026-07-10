@@ -56,6 +56,13 @@ export interface CutOptions {
   normalizeLoudness?: boolean;
   /** 品牌水印:PNG 烧进画面一角(在字幕之上)。 */
   watermark?: WatermarkSpec;
+  /** 容器元数据(如 AIGC 隐式标识);copy 模式同样写入。 */
+  metadata?: Record<string, string>;
+}
+
+/** -metadata k=v 参数对(纯函数,cut 与 audiogram 共用)。 */
+export function metadataArgs(metadata?: Record<string, string>): string[] {
+  return Object.entries(metadata ?? {}).flatMap(([k, v]) => ["-metadata", `${k}=${v}`]);
 }
 
 /** 水印参数(widthPx 由调用方按输出宽度算好传入)。 */
@@ -164,7 +171,7 @@ export function buildCutArgs(
   const common = ["-hide_banner", "-y", "-ss", toFfmpegTime(start), "-i", inputPath, "-t", toFfmpegTime(duration)];
 
   if (mode === "copy") {
-    return [...common, "-c", "copy", "-avoid_negative_ts", "make_zero", outputPath];
+    return [...common, "-c", "copy", "-avoid_negative_ts", "make_zero", ...metadataArgs(options.metadata), outputPath];
   }
 
   const crf = Number.isFinite(options.crf) ? String(options.crf) : "18";
@@ -180,6 +187,7 @@ export function buildCutArgs(
     "-c:a", "aac",
     "-b:a", "192k",
     "-movflags", "+faststart",
+    ...metadataArgs(options.metadata),
     outputPath,
   ];
 }
@@ -248,6 +256,7 @@ export function buildJumpCutArgs(
     "-c:a", "aac",
     "-b:a", "192k",
     "-movflags", "+faststart",
+    ...metadataArgs(options.metadata),
     outputPath,
   ];
 }

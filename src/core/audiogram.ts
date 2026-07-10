@@ -11,7 +11,7 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { resolveFfmpegPath } from "./binaries";
-import { escapeFilterPath, watermarkStages, type WatermarkSpec } from "./cut";
+import { escapeFilterPath, watermarkStages, metadataArgs, type WatermarkSpec } from "./cut";
 import { isValidHex } from "./brand";
 
 const execFileAsync = promisify(execFile);
@@ -55,6 +55,8 @@ export interface AudiogramOptions {
   fontsDir?: string;
   normalizeLoudness?: boolean;
   watermark?: WatermarkSpec;
+  /** 容器元数据(如 AIGC 隐式标识)。 */
+  metadata?: Record<string, string>;
   crf?: number;
   preset?: string;
 }
@@ -132,6 +134,7 @@ export function buildAudiogramArgs(
     "-c:a", "aac",
     "-b:a", "192k",
     "-movflags", "+faststart",
+    ...metadataArgs(options.metadata),
     outputPath,
   ];
 }

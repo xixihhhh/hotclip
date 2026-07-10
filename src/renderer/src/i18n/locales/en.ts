@@ -151,6 +151,8 @@ export const en = {
     optSrtHint: "Drop a same-name .srt next to each clip — for native platform captions (YouTube/bilibili) and editor fine-tuning; timestamps already reflect jump-cut/filler removal, and bilingual mode includes the translated line. Local, zero cost",
     optTimeline: "EDL timeline",
     optTimelineHint: "Write a timeline.edl (CMX3600) to the output dir — import into DaVinci/Premiere and relink the source to keep refining the AI's cut points (every jump-cut splice included); AI does the rough cut, the final cut can always be yours",
+    optAigc: "AIGC label",
+    optAigcHint: "Label per China's AIGC labeling measures (and platform AI-disclosure rules): a visible \"AI 生成\" badge in the top-left corner plus implicit metadata in the file (attribute/tool/content id) — enable when your platform requires AI disclosure",
     optDiarize: "Multi-speaker",
     optDiarizeHint: "Label who is speaking so the AI picks per-speaker clips and avoids cross-speaker quote-mining; captions color by speaker (first use downloads ~47MB speaker models)",
     optTitleCard: "Title card",

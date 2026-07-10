@@ -326,3 +326,20 @@ describe("双语译文轨 (Trans)", () => {
     expect(ass).toContain(",Trans,,0,0,0,,Hi");
   });
 });
+
+describe("AIGC 显式标识 (Aigc badge)", () => {
+  it("开启时渲染左上角全程小字与专属样式", () => {
+    const ass = buildCaptionAss([], 0, VERTICAL_LAYOUT, "karaoke", { aigcBadge: { durationSec: 12.5 } });
+    expect(ass).toContain("Style: Aigc,");
+    expect(ass).toContain("Dialogue: 3,0:00:00.00,0:00:12.50,Aigc,,0,0,0,,AI 生成");
+    // 左上对齐(Alignment 7)且字号明显小于主字幕
+    const style = ass.split("\n").find((l) => l.startsWith("Style: Aigc,"))!;
+    expect(style.split(",")[18]).toBe("7");
+    expect(Number(style.split(",")[2])).toBeLessThan(VERTICAL_LAYOUT.fontSize / 2);
+  });
+
+  it("未开启/零时长不产生事件", () => {
+    expect(buildCaptionAss([], 0, VERTICAL_LAYOUT, "karaoke", {})).not.toContain(",Aigc,");
+    expect(buildCaptionAss([], 0, VERTICAL_LAYOUT, "karaoke", { aigcBadge: { durationSec: 0 } })).not.toContain("Dialogue: 3");
+  });
+});

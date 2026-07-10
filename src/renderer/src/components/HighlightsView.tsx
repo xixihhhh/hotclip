@@ -32,6 +32,7 @@ import {
   LuFileText,
   LuPencil,
   LuFilm,
+  LuBadgeCheck,
 } from "react-icons/lu";
 import { useT } from "../i18n/store";
 import { getApi, isElectron } from "../api/provider";
@@ -105,7 +106,7 @@ export function HighlightsView({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   // 出片偏好持久化:上次的开关组合下次直接生效(解构保持下方 JSX 引用不变)
   const { prefs, setPref } = useRenderPrefs();
-  const { vertical, captionStyle, jumpCut, cleanFillers, trimUi, titleCard, openingHook, normalizeLoudness, translate, publishCopy, subtitleFile, timeline } = prefs;
+  const { vertical, captionStyle, jumpCut, cleanFillers, trimUi, titleCard, openingHook, normalizeLoudness, translate, publishCopy, subtitleFile, timeline, aigcLabel } = prefs;
   const [diarize, setDiarize] = useState(false);
   // 中文源译英,其余译中——短视频出海/引进的两个主方向
   const targetLang = (transcript.language || "").startsWith("zh") ? "en" : "zh";
@@ -780,6 +781,17 @@ export function HighlightsView({
                 </button>
                 <button
                   type="button"
+                  title={t("optAigcHint")}
+                  onClick={() => setPref({ aigcLabel: !aigcLabel })}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                    aigcLabel ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
+                  }`}
+                >
+                  <LuBadgeCheck className={`h-3.5 w-3.5 ${aigcLabel ? "text-ember" : ""}`} />
+                  {t("optAigc")}
+                </button>
+                <button
+                  type="button"
                   title={t("captionStyleHint")}
                   onClick={() =>
                     setPref({ captionStyle: CAPTION_CYCLE[(CAPTION_CYCLE.indexOf(captionStyle) + 1) % CAPTION_CYCLE.length] })
@@ -796,7 +808,7 @@ export function HighlightsView({
                 type="button"
                 disabled={selected.size === 0}
                 onClick={() =>
-                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, cleanFillers, trimUi, titleCard, openingHook, normalizeLoudness, brand: activeBrandStyle(brandState), translate: translate ? { targetLang, llm: config } : undefined, publishCopy: publishCopy ? { llm: config } : undefined, subtitleFile, timeline })
+                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, cleanFillers, trimUi, titleCard, openingHook, normalizeLoudness, brand: activeBrandStyle(brandState), translate: translate ? { targetLang, llm: config } : undefined, publishCopy: publishCopy ? { llm: config } : undefined, subtitleFile, timeline, aigcLabel })
                 }
                 className="btn-flame inline-flex items-center gap-1.5 rounded-lg px-6 py-2.5 text-[14px] font-bold text-white disabled:opacity-40"
               >

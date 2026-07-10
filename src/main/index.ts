@@ -448,6 +448,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       translateLang: translations ? opts.translate!.targetLang : undefined,
       subtitleFile: Boolean(opts.subtitleFile),
       timeline: Boolean(opts.timeline),
+      aigcLabel: Boolean(opts.aigcLabel),
       modelsRoot: modelsRoot(),
       fontsDir,
       renderOverlay: renderCaptionOverlay,

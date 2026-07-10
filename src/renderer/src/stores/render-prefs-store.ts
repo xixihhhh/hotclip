@@ -21,6 +21,7 @@ export interface RenderPrefs {
   publishCopy: boolean;
   subtitleFile: boolean;
   timeline: boolean;
+  aigcLabel: boolean;
   clipLength: ClipLength;
 }
 
@@ -38,6 +39,7 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   publishCopy: false,
   subtitleFile: false,
   timeline: false,
+  aigcLabel: false,
   clipLength: "standard",
 };
 
