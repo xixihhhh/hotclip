@@ -15,6 +15,7 @@ import { cutClip, cutJumpClip } from "./cut";
 import { computeJumpCut } from "./gaps";
 import { clampTranslationLines, remapTranslationLines, type TranslationLine } from "./translate";
 import { postTextFile, type PublishCopy } from "./publish";
+import { buildSrt, srtLinesFromWords } from "./srt";
 import { findFillerWords, dropFillerWords, fillerCutSpans, type FillerHit } from "./fillers";
 import { extractPeaks } from "./audio-peaks";
 import { detectUiCrop, type UiCrop } from "./uicrop";
@@ -131,6 +132,8 @@ export interface ExportRenderOptions {
   brand?: BrandStyle;
   /** 双语字幕的目标语言(回执用;译文本身随 ExportClipSpec.translation 传入)。 */
   translateLang?: string;
+  /** 每条切片旁落同名 .srt 字幕文件(平台字幕上传/二次精修用)。 */
+  subtitleFile?: boolean;
 }
 
 export interface ExportedClip {
@@ -404,6 +407,25 @@ export async function exportClips(
         { maxBuffer: 8 * 1024 * 1024 }
       ).then(() => true, () => false);
 
+      // SRT 字幕文件:与烧录字幕同一套词/断行/时间基(跳剪重映射后),
+      // 平台原生字幕上传与二次精修用
+      if (options.subtitleFile && wantCaptions) {
+        const relWords = captionWords!.map((w) => ({
+          text: w.text,
+          startSec: w.startSec - captionShift,
+          endSec: w.endSec - captionShift,
+        }));
+        const relTrans = transLines.map((l) => ({
+          startSec: l.startSec - captionShift,
+          endSec: l.endSec - captionShift,
+          text: l.text,
+        }));
+        const srt = buildSrt(srtLinesFromWords(relWords, plan?.breaks ?? [], relTrans));
+        if (srt.trim()) {
+          await writeFile(outPath.replace(/\.mp4$/, ".srt"), srt, "utf8").catch(() => {});
+        }
+      }
+
       // 发布文案:mp4 旁落同名 .post.txt(标题+话题+简介,直接全选复制)
       if (clip.publish) {
         await writeFile(outPath.replace(/\.mp4$/, ".post.txt"), postTextFile(clip.publish), "utf8").catch(() => {});
@@ -451,6 +473,7 @@ export async function exportClips(
         snapToShots: Boolean(options.snapToShots),
         // 双语字幕回执:目标语言;实际每条烧了几行见 clips[].render.translatedLines
         translateLang: options.translateLang ?? null,
+        subtitleFile: Boolean(options.subtitleFile),
         // 品牌预设回执:用了什么色/档位/水印,矩阵管线可核对品牌一致性
         brand: options.brand
           ? {

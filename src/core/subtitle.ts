@@ -244,7 +244,7 @@ function escapeAssText(text: string): string {
 }
 
 /** Latin↔latin token boundaries need a space; CJK joins bare. */
-function needsSpaceAfter(current: string, next: string | undefined): boolean {
+export function needsSpaceAfter(current: string, next: string | undefined): boolean {
   if (!next) return false;
   return !CJK_RE.test(current.slice(-1)) && !CJK_RE.test(next.charAt(0));
 }

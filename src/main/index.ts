@@ -443,6 +443,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       snapToShots: true,
       brand: sanitizeBrand(opts.brand),
       translateLang: translations ? opts.translate!.targetLang : undefined,
+      subtitleFile: Boolean(opts.subtitleFile),
       modelsRoot: modelsRoot(),
       fontsDir,
       renderOverlay: renderCaptionOverlay,

@@ -199,6 +199,8 @@ export interface ExportOptions {
   translate?: { targetLang: string; llm: LlmConfig };
   /** 发布文案:每条切片生成标题+话题+简介,落 .post.txt 与 clips.json;失败静默跳过。 */
   publishCopy?: { llm: LlmConfig };
+  /** 每条切片旁落同名 .srt 字幕文件(平台字幕上传/二次精修;双语时含译文行)。 */
+  subtitleFile?: boolean;
   /** Needed for captions/jump-cut: source of word-level timestamps. */
   transcript?: Transcript;
 }

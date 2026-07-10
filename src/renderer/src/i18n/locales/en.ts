@@ -142,6 +142,8 @@ export const en = {
     optTranslateHint: "Your configured LLM translates each sentence and burns it in as a smaller second caption track below the main one — bilingual clips for going global in one step; translation failures are silently skipped",
     optPublish: "Post copy",
     optPublishHint: "Generate a post title + hashtags + description for every clip, saved as a .post.txt next to each mp4 for copy-paste — never stare at an empty caption box again; failures are silently skipped",
+    optSrt: "SRT file",
+    optSrtHint: "Drop a same-name .srt next to each clip — for native platform captions (YouTube/bilibili) and editor fine-tuning; timestamps already reflect jump-cut/filler removal, and bilingual mode includes the translated line. Local, zero cost",
     optDiarize: "Multi-speaker",
     optDiarizeHint: "Label who is speaking so the AI picks per-speaker clips and avoids cross-speaker quote-mining; captions color by speaker (first use downloads ~47MB speaker models)",
     optTitleCard: "Title card",

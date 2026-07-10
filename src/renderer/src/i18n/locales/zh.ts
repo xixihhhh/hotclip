@@ -129,6 +129,8 @@ export const zh = {
     optTranslateHint: "用你配置的 LLM 把每句话整句翻译,烧成主字幕下方的小号译文轨——出海双语片一步到位;翻译失败自动跳过,不影响出片",
     optPublish: "发布文案",
     optPublishHint: "为每条切片生成发布标题+话题标签+简介,落在 mp4 旁的 .post.txt 里直接复制粘贴——发布框里写什么不用再想;生成失败自动跳过,不影响出片",
+    optSrt: "SRT 字幕",
+    optSrtHint: "每条切片旁落同名 .srt 字幕文件——平台原生字幕上传(B站/YouTube)、剪辑器二次精修都用得上;跳剪/剪口头禅后的时间轴已对齐,开了双语还带译文行,纯本地零成本",
     optDiarize: "多人对谈",
     optDiarizeHint: "标注谁在说话:让 AI 按说话人挑段、避免把两个人的话拼成断章取义,字幕也按人上色(首次需下载约47MB说话人模型)",
     optTitleCard: "标题贴片",
