@@ -191,6 +191,8 @@ export interface ExportOptions {
   brand?: BrandStyle;
   /** 双语字幕:整句译文烧成主字幕下方的小号翻译轨;翻译失败静默跳过。 */
   translate?: { targetLang: string; llm: LlmConfig };
+  /** 发布文案:每条切片生成标题+话题+简介,落 .post.txt 与 clips.json;失败静默跳过。 */
+  publishCopy?: { llm: LlmConfig };
   /** Needed for captions/jump-cut: source of word-level timestamps. */
   transcript?: Transcript;
 }

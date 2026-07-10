@@ -25,6 +25,7 @@ import { detectHighlights, chatComplete } from "@core/highlight/detect";
 import { collectVisionSignal } from "@core/highlight/vision";
 import { collectEmotionSignal } from "@core/emotion";
 import { collectClipSegments, translateSegments, clipTranslationLines } from "@core/translate";
+import { generatePublishCopies } from "@core/publish";
 import { collectSignals } from "@core/signals";
 import { exportClips, sanitizeFilename } from "@core/export";
 import { sliceWords } from "@core/subtitle";
@@ -374,6 +375,14 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
     translatable = collectClipSegments(opts.transcript, list);
     translations = await translateSegments(translatable, tr.targetLang, tr.llm, chatComplete).catch(() => null);
   }
+  // 发布文案(可选):一次 LLM 批量为所有切片生成标题+话题+简介(fail-open)。
+  let publishCopies: Map<number, import("@core/publish").PublishCopy> | null = null;
+  const pub = opts.publishCopy;
+  if (pub?.llm?.baseUrl && pub.llm.model) {
+    const zh = !(opts.transcript?.language ?? "zh").startsWith("en");
+    const sources = list.map((c) => ({ id: c.id, title: c.title, hook: c.hook, text: c.text, keywords: c.keywords }));
+    publishCopies = await generatePublishCopies(sources, zh, pub.llm, chatComplete).catch(() => null);
+  }
   return exportClips(
     filePath,
     list.map((c) => ({
@@ -388,6 +397,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       translation: translations
         ? clipTranslationLines(translatable, translations, c.startSec - 1.5, c.endSec + 1.5)
         : undefined,
+      publish: publishCopies?.get(c.id),
       keywords: c.keywords,
       meta: {
         hook: c.hook,

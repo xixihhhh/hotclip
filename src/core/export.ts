@@ -14,6 +14,7 @@ const execFileAsync = promisify(execFile);
 import { cutClip, cutJumpClip } from "./cut";
 import { computeJumpCut } from "./gaps";
 import { clampTranslationLines, remapTranslationLines, type TranslationLine } from "./translate";
+import { postTextFile, type PublishCopy } from "./publish";
 import { findFillerWords, dropFillerWords, fillerCutSpans, type FillerHit } from "./fillers";
 import { extractPeaks } from "./audio-peaks";
 import { detectUiCrop, type UiCrop } from "./uicrop";
@@ -41,6 +42,8 @@ export interface ExportClipSpec {
   manualBounds?: boolean;
   /** 双语字幕的整句译文行(源片绝对时间,主进程预先翻译好传入)。 */
   translation?: TranslationLine[];
+  /** 发布文案(主进程预先生成传入),落 .post.txt 并进 clips.json。 */
+  publish?: PublishCopy;
   /** Evidence-chain fields carried into clips.json for CMS/matrix pipelines. */
   meta?: {
     hook: string;
@@ -401,6 +404,11 @@ export async function exportClips(
         { maxBuffer: 8 * 1024 * 1024 }
       ).then(() => true, () => false);
 
+      // 发布文案:mp4 旁落同名 .post.txt(标题+话题+简介,直接全选复制)
+      if (clip.publish) {
+        await writeFile(outPath.replace(/\.mp4$/, ".post.txt"), postTextFile(clip.publish), "utf8").catch(() => {});
+      }
+
       results.push({
         id: clip.id,
         title: clip.title,
@@ -468,6 +476,8 @@ export async function exportClips(
           keywords: spec?.keywords ?? [],
           removedFillers: removedFillersByClip.get(r.id) ?? [],
           render: renderByClip.get(r.id) ?? null,
+          // 发布文案(标题/话题/简介),同内容也落在 mp4 旁的 .post.txt
+          publish: spec?.publish ?? null,
           ...(spec?.meta ?? {}),
         };
       }),
