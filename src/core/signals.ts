@@ -20,6 +20,8 @@ export interface MediaSignals {
   loudPeaks: TimeRange[];
   /** Windows with dense scene cuts (fast visual pace). */
   cutDense: TimeRange[];
+  /** 端侧视觉模型抽帧圈出的画面高能时段(可选,见 highlight/vision.ts)。 */
+  visualPeaks?: TimeRange[];
 }
 
 /** Parse `ebur128` stderr lines: "t: 12.5 ... M: -18.2 ..." → [t, M] samples. */

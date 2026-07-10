@@ -315,6 +315,16 @@ describe("renderSignals / signal injection", () => {
     expect(renderSignals(undefined, true)).toBe("");
   });
 
+  it("visualPeaks 存在时渲染视觉爆点行", () => {
+    const withVision = { ...signals, visualPeaks: [{ startSec: 60, endSec: 72 }] };
+    const zh = renderSignals(withVision, true);
+    expect(zh).toContain("视觉模型判定的画面爆点时刻");
+    expect(zh).toContain("01:00-01:12");
+    expect(renderSignals(withVision, false)).toContain("Vision-model visual peaks");
+    // 不带 visualPeaks 时该行不出现(老调用方零感知)
+    expect(renderSignals(signals, true)).not.toContain("视觉模型");
+  });
+
   it("buildHighlightPrompt embeds the signal section when provided", () => {
     const tx = makeTranscript(["第一句话。", "第二句话。"]);
     expect(buildHighlightPrompt(tx, 6, signals)).toContain("画面与声音信号");

@@ -118,6 +118,9 @@ export function renderSignals(signals: MediaSignals | undefined, zh: boolean): s
   if (signals.cutDense.length > 0) {
     lines.push(zh ? `- 镜头切换密集段(画面高能): ${fmt(signals.cutDense)}` : `- Dense scene-cut windows (visual action): ${fmt(signals.cutDense)}`);
   }
+  if (signals.visualPeaks && signals.visualPeaks.length > 0) {
+    lines.push(zh ? `- 视觉模型判定的画面爆点时刻(夸张表情/激烈动作/场面炸裂): ${fmt(signals.visualPeaks)}` : `- Vision-model visual peaks (expressions/action/spectacle): ${fmt(signals.visualPeaks)}`);
+  }
   if (lines.length === 0) return "";
   return zh
     ? `\n【画面与声音信号】(辅助证据——与这些时段重合的内容更可能有真实的情绪/画面爆点,但仍以文本质量为准)\n${lines.join("\n")}\n`

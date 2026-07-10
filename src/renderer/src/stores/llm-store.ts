@@ -7,6 +7,7 @@ import type { LlmConfig } from "../../../shared/api-types";
 
 const STORAGE_KEY = "hotclip-llm";
 const PREFILTER_KEY = "hotclip-prefilter";
+const VISION_KEY = "hotclip-vision";
 
 /** 两级漏斗第一级的本地端点设置(默认 Ollama + qwen3:4b,默认关)。 */
 export interface PrefilterSettings {
@@ -21,21 +22,28 @@ export const PREFILTER_DEFAULTS: PrefilterSettings = {
   model: "qwen3:4b",
 };
 
-function loadPrefilter(): PrefilterSettings {
+/** 视觉爆点信号的端侧 VL 端点设置(默认 Ollama + qwen3-vl:4b,默认关)。 */
+export const VISION_DEFAULTS: PrefilterSettings = {
+  enabled: false,
+  baseUrl: "http://localhost:11434/v1",
+  model: "qwen3-vl:4b",
+};
+
+function loadLocalEndpoint(key: string, defaults: PrefilterSettings): PrefilterSettings {
   try {
-    const raw = localStorage.getItem(PREFILTER_KEY);
+    const raw = localStorage.getItem(key);
     if (raw) {
       const p = JSON.parse(raw) as Partial<PrefilterSettings>;
       return {
         enabled: p.enabled === true,
-        baseUrl: typeof p.baseUrl === "string" && p.baseUrl ? p.baseUrl : PREFILTER_DEFAULTS.baseUrl,
-        model: typeof p.model === "string" && p.model ? p.model : PREFILTER_DEFAULTS.model,
+        baseUrl: typeof p.baseUrl === "string" && p.baseUrl ? p.baseUrl : defaults.baseUrl,
+        model: typeof p.model === "string" && p.model ? p.model : defaults.model,
       };
     }
   } catch {
     /* 回落默认 */
   }
-  return { ...PREFILTER_DEFAULTS };
+  return { ...defaults };
 }
 
 export const LLM_PRESETS = {
@@ -73,6 +81,8 @@ interface LlmState {
   setConfig: (partial: Partial<LlmConfig>) => void;
   prefilter: PrefilterSettings;
   setPrefilter: (partial: Partial<PrefilterSettings>) => void;
+  vision: PrefilterSettings;
+  setVision: (partial: Partial<PrefilterSettings>) => void;
 }
 
 export const useLlmStore = create<LlmState>((set, get) => ({
@@ -86,7 +96,7 @@ export const useLlmStore = create<LlmState>((set, get) => ({
     }
     set({ config });
   },
-  prefilter: loadPrefilter(),
+  prefilter: loadLocalEndpoint(PREFILTER_KEY, PREFILTER_DEFAULTS),
   setPrefilter: (partial) => {
     const prefilter = { ...get().prefilter, ...partial };
     try {
@@ -95,6 +105,16 @@ export const useLlmStore = create<LlmState>((set, get) => ({
       /* persistence is best-effort */
     }
     set({ prefilter });
+  },
+  vision: loadLocalEndpoint(VISION_KEY, VISION_DEFAULTS),
+  setVision: (partial) => {
+    const vision = { ...get().vision, ...partial };
+    try {
+      localStorage.setItem(VISION_KEY, JSON.stringify(vision));
+    } catch {
+      /* persistence is best-effort */
+    }
+    set({ vision });
   },
 }));
 

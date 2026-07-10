@@ -22,12 +22,13 @@ import { isModelInstalled, ensureModel, SENSEVOICE_MODEL, PARAFORMER_MODEL, FIRE
 import { runDiarization, labelTranscript } from "@core/diarize";
 import { ASR_CATALOG } from "../shared/asr-catalog";
 import { detectHighlights } from "@core/highlight/detect";
+import { collectVisionSignal } from "@core/highlight/vision";
 import { collectSignals } from "@core/signals";
 import { exportClips, sanitizeFilename } from "@core/export";
 import { sliceWords } from "@core/subtitle";
 import { snapContextAround } from "@core/shots";
 import { renderCaptionOverlay } from "./overlay-renderer";
-import type { Transcript, LlmConfig, HighlightCandidate, ExportOptions } from "../shared/api-types";
+import type { Transcript, LlmConfig, HighlightCandidate, ExportOptions, VisionStats } from "../shared/api-types";
 
 const VIDEO_EXTENSIONS = ["mp4", "mkv", "mov", "flv", "ts", "webm", "avi", "m4v"];
 const AUDIO_EXTENSIONS = ["mp3", "m4a", "wav", "aac", "flac"];
@@ -258,7 +259,7 @@ ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: 
 
 ipcMain.handle(
   "hotclip:detect-highlights",
-  async (_event, transcript: unknown, llm: unknown, filePath: unknown, diarize: unknown, prefilter: unknown) => {
+  async (_event, transcript: unknown, llm: unknown, filePath: unknown, diarize: unknown, prefilter: unknown, vision: unknown) => {
     let t = transcript as Transcript;
     const config = llm as LlmConfig;
     if (!t || !Array.isArray(t.segments)) throw new Error("detect-highlights requires a transcript");
@@ -286,8 +287,30 @@ ipcMain.handle(
       pf && typeof pf.baseUrl === "string" && pf.baseUrl.trim() && typeof pf.model === "string" && pf.model.trim()
         ? { baseUrl: pf.baseUrl, model: pf.model }
         : null;
+    // 视觉爆点信号(可选):端侧 VL 抽帧圈画面高能时段,挂进 signals 随提示词进云端。
+    // fail-open——采集失败/证据太薄都退回纯文本检测,不影响主流程。
+    let visionStats: VisionStats | undefined;
+    const vc = vision as { baseUrl?: unknown; model?: unknown } | null | undefined;
+    if (
+      vc && typeof vc.baseUrl === "string" && vc.baseUrl.trim() && typeof vc.model === "string" && vc.model.trim() &&
+      typeof filePath === "string" && filePath.trim()
+    ) {
+      const durationSec = await probeMedia(filePath).then((m) => m.durationSec).catch(() => 0);
+      if (durationSec > 1) {
+        const outcome = await collectVisionSignal({
+          videoPath: filePath,
+          durationSec,
+          config: { baseUrl: vc.baseUrl, model: vc.model },
+          signals,
+        }).catch(() => null);
+        if (outcome) {
+          signals = { loudPeaks: [], cutDense: [], ...signals, visualPeaks: outcome.visualPeaks };
+          visionStats = outcome.stats;
+        }
+      }
+    }
     const outcome = await detectHighlights(t, config, undefined, signals, localFilter);
-    return { candidates: outcome.candidates, transcript: labeled, funnel: outcome.funnel };
+    return { candidates: outcome.candidates, transcript: labeled, funnel: outcome.funnel, vision: visionStats };
   }
 );
 

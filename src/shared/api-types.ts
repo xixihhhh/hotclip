@@ -95,6 +95,13 @@ export interface FunnelStats {
   keptChars: number;
 }
 
+/** 视觉爆点信号的抽帧统计(UI 展示"看了多少帧、圈出几段")。 */
+export interface VisionStats {
+  framesTotal: number;
+  framesScored: number;
+  peakCount: number;
+}
+
 /** One AI-nominated clip candidate with frame-accurate boundaries. */
 export interface HighlightCandidate {
   id: number;
@@ -193,6 +200,8 @@ export interface DetectHighlightsResult {
   transcript?: Transcript;
   /** 本地初筛生效时的漏斗统计;未启用/回退全文时缺省。 */
   funnel?: FunnelStats;
+  /** 视觉爆点信号生效时的抽帧统计;未启用/回退时缺省。 */
+  vision?: VisionStats;
 }
 
 /** One exported clip file on disk. */
@@ -240,7 +249,8 @@ export interface HotClipApi {
     llm: LlmConfig,
     filePath?: string,
     diarize?: boolean,
-    prefilter?: PrefilterConfig | null
+    prefilter?: PrefilterConfig | null,
+    vision?: PrefilterConfig | null
   ) => Promise<DetectHighlightsResult>;
   /** Cut the selected highlights into mp4 files; resolves with the file list. */
   exportClips: (filePath: string, clips: HighlightCandidate[], options?: ExportOptions) => Promise<ExportedClip[]>;

@@ -35,7 +35,7 @@ import { useBrandStore, activeBrandStyle } from "../stores/brand-store";
 import { adjustClipBoundary } from "../../../shared/boundary";
 import { ClipReviewModal } from "./ClipReviewModal";
 import { BrandStyleModal } from "./BrandStyleModal";
-import type { Transcript, HighlightCandidate, RenderToggles, CaptionStyleChoice, FunnelStats } from "../../../shared/api-types";
+import type { Transcript, HighlightCandidate, RenderToggles, CaptionStyleChoice, FunnelStats, VisionStats } from "../../../shared/api-types";
 
 /** Click-to-cycle order for the caption style chip. */
 const CAPTION_CYCLE: CaptionStyleChoice[] = ["karaoke", "keyword", "pop", "bubble", "none"];
@@ -81,7 +81,7 @@ export function HighlightsView({
   auto?: boolean;
 }): React.JSX.Element {
   const t = useT("highlights");
-  const { config, setConfig, prefilter, setPrefilter } = useLlmStore();
+  const { config, setConfig, prefilter, setPrefilter, vision, setVision } = useLlmStore();
   // browser preview (mock) needs no key; Electron needs a real endpoint
   const gateOpen = !isElectron() || isLlmReady(config);
   const [showGate, setShowGate] = useState(!gateOpen);
@@ -90,6 +90,8 @@ export function HighlightsView({
   const [candidates, setCandidates] = useState<HighlightCandidate[] | null>(null);
   /** 本地初筛生效时的漏斗统计(结果页展示省了多少)。 */
   const [funnel, setFunnel] = useState<FunnelStats | null>(null);
+  /** 视觉爆点信号生效时的抽帧统计(结果页展示看了多少帧)。 */
+  const [visionStats, setVisionStats] = useState<VisionStats | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   // Vertical + karaoke + jump-cut ON by default — publish-ready clips out of the box.
   const [vertical, setVertical] = useState(true);
@@ -117,10 +119,12 @@ export function HighlightsView({
         config,
         filePath,
         useDiarize,
-        prefilter.enabled ? { baseUrl: prefilter.baseUrl, model: prefilter.model } : null
+        prefilter.enabled ? { baseUrl: prefilter.baseUrl, model: prefilter.model } : null,
+        vision.enabled ? { baseUrl: vision.baseUrl, model: vision.model } : null
       );
       setCandidates(result.candidates);
       setFunnel(result.funnel ?? null);
+      setVisionStats(result.vision ?? null);
       // reviewer-approved clips are pre-selected; flagged ones start unchecked
       setSelected(new Set(result.candidates.filter((c) => c.recommended).map((c) => c.id)));
       // Lift the speaker-labeled transcript so export can color captions by speaker.
@@ -130,7 +134,7 @@ export function HighlightsView({
     } finally {
       setDetecting(false);
     }
-  }, [transcript, config, filePath, onTranscriptLabeled, prefilter]);
+  }, [transcript, config, filePath, onTranscriptLabeled, prefilter, vision]);
 
   // Multi-speaker attribution: re-detect with diarization when toggled on.
   const toggleDiarize = useCallback((): void => {
@@ -282,6 +286,49 @@ export function HighlightsView({
             )}
           </div>
 
+          {/* 视觉爆点信号:端侧 VL 抽帧看画面(补文本看不见的画面梗) */}
+          <div className="mt-3 rounded-xl border border-dashed border-line p-3.5">
+            <button
+              type="button"
+              onClick={() => setVision({ enabled: !vision.enabled })}
+              className="flex w-full items-center justify-between text-left"
+            >
+              <span className="text-[12.5px] font-bold">{t("visionTitle")}</span>
+              <span
+                className={`relative h-4.5 w-8 shrink-0 rounded-full transition-colors ${
+                  vision.enabled ? "flame-gradient" : "bg-line"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 h-3.5 w-3.5 rounded-full bg-white shadow transition-all ${
+                    vision.enabled ? "left-4" : "left-0.5"
+                  }`}
+                />
+              </span>
+            </button>
+            <p className="mt-1.5 text-[11.5px] leading-relaxed text-mut">{t("visionDesc")}</p>
+            {vision.enabled && (
+              <div className="mt-2.5 grid grid-cols-2 gap-2.5">
+                <label className="block">
+                  <span className="text-[11px] font-semibold text-mut">{t("llmBaseUrl")}</span>
+                  <input
+                    value={vision.baseUrl}
+                    onChange={(e) => setVision({ baseUrl: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-line bg-panel-2 px-3 py-2 text-[13px] outline-none focus:border-ember/60"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[11px] font-semibold text-mut">{t("llmModel")}</span>
+                  <input
+                    value={vision.model}
+                    onChange={(e) => setVision({ model: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-line bg-panel-2 px-3 py-2 text-[13px] outline-none focus:border-ember/60"
+                  />
+                </label>
+              </div>
+            )}
+          </div>
+
           <div className="mt-5 flex items-center justify-between">
             <a
               href={LLM_PRESETS.atlas.keyUrl}
@@ -347,6 +394,14 @@ export function HighlightsView({
                     total: (funnel.totalChars / 1000).toFixed(1),
                     kept: (funnel.keptChars / 1000).toFixed(1),
                     pct: Math.round((1 - funnel.keptChars / Math.max(1, funnel.totalChars)) * 100),
+                  })}
+                </p>
+              )}
+              {visionStats && (
+                <p className="mt-1 text-[11.5px] text-sky-400/90">
+                  {t("visionScanned", {
+                    frames: visionStats.framesScored,
+                    peaks: visionStats.peakCount,
                   })}
                 </p>
               )}
