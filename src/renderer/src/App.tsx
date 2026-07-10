@@ -4,7 +4,7 @@
  * Runs both inside Electron (IPC api) and in a plain browser (mock api) —
  * the latter is the design-preview path today and the web-platform seam later.
  */
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   LuFileVideo,
   LuFolderSearch,
@@ -12,6 +12,7 @@ import {
   LuBadgeCheck,
   LuSparkles,
   LuLanguages,
+  LuCircleArrowUp,
   LuClock3,
   LuProportions,
   LuGauge,
@@ -29,7 +30,7 @@ import { TranscribeView } from "./components/TranscribeView";
 import { HighlightsView } from "./components/HighlightsView";
 import { ExportView } from "./components/ExportView";
 import { WatchFolderModal } from "./components/WatchFolderModal";
-import type { Transcript, HighlightCandidate, RenderToggles } from "../../shared/api-types";
+import type { Transcript, HighlightCandidate, RenderToggles, UpdateInfo } from "../../shared/api-types";
 import "./app.css";
 
 interface ProbedFile extends MediaInfo {
@@ -71,6 +72,16 @@ export default function App(): React.JSX.Element {
   const [auto, setAuto] = useState(false);
   /** 录播监听控制面板。 */
   const [showWatch, setShowWatch] = useState(false);
+  /** 新版本提示(启动静默查一次,失败不打扰)。 */
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  useEffect(() => {
+    void getApi()
+      .checkUpdate()
+      .then((u) => {
+        if (u?.hasUpdate) setUpdate(u);
+      })
+      .catch(() => {});
+  }, []);
   /** Clips + render toggles chosen for export (moves the wizard to step 2). */
   const [exporting, setExporting] = useState<{
     clips: HighlightCandidate[];
@@ -162,6 +173,18 @@ export default function App(): React.JSX.Element {
           ))}
         </nav>
 
+        <div className="flex items-center gap-2" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+        {update && (
+          <button
+            type="button"
+            onClick={() => getApi().openUrl(update.url)}
+            title={tc("updateHint", { v: update.latest })}
+            className="flame-gradient flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-bold text-white"
+          >
+            <LuCircleArrowUp className="h-3.5 w-3.5" />
+            {tc("updateChip", { v: update.latest })}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setLocale(nextLocale)}
@@ -172,6 +195,7 @@ export default function App(): React.JSX.Element {
           <LuLanguages className="h-3.5 w-3.5" />
           {REGISTRY[nextLocale].label}
         </button>
+        </div>
       </header>
 
       {/* ---- stage ---- */}

@@ -38,6 +38,8 @@ const api: HotClipApi = {
     ipcRenderer.on("hotclip:watch-event", listener);
     return () => ipcRenderer.removeListener("hotclip:watch-event", listener);
   },
+  checkUpdate: () => ipcRenderer.invoke("hotclip:check-update"),
+  openUrl: (url) => ipcRenderer.send("hotclip:open-url", url),
 };
 
 contextBridge.exposeInMainWorld("hotclip", api);

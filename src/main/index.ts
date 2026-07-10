@@ -28,13 +28,14 @@ import { collectClipSegments, translateSegments, clipTranslationLines } from "@c
 import { generatePublishCopies } from "@core/publish";
 import { FolderWatcher, isVideoFile, isSeen, type SeenMap, type WatchedFile } from "@core/watch";
 import { collectDanmakuSignal } from "@core/danmaku";
+import { checkForUpdate } from "@core/update-check";
 import { autoClip } from "@core/pipeline";
 import { collectSignals } from "@core/signals";
 import { exportClips, sanitizeFilename } from "@core/export";
 import { sliceWords } from "@core/subtitle";
 import { snapContextAround } from "@core/shots";
 import { renderCaptionOverlay } from "./overlay-renderer";
-import type { Transcript, LlmConfig, HighlightCandidate, ExportOptions, VisionStats, EmotionStats, DanmakuStats, WatchEvent } from "../shared/api-types";
+import type { Transcript, LlmConfig, HighlightCandidate, ExportOptions, VisionStats, EmotionStats, DanmakuStats, WatchEvent, UpdateInfo } from "../shared/api-types";
 
 const VIDEO_EXTENSIONS = ["mp4", "mkv", "mov", "flv", "ts", "webm", "avi", "m4v"];
 const AUDIO_EXTENSIONS = ["mp3", "m4a", "wav", "aac", "flac"];
@@ -539,6 +540,21 @@ ipcMain.handle("hotclip:watch-stop", async () => {
 });
 
 ipcMain.handle("hotclip:watch-status", async () => ({ running: watchTimer !== null, dir: watchDirPath }));
+
+// ---- 新版本检查:启动后渲染层问一次,失败静默 ----
+let updateCache: UpdateInfo | null | undefined;
+ipcMain.handle("hotclip:check-update", async () => {
+  if (updateCache !== undefined) return updateCache;
+  updateCache = await checkForUpdate(app.getVersion());
+  return updateCache;
+});
+
+// 外链只放行本项目 GitHub(防任意 URL 注入系统浏览器)
+ipcMain.on("hotclip:open-url", (_event, url: unknown) => {
+  if (typeof url === "string" && url.startsWith("https://github.com/xixihhhh/hotclip")) {
+    void shell.openExternal(url);
+  }
+});
 
 ipcMain.on("hotclip:reveal", (_event, path: unknown) => {
   if (typeof path === "string" && path.trim()) shell.showItemInFolder(path);

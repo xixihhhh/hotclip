@@ -180,6 +180,12 @@ const browserMock: HotClipApi = {
     watchListeners.add(cb);
     return () => watchListeners.delete(cb);
   },
+  async checkUpdate() {
+    return null; // 浏览器预览不做更新提示
+  },
+  openUrl(url) {
+    window.open(url, "_blank", "noreferrer");
+  },
   async detectHighlights(transcript, _llm, _filePath, diarize, prefilter, vision, _length): Promise<DetectHighlightsResult> {
     await sleep(1500);
     // 浏览器预览:开了本地初筛就演示一份漏斗统计

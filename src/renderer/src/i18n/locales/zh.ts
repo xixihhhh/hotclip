@@ -4,6 +4,8 @@
  */
 export const zh = {
   common: {
+    updateChip: "新版 v{v}",
+    updateHint: "v{v} 已发布,点击去下载页(当前版本继续可用)",
     appName: "HotClip 爆款切片",
     tagline: "长视频 · 直播回放,一键切出爆款竖屏短视频",
     loading: "加载中…",

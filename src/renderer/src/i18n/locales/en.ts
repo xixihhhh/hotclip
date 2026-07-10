@@ -1,6 +1,8 @@
 /** English locale — same shape as zh (the source of truth). */
 export const en = {
   common: {
+    updateChip: "v{v} available",
+    updateHint: "v{v} is out — click to open the download page (this version keeps working)",
     appName: "HotClip",
     tagline: "Turn long videos & livestream replays into viral vertical shorts",
     loading: "Loading…",

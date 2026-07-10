@@ -317,4 +317,16 @@ export interface HotClipApi {
   watchStatus: () => Promise<{ running: boolean; dir: string | null }>;
   /** 订阅监听过程事件;返回退订函数。 */
   onWatchEvent: (cb: (e: WatchEvent) => void) => () => void;
+  /** 查一次新版本;断网/失败返回 null(fail-open,绝不打扰)。 */
+  checkUpdate: () => Promise<UpdateInfo | null>;
+  /** 打开外部链接(仅白名单域,当前只放行本项目 GitHub)。 */
+  openUrl: (url: string) => void;
+}
+
+/** 新版本检查结果。 */
+export interface UpdateInfo {
+  current: string;
+  latest: string;
+  hasUpdate: boolean;
+  url: string;
 }
