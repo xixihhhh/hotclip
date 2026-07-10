@@ -105,6 +105,7 @@ HotClip fills the gap from both sides:
 - **On-device two-stage funnel (cost saver)**: optionally let a small local Ollama model (e.g. qwen3:4b) read the full transcript first and shortlist candidate ranges, so the cloud model only reads the shortlist — **an order of magnitude less cloud spend on long videos**; quote reverse-matching still runs on the full transcript, so cut-point accuracy is untouched; unreachable local endpoints silently fall back to full-text, failed chunks are kept wholesale (spend more rather than miss content), and the savings are shown in the results view
 - **Shot-snapped cut points**: TransNetV2 shot-boundary detection (31MB ONNX, local inference, MIT) finds real shot changes frame by frame, and clip boundaries snap to the nearest one (extending outward first, ≤0.8s) — clips no longer open mid-action or mid-transition; a **word-boundary guard** guarantees snapping never clips speech, detection failures silently fall back to no snapping, and every snap is logged in the clips.json receipt
 - **Brand style templates**: one highlight color driving karaoke sweep / keyword emphasis / opening hook / bubble gradients, three caption sizes and positions, and a **logo watermark** (any corner, adjustable opacity) — configure once, save as named presets, and every clip (hands-off mode included) ships in your style; the applied style lands in the clips.json receipt so multi-account pipelines can verify brand consistency. Competitors keep this behind a paywall
+- **Local MCP server (agent-ready)**: register in Claude Code / Claude Desktop and let an agent drive the whole local pipeline in one sentence — `clip_video` (fully managed) / `detect_highlights` (review first) / `transcribe_video` (on-device ASR); a hand-rolled zero-dependency stdio protocol, filling the "local MCP clipper" gap (the only commercial one is OpusClip's cloud version)
 - **Post copy generation (no more empty caption box)**: one toggle generates a **hooky post title + 3-6 niche hashtags + a one-or-two-line description** for every clip, saved as a same-name `.post.txt` next to each mp4 for select-all copy-paste and written into clips.json for matrix pipelines — sourced entirely from the detection evidence chain (title/hook/keywords/text), Chinese sources get Chinese copy and English sources get English; failures are silently skipped
 - **Facial-emotion peak signal (zero-config)**: YuNet face detection + FER+ emotion recognition (two MIT-licensed ONNX models of a few MB, auto-downloaded on first use) scan sampled frames for **laughter / surprise / excitement** peaks and feed the windows into highlight judgment — the free out-of-the-box tier of visual evidence, no Ollama required; sampling bets on loudness-peak and dense-cut windows (that's where expressions live), face-less footage and unavailable models are silently skipped, and the face count is shown in the results view
 - **Bilingual captions (go global in one step)**: one toggle and your configured LLM translates every line **as a full sentence** (real context, not caption fragments), burned in as a smaller second track under the main captions — the broadcast bilingual layout with the karaoke original on top and the translation below; Chinese sources auto-translate to English and vice versa; translation lines are remapped through jump-cut timeline compression so removed sentences leave no ghosts; failures are silently skipped so exports never stall, and the burned line count lands in the clips.json receipt. Competitors sell "captions in 100+ languages" as a paid tier — here it's free
@@ -146,6 +147,28 @@ pnpm install
 pnpm dev        # run the desktop app in dev mode
 pnpm test       # run unit tests
 ```
+
+## Agent-ready (MCP Server)
+
+HotClip ships a **local MCP server** — register it in Claude Code / Claude Desktop and just tell your agent "turn this 2-hour VOD into viral shorts": transcription, highlight detection and export all run on your machine, footage never leaves it:
+
+```json
+{
+  "mcpServers": {
+    "hotclip": {
+      "command": "npx",
+      "args": ["-y", "tsx", "src/mcp/server.ts"],
+      "cwd": "/path/to/hotclip",
+      "env": {
+        "HOTCLIP_LLM_BASE_URL": "http://localhost:11434/v1",
+        "HOTCLIP_LLM_MODEL": "qwen3:8b"
+      }
+    }
+  }
+}
+```
+
+Three tools: `clip_video` (fully managed end-to-end), `detect_highlights` (candidates only, review before cutting), `transcribe_video` (on-device ASR with caching). Set `HOTCLIP_LLM_API_KEY` for cloud endpoints; models are shared with the desktop app — download once, use in both.
 
 ## Tech Stack
 
