@@ -237,6 +237,20 @@ export interface AudioPeaks {
   hopSec: number;
 }
 
+/** 录播监听的过程事件(渲染层控制面板展示)。 */
+export interface WatchEvent {
+  type: "found" | "transcribing" | "detecting" | "exporting" | "done" | "error";
+  /** 文件名(展示用)。 */
+  file: string;
+  path: string;
+  /** done:导出条数。 */
+  clips?: number;
+  outDir?: string;
+  /** error:一句话原因。 */
+  message?: string;
+  at: number;
+}
+
 export interface ExportProgressEvent {
   /** 1-based index of the clip currently being cut. */
   current: number;
@@ -277,4 +291,12 @@ export interface HotClipApi {
   selectImage: () => Promise<string | null>;
   /** 取 [startSec, endSec] 的音频峰值轨——审阅台时间轴的波形。 */
   getAudioPeaks: (filePath: string, startSec: number, endSec: number) => Promise<AudioPeaks>;
+  /** 选择一个文件夹(录播监听用);取消返回 null。 */
+  selectDir: () => Promise<string | null>;
+  /** 开始监听文件夹:新录播写完落稳后自动全托管切片。 */
+  watchStart: (dir: string, llm: LlmConfig) => Promise<void>;
+  watchStop: () => Promise<void>;
+  watchStatus: () => Promise<{ running: boolean; dir: string | null }>;
+  /** 订阅监听过程事件;返回退订函数。 */
+  onWatchEvent: (cb: (e: WatchEvent) => void) => () => void;
 }

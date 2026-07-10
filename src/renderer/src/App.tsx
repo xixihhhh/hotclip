@@ -7,6 +7,7 @@
 import { useCallback, useState } from "react";
 import {
   LuFileVideo,
+  LuFolderSearch,
   LuShieldCheck,
   LuBadgeCheck,
   LuSparkles,
@@ -27,6 +28,7 @@ import { LogoMark, LogoWordmark } from "./components/Logo";
 import { TranscribeView } from "./components/TranscribeView";
 import { HighlightsView } from "./components/HighlightsView";
 import { ExportView } from "./components/ExportView";
+import { WatchFolderModal } from "./components/WatchFolderModal";
 import type { Transcript, HighlightCandidate, RenderToggles } from "../../shared/api-types";
 import "./app.css";
 
@@ -67,6 +69,8 @@ export default function App(): React.JSX.Element {
   const [phase, setPhase] = useState<"transcribe" | "highlights">("transcribe");
   /** Hands-off mode: every wizard step advances itself (托管). */
   const [auto, setAuto] = useState(false);
+  /** 录播监听控制面板。 */
+  const [showWatch, setShowWatch] = useState(false);
   /** Clips + render toggles chosen for export (moves the wizard to step 2). */
   const [exporting, setExporting] = useState<{
     clips: HighlightCandidate[];
@@ -269,6 +273,18 @@ export default function App(): React.JSX.Element {
           </div>
         </div>
 
+        {/* 录播监听入口:文件夹级无人值守 */}
+        {!file && (
+          <button
+            type="button"
+            onClick={() => setShowWatch(true)}
+            className="rise-in rise-in-2 mt-5 inline-flex items-center gap-1.5 rounded-lg border border-line px-4 py-2 text-[12.5px] font-semibold text-mut transition-colors hover:border-mut hover:text-fg"
+          >
+            <LuFolderSearch className="h-4 w-4" />
+            {t("watchEntry")}
+          </button>
+        )}
+
         {error && <p className="mt-5 text-sm text-red-400">{error}</p>}
 
         {/* probed file card */}
@@ -365,6 +381,9 @@ export default function App(): React.JSX.Element {
         </>
         )}
       </main>
+
+      {/* ---- 录播监听控制面板 ---- */}
+      {showWatch && <WatchFolderModal onClose={() => setShowWatch(false)} />}
     </div>
   );
 }

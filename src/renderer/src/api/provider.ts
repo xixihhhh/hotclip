@@ -13,6 +13,7 @@ import type {
   HighlightCandidate,
   DetectHighlightsResult,
   ExportProgressEvent,
+  WatchEvent,
 } from "../../../shared/api-types";
 
 const MOCK_MEDIA: MediaInfo = {
@@ -59,6 +60,14 @@ type ExportCb = (p: ExportProgressEvent) => void;
 const exportListeners = new Set<ExportCb>();
 const emitExport = (p: ExportProgressEvent): void => exportListeners.forEach((cb) => cb(p));
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+// 录播监听演示:启动后按剧本吐一轮事件
+type WatchCb = (e: WatchEvent) => void;
+const watchListeners = new Set<WatchCb>();
+let watchRunning = false;
+let watchDirDemo: string | null = null;
+const emitWatch = (e: Omit<WatchEvent, "at">): void => {
+  if (watchRunning) watchListeners.forEach((cb) => cb({ ...e, at: Date.now() }));
+};
 
 /** Browser-mode mock: deterministic fake data with realistic staged latency. */
 const browserMock: HotClipApi = {
@@ -140,6 +149,36 @@ const browserMock: HotClipApi = {
       return Math.min(1, talking * syllable);
     });
     return { values, startSec, hopSec };
+  },
+  async selectDir() {
+    await sleep(300);
+    return "/demo/录播文件夹";
+  },
+  async watchStart(dir) {
+    watchRunning = true;
+    watchDirDemo = dir;
+    // 演示剧本:一条新录播被发现 → 转写 → 找爆点 → 出片完成
+    const file = "直播回放-2026-07-10.flv";
+    const path = `${dir}/${file}`;
+    const script: Array<[Omit<WatchEvent, "at">, number]> = [
+      [{ type: "found", file, path }, 1200],
+      [{ type: "transcribing", file, path }, 2600],
+      [{ type: "detecting", file, path }, 5200],
+      [{ type: "exporting", file, path }, 7400],
+      [{ type: "done", file, path, clips: 4, outDir: `${dir}/直播回放-2026-07-10-hotclip` }, 9600],
+    ];
+    for (const [e, delay] of script) setTimeout(() => emitWatch(e), delay);
+  },
+  async watchStop() {
+    watchRunning = false;
+    watchDirDemo = null;
+  },
+  async watchStatus() {
+    return { running: watchRunning, dir: watchDirDemo };
+  },
+  onWatchEvent(cb) {
+    watchListeners.add(cb);
+    return () => watchListeners.delete(cb);
   },
   async detectHighlights(transcript, _llm, _filePath, diarize, prefilter, vision): Promise<DetectHighlightsResult> {
     await sleep(1500);

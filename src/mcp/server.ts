@@ -2,7 +2,8 @@
  * HotClip MCP Server 入口(stdio):
  *   npx tsx src/mcp/server.ts
  * 在 Claude Code / Claude Desktop 里注册后,Agent 可直接调用本地切片管线
- * (转写/找爆点/出片全在本机,素材不出电脑)。协议逻辑见 protocol.ts。
+ * (转写/找爆点/出片全在本机,素材不出电脑)。协议逻辑见 protocol.ts,
+ * 管线实现与桌面端/录播监听共用 core/pipeline.ts。
  *
  * LLM 配置走环境变量:HOTCLIP_LLM_BASE_URL / HOTCLIP_LLM_MODEL /
  * HOTCLIP_LLM_API_KEY(本地 Ollama 端点可省 key)。
@@ -10,16 +11,9 @@
  */
 import { createInterface } from "readline";
 import { homedir } from "os";
-import { join, dirname, basename, extname } from "path";
-import { stat } from "fs/promises";
-import type { LlmConfig, Transcript } from "../shared/api-types";
-import { SenseVoiceEngine } from "../core/transcribe/sensevoice";
-import { readTranscriptCache, writeTranscriptCache } from "../core/transcribe/cache";
-import { detectHighlights } from "../core/highlight/detect";
-import { collectSignals } from "../core/signals";
-import { collectEmotionSignal } from "../core/emotion";
-import { exportClips, sanitizeFilename } from "../core/export";
-import { sliceWords } from "../core/subtitle";
+import { join, basename } from "path";
+import type { LlmConfig } from "../shared/api-types";
+import { transcribeCached, detectForPipeline, autoClip } from "../core/pipeline";
 import { handleMcpMessage, type JsonRpcMessage } from "./protocol";
 
 /** 与 Electron 的 app.getPath("userData") 同路径——模型/缓存两边共享。 */
@@ -44,66 +38,35 @@ function llmFromEnv(): LlmConfig {
   return { baseUrl, apiKey: process.env.HOTCLIP_LLM_API_KEY ?? "ollama", model };
 }
 
-async function ensureFile(videoPath: string): Promise<{ size: number; mtimeMs: number }> {
-  try {
-    const s = await stat(videoPath);
-    if (!s.isFile()) throw new Error("不是文件");
-    return { size: s.size, mtimeMs: s.mtimeMs };
-  } catch {
-    throw new Error(`文件不存在或不可读: ${videoPath}`);
-  }
-}
-
-/** 转写(带缓存):SenseVoice 端侧,首次自动下载模型。 */
-async function transcribe(videoPath: string): Promise<Transcript> {
-  const fileStat = await ensureFile(videoPath);
-  const cached = await readTranscriptCache(cacheDir(), videoPath, fileStat, "sensevoice");
-  if (cached) return cached;
-  const engine = new SenseVoiceEngine(modelsRoot());
-  const t = await engine.transcribe(videoPath);
-  await writeTranscriptCache(cacheDir(), videoPath, fileStat, "sensevoice", t).catch(() => {});
-  return t;
-}
-
-function clampClips(n: unknown, fallback = 6): number {
-  const v = Number(n);
-  return Number.isFinite(v) ? Math.max(1, Math.min(12, Math.round(v))) : fallback;
-}
-
-async function detect(videoPath: string, maxClips: number): Promise<{ transcript: Transcript; candidates: Awaited<ReturnType<typeof detectHighlights>>["candidates"] }> {
-  const llm = llmFromEnv();
-  const transcript = await transcribe(videoPath);
-  if (transcript.segments.length === 0) throw new Error("转写结果为空(可能是无人声素材)");
-  // 视听信号 + 表情峰值:与桌面端同款证据链,全部 fail-open
-  const signals = await collectSignals(videoPath).catch(() => undefined);
-  const emotion = await collectEmotionSignal({
-    videoPath,
-    durationSec: transcript.durationSec,
-    modelsRoot: modelsRoot(),
-    signals,
-  }).catch(() => null);
-  const merged = emotion ? { loudPeaks: [], cutDense: [], ...signals, emotionPeaks: emotion.emotionPeaks } : signals;
-  const outcome = await detectHighlights(transcript, llm, undefined, merged);
-  return { transcript, candidates: outcome.candidates.slice(0, maxClips) };
-}
-
 function fmtClock(sec: number): string {
   const m = Math.floor(sec / 60);
   return `${String(m).padStart(2, "0")}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
 }
 
+function clampClips(n: unknown): number | undefined {
+  const v = Number(n);
+  return Number.isFinite(v) ? Math.max(1, Math.min(12, Math.round(v))) : undefined;
+}
+
 /** 工具实现:返回给 Agent 的文本。 */
 async function executeTool(name: string, args: Record<string, unknown>): Promise<string> {
   const videoPath = String(args.videoPath);
+
   if (name === "transcribe_video") {
-    const t = await transcribe(videoPath);
+    const t = await transcribeCached(videoPath, modelsRoot(), cacheDir());
     const lines = t.segments.map((s) => `[${fmtClock(s.startSec)}] ${s.text}`).join("\n");
     const capped = lines.length > 60_000 ? `${lines.slice(0, 60_000)}\n…(截断)` : lines;
     return `语言:${t.language} 时长:${fmtClock(t.durationSec)} 共 ${t.segments.length} 句\n${capped}`;
   }
 
   if (name === "detect_highlights") {
-    const { candidates } = await detect(videoPath, clampClips(args.maxClips));
+    const llm = llmFromEnv();
+    const transcript = await transcribeCached(videoPath, modelsRoot(), cacheDir());
+    const candidates = await detectForPipeline(videoPath, transcript, {
+      modelsRoot: modelsRoot(),
+      llm,
+      maxClips: clampClips(args.maxClips),
+    });
     if (candidates.length === 0) return "没有找到值得切的爆点候选。";
     return JSON.stringify(
       candidates.map((c) => ({
@@ -125,47 +88,27 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
   }
 
   if (name === "clip_video") {
-    const { transcript, candidates } = await detect(videoPath, clampClips(args.maxClips));
-    const publishable = candidates.filter((c) => c.recommended);
-    if (publishable.length === 0) return "AI 复评后没有建议发布的切片(候选都被判定为弱钩子)。可用 detect_highlights 查看全部候选与复评意见。";
-    const vertical = args.vertical !== false;
-    const captions = args.captions !== false;
-    const outDir =
-      typeof args.outDir === "string" && args.outDir.trim()
-        ? args.outDir
-        : join(dirname(videoPath), `${sanitizeFilename(basename(videoPath, extname(videoPath)), "video")}-hotclip`);
-    const results = await exportClips(
-      videoPath,
-      publishable.map((c) => ({
-        id: c.id,
-        title: c.title,
-        startSec: c.startSec,
-        endSec: c.endSec,
-        words: captions ? sliceWords(transcript, c.startSec, c.endSec) : undefined,
-        keywords: c.keywords,
-        meta: { hook: c.hook, score: c.score, reason: c.reason, text: c.text, recommended: c.recommended, reviewNote: c.reviewNote },
-      })),
-      outDir,
-      {
-        vertical,
-        captionStyle: captions ? "karaoke" : undefined,
-        jumpCut: true,
-        cleanFillers: true,
-        titleCard: true,
-        normalizeLoudness: true,
-        faceTrack: vertical,
-        snapToShots: true,
-        modelsRoot: modelsRoot(),
-        fontsDir: join(process.cwd(), "resources", "fonts"),
-      }
-    );
-    const list = results
+    const llm = llmFromEnv();
+    const outcome = await autoClip(videoPath, {
+      modelsRoot: modelsRoot(),
+      cacheDir: cacheDir(),
+      llm,
+      maxClips: clampClips(args.maxClips),
+      vertical: args.vertical !== false,
+      captions: args.captions !== false,
+      outDir: typeof args.outDir === "string" && args.outDir.trim() ? args.outDir : undefined,
+      fontsDir: join(process.cwd(), "resources", "fonts"),
+    });
+    if (outcome.exported.length === 0) {
+      return "AI 复评后没有建议发布的切片(候选都被判定为弱钩子)。可用 detect_highlights 查看全部候选与复评意见。";
+    }
+    const list = outcome.exported
       .map((r) => {
-        const c = publishable.find((x) => x.id === r.id);
+        const c = outcome.candidates.find((x) => x.id === r.id);
         return `- ${basename(r.path)} (${Math.round(r.durationSec)}s, 评分 ${c?.score ?? "?"}) ${c?.title ?? ""}`;
       })
       .join("\n");
-    return `已导出 ${results.length} 条切片到 ${outDir}\n${list}\n附带 clips.json(标题/评分/时间码/回执)与每条封面 JPG。`;
+    return `已导出 ${outcome.exported.length} 条切片到 ${outcome.outDir}\n${list}\n附带 clips.json(标题/评分/时间码/回执)与每条封面 JPG。`;
   }
 
   throw new Error(`未实现的工具: ${name}`);

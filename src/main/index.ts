@@ -6,7 +6,7 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, protocol } from "electron";
 import { join } from "path";
 import { basename, extname } from "path";
-import { stat } from "fs/promises";
+import { stat, readFile, writeFile, readdir } from "fs/promises";
 import { createReadStream } from "fs";
 import { Readable } from "stream";
 import { extractPeaks } from "@core/audio-peaks";
@@ -26,12 +26,14 @@ import { collectVisionSignal } from "@core/highlight/vision";
 import { collectEmotionSignal } from "@core/emotion";
 import { collectClipSegments, translateSegments, clipTranslationLines } from "@core/translate";
 import { generatePublishCopies } from "@core/publish";
+import { FolderWatcher, isVideoFile, isSeen, type SeenMap, type WatchedFile } from "@core/watch";
+import { autoClip } from "@core/pipeline";
 import { collectSignals } from "@core/signals";
 import { exportClips, sanitizeFilename } from "@core/export";
 import { sliceWords } from "@core/subtitle";
 import { snapContextAround } from "@core/shots";
 import { renderCaptionOverlay } from "./overlay-renderer";
-import type { Transcript, LlmConfig, HighlightCandidate, ExportOptions, VisionStats, EmotionStats } from "../shared/api-types";
+import type { Transcript, LlmConfig, HighlightCandidate, ExportOptions, VisionStats, EmotionStats, WatchEvent } from "../shared/api-types";
 
 const VIDEO_EXTENSIONS = ["mp4", "mkv", "mov", "flv", "ts", "webm", "avi", "m4v"];
 const AUDIO_EXTENSIONS = ["mp3", "m4a", "wav", "aac", "flac"];
@@ -130,6 +132,13 @@ ipcMain.handle("hotclip:select-media", async () => {
       { name: "All Files", extensions: ["*"] },
     ],
   });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
+});
+
+// 录播监听的目录选择
+ipcMain.handle("hotclip:select-dir", async () => {
+  const result = await dialog.showOpenDialog({ properties: ["openDirectory", "createDirectory"] });
   if (result.canceled || result.filePaths.length === 0) return null;
   return result.filePaths[0];
 });
@@ -433,6 +442,87 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
     }
   );
 });
+
+// ---- 录播监听:watch 文件夹,新录播写完落稳后自动全托管切片 ----
+// 轮询式监听(网络盘/分段写盘下 fs.watch 不可靠);已处理记录持久化,重启不重切。
+
+const WATCH_POLL_MS = 15_000;
+let watchTimer: NodeJS.Timeout | null = null;
+let watchDirPath: string | null = null;
+
+const watchSeenPath = (): string => join(app.getPath("userData"), "watch-seen.json");
+
+async function loadWatchSeen(): Promise<SeenMap> {
+  try {
+    return JSON.parse(await readFile(watchSeenPath(), "utf8")) as SeenMap;
+  } catch {
+    return {};
+  }
+}
+
+ipcMain.handle("hotclip:watch-start", async (event, dir: unknown, llm: unknown) => {
+  if (typeof dir !== "string" || !dir.trim()) throw new Error("watch requires a directory");
+  const config = llm as LlmConfig;
+  if (!config?.baseUrl || !config?.model) throw new Error("请先在设置里配置 LLM(baseUrl/model)");
+  if (watchTimer) {
+    clearInterval(watchTimer);
+    watchTimer = null;
+  }
+  const seen = await loadWatchSeen();
+  const emit = (e: Omit<WatchEvent, "at">): void => {
+    if (!event.sender.isDestroyed()) event.sender.send("hotclip:watch-event", { ...e, at: Date.now() });
+  };
+  const fontsDir = app.isPackaged
+    ? join(process.resourcesPath, "fonts")
+    : join(app.getAppPath(), "resources", "fonts");
+  const watcher = new FolderWatcher({
+    listDir: async () => {
+      const names = await readdir(dir);
+      const files: WatchedFile[] = [];
+      for (const name of names.filter(isVideoFile)) {
+        const p = join(dir, name);
+        const s = await stat(p).catch(() => null);
+        if (s?.isFile()) files.push({ path: p, size: s.size, mtimeMs: s.mtimeMs });
+      }
+      return files;
+    },
+    isSeen: (f) => isSeen(seen, f),
+    onStable: async (f) => {
+      const file = basename(f.path);
+      emit({ type: "found", file, path: f.path });
+      // 成败都记 seen:失败重试要用户手动触发,不能无人值守下反复烧 LLM 花费
+      const markSeen = async (): Promise<void> => {
+        seen[f.path] = { size: f.size, mtimeMs: f.mtimeMs };
+        await writeFile(watchSeenPath(), JSON.stringify(seen), "utf8").catch(() => {});
+      };
+      try {
+        const outcome = await autoClip(f.path, {
+          modelsRoot: modelsRoot(),
+          cacheDir: transcriptCacheDir(),
+          llm: config,
+          fontsDir,
+          onStage: (stage) => emit({ type: stage, file, path: f.path }),
+        });
+        await markSeen();
+        emit({ type: "done", file, path: f.path, clips: outcome.exported.length, outDir: outcome.outDir });
+      } catch (e) {
+        await markSeen();
+        emit({ type: "error", file, path: f.path, message: e instanceof Error ? e.message : String(e) });
+      }
+    },
+  });
+  watchDirPath = dir;
+  watchTimer = setInterval(() => void watcher.tick(), WATCH_POLL_MS);
+  void watcher.tick();
+});
+
+ipcMain.handle("hotclip:watch-stop", async () => {
+  if (watchTimer) clearInterval(watchTimer);
+  watchTimer = null;
+  watchDirPath = null;
+});
+
+ipcMain.handle("hotclip:watch-status", async () => ({ running: watchTimer !== null, dir: watchDirPath }));
 
 ipcMain.on("hotclip:reveal", (_event, path: unknown) => {
   if (typeof path === "string" && path.trim()) shell.showItemInFolder(path);

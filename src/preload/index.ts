@@ -3,7 +3,7 @@
  * The renderer never touches ipcRenderer — only this typed bridge.
  */
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
-import type { HotClipApi, TranscribeProgressEvent, ExportProgressEvent } from "../shared/api-types";
+import type { HotClipApi, TranscribeProgressEvent, ExportProgressEvent, WatchEvent } from "../shared/api-types";
 
 const api: HotClipApi = {
   selectMedia: () => ipcRenderer.invoke("hotclip:select-media"),
@@ -29,6 +29,15 @@ const api: HotClipApi = {
   selectImage: () => ipcRenderer.invoke("hotclip:select-image"),
   getAudioPeaks: (filePath, startSec, endSec) =>
     ipcRenderer.invoke("hotclip:audio-peaks", filePath, startSec, endSec),
+  selectDir: () => ipcRenderer.invoke("hotclip:select-dir"),
+  watchStart: (dir, llm) => ipcRenderer.invoke("hotclip:watch-start", dir, llm),
+  watchStop: () => ipcRenderer.invoke("hotclip:watch-stop"),
+  watchStatus: () => ipcRenderer.invoke("hotclip:watch-status"),
+  onWatchEvent: (cb) => {
+    const listener = (_e: IpcRendererEvent, p: WatchEvent): void => cb(p);
+    ipcRenderer.on("hotclip:watch-event", listener);
+    return () => ipcRenderer.removeListener("hotclip:watch-event", listener);
+  },
 };
 
 contextBridge.exposeInMainWorld("hotclip", api);
