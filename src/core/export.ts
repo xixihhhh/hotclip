@@ -18,6 +18,7 @@ import { postTextFile, type PublishCopy } from "./publish";
 import { buildSrt, srtLinesFromWords } from "./srt";
 import { buildEdl, type EdlClip } from "./edl";
 import { runAudiogram, audiogramSpec } from "./audiogram";
+import { pickCoverTime } from "./cover";
 import { findFillerWords, dropFillerWords, fillerCutSpans, type FillerHit } from "./fillers";
 import { extractPeaks } from "./audio-peaks";
 import { detectUiCrop, type UiCrop } from "./uicrop";
@@ -264,12 +265,15 @@ export async function exportClips(
       // the gap rule nor the silence gate would remove them).
       let plan = null;
       let fillerHits: FillerHit[] = [];
+      // 峰值轨提升作用域:跳剪的静音门用,封面选帧也用(见下)
+      let clipPeaks: Awaited<ReturnType<typeof extractPeaks>> | undefined;
       if ((options.jumpCut || options.cleanFillers) && clip.words && clip.words.length > 0) {
         fillerHits = options.cleanFillers ? findFillerWords(clip.words) : [];
         const planWords = dropFillerWords(clip.words, fillerHits);
         const peaks = options.jumpCut
           ? await extractPeaks(inputPath, clip.startSec, clip.endSec).catch(() => undefined)
           : undefined;
+        clipPeaks = peaks;
         // filler-only mode with nothing found → leave the clip untouched
         if (options.jumpCut || fillerHits.length > 0) {
           plan = computeJumpCut(planWords, clip.startSec, clip.endSec, {
@@ -435,7 +439,16 @@ export async function exportClips(
       // Cover: a frame just after the hook lands, pulled from the FINISHED
       // clip so captions/title plate are baked in — platform-upload ready.
       const coverPath = outPath.replace(/\.mp4$/, ".jpg");
-      const coverAt = Math.min(0.8, Math.max(0, clipDuration - 0.1));
+      // 智能封面:切片内响度最高的一帧(峰值≈情绪最高点);没跳剪时补提一次
+      // 峰值轨,失败回退固定 0.8s 帧
+      if (!clipPeaks) {
+        clipPeaks = await extractPeaks(inputPath, clip.startSec, clip.endSec).catch(() => undefined);
+      }
+      const coverAt = pickCoverTime(
+        clipPeaks,
+        plan ? plan.segments : [{ startSec: clip.startSec, endSec: clip.endSec }],
+        clipDuration
+      );
       const coverOk = await execFileAsync(
         resolveFfmpegPath(),
         ["-hide_banner", "-v", "error", "-ss", coverAt.toFixed(2), "-i", outPath, "-frames:v", "1", "-q:v", "2", "-y", coverPath],
