@@ -204,6 +204,8 @@ export interface ExportOptions {
   publishCopy?: { llm: LlmConfig };
   /** 每条切片旁落同名 .srt 字幕文件(平台字幕上传/二次精修;双语时含译文行)。 */
   subtitleFile?: boolean;
+  /** 输出目录落 timeline.edl——AI 切点交给 DaVinci/Premiere 重链源片精修。 */
+  timeline?: boolean;
   /** Needed for captions/jump-cut: source of word-level timestamps. */
   transcript?: Transcript;
 }

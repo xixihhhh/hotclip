@@ -20,6 +20,7 @@ export interface RenderPrefs {
   translate: boolean;
   publishCopy: boolean;
   subtitleFile: boolean;
+  timeline: boolean;
   clipLength: ClipLength;
 }
 
@@ -36,6 +37,7 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   translate: false,
   publishCopy: false,
   subtitleFile: false,
+  timeline: false,
   clipLength: "standard",
 };
 

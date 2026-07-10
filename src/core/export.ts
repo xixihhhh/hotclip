@@ -16,6 +16,7 @@ import { computeJumpCut } from "./gaps";
 import { clampTranslationLines, remapTranslationLines, type TranslationLine } from "./translate";
 import { postTextFile, type PublishCopy } from "./publish";
 import { buildSrt, srtLinesFromWords } from "./srt";
+import { buildEdl, type EdlClip } from "./edl";
 import { findFillerWords, dropFillerWords, fillerCutSpans, type FillerHit } from "./fillers";
 import { extractPeaks } from "./audio-peaks";
 import { detectUiCrop, type UiCrop } from "./uicrop";
@@ -134,6 +135,8 @@ export interface ExportRenderOptions {
   translateLang?: string;
   /** 每条切片旁落同名 .srt 字幕文件(平台字幕上传/二次精修用)。 */
   subtitleFile?: boolean;
+  /** 输出目录落 timeline.edl(CMX3600)——切点交给剪辑软件重链源片精修。 */
+  timeline?: boolean;
 }
 
 export interface ExportedClip {
@@ -213,6 +216,8 @@ export async function exportClips(
     const renderByClip = new Map<number, ClipRenderOutcome>();
     // 吸附后的实际切点(clips.json 的 sourceStart/End 要报真实值)
     const snappedRange = new Map<number, { startSec: number; endSec: number }>();
+    // 时间线导出:每条切片实际保留的源片区间(跳剪时一条多段)
+    const edlClips: EdlClip[] = [];
     for (let i = 0; i < clips.length; i++) {
       let clip = clips[i];
       if (signal?.aborted) throw new Error("export cancelled");
@@ -442,6 +447,10 @@ export async function exportClips(
       if (fillerHits.length > 0) {
         removedFillersByClip.set(clip.id, fillerHits.map((h) => h.text.trim()));
       }
+      edlClips.push({
+        title: clip.title,
+        segments: plan ? plan.segments : [{ startSec: clip.startSec, endSec: clip.endSec }],
+      });
       const origDur = clip.endSec - clip.startSec;
       renderByClip.set(clip.id, {
         captionStyle: wantCaptions ? (webStyle ?? assStyle) : "none",
@@ -455,6 +464,18 @@ export async function exportClips(
         shotSnap,
       });
       onProgress?.({ current: i + 1, total: clips.length, clipId: clip.id, stage: "done" });
+    }
+
+    // 时间线 EDL:切点(含跳剪内部剪)交给剪辑软件重链源片精修;失败不拖垮导出
+    if (options.timeline && edlClips.length > 0) {
+      const fps = await probeMedia(inputPath).then((m) => (m.fps > 0 ? m.fps : 30)).catch(() => 30);
+      const edl = buildEdl({
+        title: `${basename(inputPath)} - HotClip`,
+        sourceName: basename(inputPath),
+        fps,
+        clips: edlClips,
+      });
+      await writeFile(join(outDir, "timeline.edl"), edl, "utf8").catch(() => {});
     }
 
     // clips.json: machine-readable evidence chain for CMS / matrix pipelines.
@@ -474,6 +495,7 @@ export async function exportClips(
         // 双语字幕回执:目标语言;实际每条烧了几行见 clips[].render.translatedLines
         translateLang: options.translateLang ?? null,
         subtitleFile: Boolean(options.subtitleFile),
+        timeline: Boolean(options.timeline),
         // 品牌预设回执:用了什么色/档位/水印,矩阵管线可核对品牌一致性
         brand: options.brand
           ? {
