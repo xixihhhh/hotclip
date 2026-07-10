@@ -23,6 +23,7 @@ const api: HotClipApi = {
     ipcRenderer.on("hotclip:export-progress", listener);
     return () => ipcRenderer.removeListener("hotclip:export-progress", listener);
   },
+  cancelExport: () => ipcRenderer.send("hotclip:export-cancel"),
   revealClip: (path) => ipcRenderer.send("hotclip:reveal", path),
   // 路径整体编码进 pathname,主进程协议按同样规则解回
   mediaUrl: (filePath) => `hotclip-media://local/${encodeURIComponent(filePath)}`,

@@ -68,6 +68,7 @@ let watchDirDemo: string | null = null;
 const emitWatch = (e: Omit<WatchEvent, "at">): void => {
   if (watchRunning) watchListeners.forEach((cb) => cb({ ...e, at: Date.now() }));
 };
+let mockExportCancelled = false;
 
 /** Browser-mode mock: deterministic fake data with realistic staged latency. */
 const browserMock: HotClipApi = {
@@ -109,10 +110,13 @@ const browserMock: HotClipApi = {
     return () => progressListeners.delete(cb);
   },
   async exportClips(_filePath, clips) {
+    mockExportCancelled = false;
     const results = [];
     for (let i = 0; i < clips.length; i++) {
+      if (mockExportCancelled) throw new Error("export cancelled");
       emitExport({ current: i + 1, total: clips.length, clipId: clips[i].id, stage: "cutting" });
       await sleep(1100);
+      if (mockExportCancelled) throw new Error("export cancelled");
       emitExport({ current: i + 1, total: clips.length, clipId: clips[i].id, stage: "done" });
       results.push({
         id: clips[i].id,
@@ -127,6 +131,9 @@ const browserMock: HotClipApi = {
   onExportProgress(cb) {
     exportListeners.add(cb);
     return () => exportListeners.delete(cb);
+  },
+  cancelExport() {
+    mockExportCancelled = true;
   },
   revealClip() {
     /* browser mock: nothing to reveal */

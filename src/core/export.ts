@@ -389,14 +389,15 @@ export async function exportClips(
             normalizeLoudness: options.normalizeLoudness,
             watermark,
             metadata: aigcMeta,
-          }
+          },
+          signal
         );
       } else if (plan && plan.segments.length > 1) {
-        await cutJumpClip(inputPath, cutTarget, clip.startSec, plan.segments, cutOptions);
+        await cutJumpClip(inputPath, cutTarget, clip.startSec, plan.segments, cutOptions, signal);
       } else {
         // single kept segment → plain cut (honoring trimmed lead-in/tail)
         const range = plan?.segments[0] ?? { startSec: clip.startSec, endSec: clip.endSec };
-        await cutClip(inputPath, cutTarget, range.startSec, range.endSec, cutOptions);
+        await cutClip(inputPath, cutTarget, range.startSec, range.endSec, cutOptions, signal);
       }
       if (webStyle) {
         // Overlay geometry must match the base clip exactly, whatever the cut

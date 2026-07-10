@@ -144,8 +144,9 @@ export async function runAudiogram(
   inputPath: string,
   outputPath: string,
   ranges: Array<{ startSec: number; endSec: number }>,
-  options: AudiogramOptions
+  options: AudiogramOptions,
+  signal?: AbortSignal
 ): Promise<void> {
   const args = buildAudiogramArgs(inputPath, outputPath, ranges, options);
-  await execFileAsync(resolveFfmpegPath(), args, { maxBuffer: 64 * 1024 * 1024 });
+  await execFileAsync(resolveFfmpegPath(), args, { maxBuffer: 64 * 1024 * 1024, signal });
 }

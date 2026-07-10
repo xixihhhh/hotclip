@@ -220,6 +220,8 @@ export const zh = {
     makeAnother: "再切一个视频",
     failed: "出片失败:{msg}",
     retry: "重试",
+    cancel: "取消导出",
+    cancelled: "已取消导出——已完成的切片保留在输出文件夹里",
   },
   watch: {
     title: "监听文件夹",

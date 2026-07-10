@@ -301,6 +301,8 @@ export interface HotClipApi {
   exportClips: (filePath: string, clips: HighlightCandidate[], options?: ExportOptions) => Promise<ExportedClip[]>;
   /** Subscribe to per-clip export progress; returns an unsubscribe function. */
   onExportProgress: (cb: (p: ExportProgressEvent) => void) => () => void;
+  /** 取消进行中的导出(会中断正在跑的 ffmpeg;已完成的切片保留)。 */
+  cancelExport: () => void;
   /** Reveal an exported file in Finder / Explorer. */
   revealClip: (path: string) => void;
   /** 本地媒体的可播放 URL(审阅台 <video> 用);空串 = 当前环境不支持预览。 */

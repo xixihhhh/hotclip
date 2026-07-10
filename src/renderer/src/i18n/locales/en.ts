@@ -215,6 +215,8 @@ export const en = {
     makeAnother: "Clip another video",
     failed: "Export failed: {msg}",
     retry: "Retry",
+    cancel: "Cancel export",
+    cancelled: "Export cancelled — finished clips are kept in the output folder",
   },
   watch: {
     title: "Watch folder",

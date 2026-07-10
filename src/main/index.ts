@@ -365,6 +365,10 @@ async function diarizeTranscript(t: Transcript, filePath: string): Promise<Trans
 // ---- IPC: export selected clips (wizard step 3) ----
 // Output goes to ~/Movies/HotClip/<source-name>/ — a place beginners can find.
 
+// 导出取消:单并发导出,一个活动控制器;cancel 会 kill 正在跑的 ffmpeg
+let exportAbort: AbortController | null = null;
+ipcMain.on("hotclip:export-cancel", () => exportAbort?.abort());
+
 ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: unknown, options: unknown) => {
   if (typeof filePath !== "string" || !filePath.trim()) throw new Error("export requires a file path");
   const list = clips as HighlightCandidate[];
@@ -406,7 +410,10 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
     const sources = list.map((c) => ({ id: c.id, title: c.title, hook: c.hook, text: c.text, keywords: c.keywords }));
     publishCopies = await generatePublishCopies(sources, zh, pub.llm, chatComplete).catch(() => null);
   }
-  return exportClips(
+  exportAbort = new AbortController();
+  const abortSignal = exportAbort.signal;
+  try {
+  return await exportClips(
     filePath,
     list.map((c) => ({
       id: c.id,
@@ -456,8 +463,12 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
     },
     (p) => {
       if (!event.sender.isDestroyed()) event.sender.send("hotclip:export-progress", p);
-    }
+    },
+    abortSignal
   );
+  } finally {
+    exportAbort = null;
+  }
 });
 
 // ---- 录播监听:watch 文件夹,新录播写完落稳后自动全托管切片 ----

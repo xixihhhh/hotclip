@@ -267,11 +267,13 @@ export async function cutJumpClip(
   outputPath: string,
   clipStartSec: number,
   segments: Array<{ startSec: number; endSec: number }>,
-  options: CutOptions = {}
+  options: CutOptions = {},
+  signal?: AbortSignal
 ): Promise<void> {
   const args = buildJumpCutArgs(inputPath, outputPath, clipStartSec, segments, options);
   try {
-    await execFileAsync(resolveFfmpegPath(), args, { maxBuffer: 32 * 1024 * 1024 });
+    // signal 直达子进程:取消时 node 会 kill ffmpeg,长切片也能即时中断
+    await execFileAsync(resolveFfmpegPath(), args, { maxBuffer: 32 * 1024 * 1024, signal });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     const tail = msg.split("\n").slice(-6).join("\n");
@@ -285,11 +287,13 @@ export async function cutClip(
   outputPath: string,
   startSec: number,
   endSec: number,
-  options: CutOptions = {}
+  options: CutOptions = {},
+  signal?: AbortSignal
 ): Promise<void> {
   const args = buildCutArgs(inputPath, outputPath, startSec, endSec, options);
   try {
-    await execFileAsync(resolveFfmpegPath(), args, { maxBuffer: 32 * 1024 * 1024 });
+    // signal 直达子进程:取消时 node 会 kill ffmpeg,长切片也能即时中断
+    await execFileAsync(resolveFfmpegPath(), args, { maxBuffer: 32 * 1024 * 1024, signal });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     // ffmpeg errors bury the cause at the end of stderr — surface only the tail

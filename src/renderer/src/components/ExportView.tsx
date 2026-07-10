@@ -4,7 +4,7 @@
  * with reveal-in-folder actions.
  */
 import { useEffect, useRef, useState } from "react";
-import { LuScissors, LuCircleCheck, LuFolderOpen, LuArrowLeft, LuRotateCcw, LuFilm } from "react-icons/lu";
+import { LuScissors, LuCircleCheck, LuFolderOpen, LuArrowLeft, LuRotateCcw, LuFilm, LuCircleStop } from "react-icons/lu";
 import { useT } from "../i18n/store";
 import { getApi, isElectron } from "../api/provider";
 import type {
@@ -86,14 +86,26 @@ export function ExportView({
                 style={{ width: `${Math.max(2, pct)}%` }}
               />
             </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => getApi().cancelExport()}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3.5 py-1.5 text-[12.5px] text-mut transition-colors hover:border-red-400/60 hover:text-red-400"
+              >
+                <LuCircleStop className="h-3.5 w-3.5" />
+                {t("cancel")}
+              </button>
+            </div>
           </div>
         </>
       )}
 
-      {/* error */}
+      {/* error / cancelled */}
       {error && (
         <div className="card mt-2 w-full rounded-2xl p-6 text-center">
-          <p className="text-sm break-all text-red-400">{t("failed", { msg: error })}</p>
+          <p className={`text-sm break-all ${/cancel/i.test(error) ? "text-mut" : "text-red-400"}`}>
+            {/cancel/i.test(error) ? t("cancelled") : t("failed", { msg: error })}
+          </p>
           <div className="mt-4 flex items-center justify-center gap-3">
             <button
               type="button"
