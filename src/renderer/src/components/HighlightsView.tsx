@@ -30,11 +30,13 @@ import {
   LuLanguages,
   LuMegaphone,
   LuFileText,
+  LuPencil,
 } from "react-icons/lu";
 import { useT } from "../i18n/store";
 import { getApi, isElectron } from "../api/provider";
 import { useLlmStore, isLlmReady, LLM_PRESETS } from "../stores/llm-store";
 import { useBrandStore, activeBrandStyle } from "../stores/brand-store";
+import { useRenderPrefs } from "../stores/render-prefs-store";
 import { adjustClipBoundary } from "../../../shared/boundary";
 import { ClipReviewModal } from "./ClipReviewModal";
 import { BrandStyleModal } from "./BrandStyleModal";
@@ -100,26 +102,16 @@ export function HighlightsView({
   /** 弹幕热度信号统计(视频旁同名 .xml 自动发现)。 */
   const [danmakuStats, setDanmakuStats] = useState<DanmakuStats | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
-  // Vertical + karaoke + jump-cut ON by default — publish-ready clips out of the box.
-  const [vertical, setVertical] = useState(true);
-  const [captionStyle, setCaptionStyle] = useState<CaptionStyleChoice>("karaoke");
-  const [jumpCut, setJumpCut] = useState(true);
-  const [cleanFillers, setCleanFillers] = useState(true);
-  const [trimUi, setTrimUi] = useState(true);
+  // 出片偏好持久化:上次的开关组合下次直接生效(解构保持下方 JSX 引用不变)
+  const { prefs, setPref } = useRenderPrefs();
+  const { vertical, captionStyle, jumpCut, cleanFillers, trimUi, titleCard, openingHook, normalizeLoudness, translate, publishCopy, subtitleFile } = prefs;
   const [diarize, setDiarize] = useState(false);
-  const [titleCard, setTitleCard] = useState(true);
-  const [openingHook, setOpeningHook] = useState(true);
-  const [normalizeLoudness, setNormalizeLoudness] = useState(true);
-  /** 双语字幕:整句译文烧成主字幕下方的小号翻译轨(默认关,走云端 LLM)。 */
-  const [translate, setTranslate] = useState(false);
-  /** 发布文案:每条切片生成标题+话题+简介落 .post.txt(默认关,走云端 LLM)。 */
-  const [publishCopy, setPublishCopy] = useState(false);
-  /** SRT 字幕文件:切片旁落同名 .srt(纯本地零成本,默认关)。 */
-  const [subtitleFile, setSubtitleFile] = useState(false);
   // 中文源译英,其余译中——短视频出海/引进的两个主方向
   const targetLang = (transcript.language || "").startsWith("zh") ? "en" : "zh";
-  /** 切片时长档(短=快节奏竖屏,长=B站/播客金句段);切换即重新检测。 */
-  const [clipLength, setClipLength] = useState<ClipLength>("standard");
+  /** 标题即点即改:当前编辑中的候选 id。 */
+  const [editingTitle, setEditingTitle] = useState<number | null>(null);
+  /** 切片时长档(短=快节奏竖屏,长=B站/播客金句段);切换即重新检测,选择持久化。 */
+  const clipLength = prefs.clipLength;
   /** 审阅台当前打开的候选 id;null = 关闭。 */
   const [reviewId, setReviewId] = useState<number | null>(null);
   /** 品牌样式模板弹窗。 */
@@ -160,7 +152,7 @@ export function HighlightsView({
   const LENGTH_CYCLE: ClipLength[] = ["standard", "short", "long"];
   const cycleLength = useCallback((): void => {
     const next = LENGTH_CYCLE[(LENGTH_CYCLE.indexOf(clipLength) + 1) % LENGTH_CYCLE.length];
-    setClipLength(next);
+    setPref({ clipLength: next });
     void run(diarize, next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clipLength, diarize, run]);
@@ -505,7 +497,40 @@ export function HighlightsView({
                     >
                       <LuCheck className="h-3.5 w-3.5" />
                     </span>
-                    <h3 className="text-[16px] leading-snug font-bold">{c.title}</h3>
+                    {editingTitle === c.id ? (
+                      <input
+                        autoFocus
+                        defaultValue={c.title}
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                          if (e.key === "Escape") setEditingTitle(null);
+                        }}
+                        onBlur={(e) => {
+                          const v = e.target.value.trim();
+                          if (v) {
+                            setCandidates((prev) => prev?.map((x) => (x.id === c.id ? { ...x, title: v } : x)) ?? prev);
+                          }
+                          setEditingTitle(null);
+                        }}
+                        className="w-full rounded-lg border border-ember/60 bg-panel-2 px-2 py-1 text-[16px] font-bold outline-none"
+                      />
+                    ) : (
+                      <h3 className="group/title flex min-w-0 items-center gap-1.5 text-[16px] leading-snug font-bold">
+                        <span className="min-w-0">{c.title}</span>
+                        <button
+                          type="button"
+                          title={t("editTitleHint")}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingTitle(c.id);
+                          }}
+                          className="shrink-0 rounded p-0.5 text-mut opacity-0 transition-opacity group-hover/title:opacity-100 hover:text-fg"
+                        >
+                          <LuPencil className="h-3.5 w-3.5" />
+                        </button>
+                      </h3>
+                    )}
                   </div>
                   <span className="flame-gradient flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-extrabold text-white">
                     <LuFlame className="h-3 w-3" />
@@ -634,7 +659,7 @@ export function HighlightsView({
                 <button
                   type="button"
                   title={t("optVerticalHint")}
-                  onClick={() => setVertical(!vertical)}
+                  onClick={() => setPref({ vertical: !vertical })}
                   className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
                     vertical ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
                   }`}
@@ -645,7 +670,7 @@ export function HighlightsView({
                 <button
                   type="button"
                   title={t("optTrimUiHint")}
-                  onClick={() => setTrimUi(!trimUi)}
+                  onClick={() => setPref({ trimUi: !trimUi })}
                   className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
                     trimUi ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
                   }`}
@@ -656,7 +681,7 @@ export function HighlightsView({
                 <button
                   type="button"
                   title={t("optTitleCardHint")}
-                  onClick={() => setTitleCard(!titleCard)}
+                  onClick={() => setPref({ titleCard: !titleCard })}
                   className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
                     titleCard ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
                   }`}
@@ -667,7 +692,7 @@ export function HighlightsView({
                 <button
                   type="button"
                   title={t("optOpeningHookHint")}
-                  onClick={() => setOpeningHook(!openingHook)}
+                  onClick={() => setPref({ openingHook: !openingHook })}
                   className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
                     openingHook ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
                   }`}
@@ -678,7 +703,7 @@ export function HighlightsView({
                 <button
                   type="button"
                   title={t("optJumpCutHint")}
-                  onClick={() => setJumpCut(!jumpCut)}
+                  onClick={() => setPref({ jumpCut: !jumpCut })}
                   className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
                     jumpCut ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
                   }`}
@@ -689,7 +714,7 @@ export function HighlightsView({
                 <button
                   type="button"
                   title={t("optCleanFillersHint")}
-                  onClick={() => setCleanFillers(!cleanFillers)}
+                  onClick={() => setPref({ cleanFillers: !cleanFillers })}
                   className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
                     cleanFillers ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
                   }`}
@@ -700,7 +725,7 @@ export function HighlightsView({
                 <button
                   type="button"
                   title={t("optLoudnessHint")}
-                  onClick={() => setNormalizeLoudness(!normalizeLoudness)}
+                  onClick={() => setPref({ normalizeLoudness: !normalizeLoudness })}
                   className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
                     normalizeLoudness ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
                   }`}
@@ -711,7 +736,7 @@ export function HighlightsView({
                 <button
                   type="button"
                   title={t("optTranslateHint")}
-                  onClick={() => setTranslate(!translate)}
+                  onClick={() => setPref({ translate: !translate })}
                   className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
                     translate ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
                   }`}
@@ -722,7 +747,7 @@ export function HighlightsView({
                 <button
                   type="button"
                   title={t("optPublishHint")}
-                  onClick={() => setPublishCopy(!publishCopy)}
+                  onClick={() => setPref({ publishCopy: !publishCopy })}
                   className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
                     publishCopy ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
                   }`}
@@ -733,7 +758,7 @@ export function HighlightsView({
                 <button
                   type="button"
                   title={t("optSrtHint")}
-                  onClick={() => setSubtitleFile(!subtitleFile)}
+                  onClick={() => setPref({ subtitleFile: !subtitleFile })}
                   className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
                     subtitleFile ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
                   }`}
@@ -745,7 +770,7 @@ export function HighlightsView({
                   type="button"
                   title={t("captionStyleHint")}
                   onClick={() =>
-                    setCaptionStyle(CAPTION_CYCLE[(CAPTION_CYCLE.indexOf(captionStyle) + 1) % CAPTION_CYCLE.length])
+                    setPref({ captionStyle: CAPTION_CYCLE[(CAPTION_CYCLE.indexOf(captionStyle) + 1) % CAPTION_CYCLE.length] })
                   }
                   className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
                     captionStyle !== "none" ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"

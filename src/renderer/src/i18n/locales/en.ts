@@ -129,6 +129,7 @@ export const en = {
     lengthStandard: "Length: standard",
     lengthLong: "Length: long · 40-90s",
     lengthHint: "Target clip length — click to cycle and re-detect. Short: fast vertical pace (TikTok watch-through friendly); Standard: 8-40s; Long: podcast/YouTube punch segments",
+    editTitleHint: "Edit title — used for the file name, title card and post copy",
     llmStart: "Save & find highlights",
     selectedCount: "{n} selected",
     exportSelected: "Export clips",

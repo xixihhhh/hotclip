@@ -168,6 +168,7 @@ export const zh = {
     lengthStandard: "时长:标准",
     lengthLong: "时长:长·40-90s",
     lengthHint: "切片目标时长档,点击循环切换并重新检测——短:快节奏竖屏(抖音/TikTok 完播友好);标准:8-40 秒;长:B站/播客金句段",
+    editTitleHint: "改标题——导出文件名、标题贴片、发布文案都会用它",
   },
   brand: {
     title: "品牌样式模板",
