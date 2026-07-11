@@ -123,7 +123,9 @@ export class SherpaOfflineEngine implements TranscribeEngine {
           })
         : null;
 
-      const wave = sh.readWave(wavPath) as { samples: Float32Array; sampleRate: number };
+      // 第二参必须为 false(拷贝而非 external buffer):Electron 的 V8 memory cage
+      // 禁止 wrap 外部内存,默认档在打包应用里必抛 "External buffers are not allowed"
+      const wave = sh.readWave(wavPath, false) as { samples: Float32Array; sampleRate: number };
       const sampleRate: number = wave.sampleRate;
       const durationSec = wave.samples.length / sampleRate;
       const windowSamples = WINDOW_SEC * sampleRate;
