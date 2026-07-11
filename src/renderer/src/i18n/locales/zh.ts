@@ -168,6 +168,8 @@ export const zh = {
     optTitleCardHint: "把 AI 起的爆款标题烧进顶部安全区,切片标配",
     optOpeningHook: "开场钩子",
     optOpeningHookHint: "把 AI 写的悬念句大字烧在开头 2 秒当文字钩子(黄金3秒留人),无悬念句的片自动不加",
+    optAlsoLandscape: "+横屏版",
+    optAlsoLandscapeHint: "竖屏之外再出一版横屏原画幅到「横屏/」子目录——竖版发抖音/TikTok,横版发B站/YouTube,不用剪两遍;横屏版不带标题贴片(那是竖屏形态),字幕自动换底部小号布局,封面/SRT 各自成套;导出时间约翻倍,竖屏源自动跳过",
     optColdOpen: "高潮前置",
     optColdOpenHint: "把切片里最炸的钩子句(1-4 秒)剪到开头再接完整正片,播到原位置原样重复——直播切片圈通行的完播率手法;钩子定位失败、或它本来就在开头 10 秒内时自动跳过",
     optBrand: "样式模板",

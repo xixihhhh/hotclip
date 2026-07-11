@@ -186,6 +186,8 @@ export const en = {
     optTitleCardHint: "Burn the AI-written title into the top safe zone",
     optOpeningHook: "Hook intro",
     optOpeningHookHint: "Burn the AI teaser big over the first ~2s as an opening text hook (grab-them-in-3s); clips without a teaser skip it",
+    optAlsoLandscape: "+Landscape",
+    optAlsoLandscapeHint: "Export a landscape original-aspect version alongside the vertical one (into a subfolder) — vertical for Douyin/TikTok, landscape for Bilibili/YouTube, no second editing pass; the landscape variant drops the title card (a vertical-shorts convention), captions switch to the smaller bottom layout, covers/SRT come per variant; export time roughly doubles, portrait sources skip it",
     optColdOpen: "Cold open",
     optColdOpenHint: "Splice the clip's hottest hook line (1-4s) to the very front, then play the full clip — it repeats at its original spot, the standard retention trick in clip editing; skipped automatically when the hook can't be located or already sits within the first 10s",
     optBrand: "Brand style",

@@ -20,6 +20,7 @@ export interface RenderPrefs {
   denoise: boolean;
   compilation: boolean;
   coldOpen: boolean;
+  alsoLandscape: boolean;
   translate: boolean;
   publishCopy: boolean;
   subtitleFile: boolean;
@@ -41,6 +42,7 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   denoise: false, // 素材千差万别,降噪宁保守默认关
   compilation: false, // 合集是额外产物,默认关
   coldOpen: false, // 高潮前置改变成片结构,默认关由用户选择
+  alsoLandscape: false, // 多画幅导出时间翻倍,默认关
   translate: false,
   publishCopy: false,
   subtitleFile: false,

@@ -210,6 +210,8 @@ export interface ExportOptions {
   compilation?: boolean;
   /** 高潮前置:钩子句剪成迷你片拼到切片开头再接完整正片(cold-open)。 */
   coldOpen?: boolean;
+  /** 多画幅:竖屏之外再出一版横屏原画幅(竖版发抖音,横版发B站/YouTube)。 */
+  alsoLandscape?: boolean;
   /** 品牌样式预设(高亮色/字号/位置/水印);缺省走内置默认。 */
   brand?: BrandStyle;
   /** 双语字幕:整句译文烧成主字幕下方的小号翻译轨;翻译失败静默跳过。 */

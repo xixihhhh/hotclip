@@ -140,6 +140,8 @@ export interface ExportRenderOptions {
   compilation?: boolean;
   /** 高潮前置:钩子句剪成迷你片拼到切片开头再接完整正片(cold-open)。 */
   coldOpen?: boolean;
+  /** 多画幅:竖屏之外再出一版横屏原画幅(落 `横屏/` 子目录,竖版发抖音横版发B站)。 */
+  alsoLandscape?: boolean;
   /** 切点吸附镜头边界(TransNetV2,需 modelsRoot);检测失败静默回退不吸附。 */
   snapToShots?: boolean;
   /** 品牌样式预设(高亮色/字号/位置/水印);缺省走内置默认,输出不变。 */
@@ -244,6 +246,13 @@ export async function exportClips(
   const srcInfo = await probeMedia(inputPath).catch(() => null);
   const audioOnly = srcInfo ? !srcInfo.hasVideo : false;
 
+  // 多画幅:开「+横屏版」时进度总数翻倍(第二遍横屏在主循环后递归跑)。
+  // 竖屏源裁不出可用的 16:9,原画幅本来就是竖的——直接跳过横屏版。
+  const alsoLandscape =
+    Boolean(options.alsoLandscape && options.vertical) &&
+    (srcInfo && srcInfo.hasVideo ? srcInfo.width >= srcInfo.height : !audioOnly);
+  const totalUnits = clips.length * (alsoLandscape ? 2 : 1);
+
   // one UI-chrome detection pass for the whole source (bands don't move)
   let uiCrop: UiCrop | undefined;
   if (options.trimUi && clips.length > 0 && !audioOnly) {
@@ -266,7 +275,7 @@ export async function exportClips(
     for (let i = 0; i < clips.length; i++) {
       let clip = clips[i];
       if (signal?.aborted) throw new Error("export cancelled");
-      onProgress?.({ current: i + 1, total: clips.length, clipId: clip.id, stage: "cutting" });
+      onProgress?.({ current: i + 1, total: totalUnits, clipId: clip.id, stage: "cutting" });
 
       // 切点吸附:起止点吸到最近的镜头边界(词边界守卫,检测失败回退不吸附)。
       // 必须在跳剪/字幕/取景之前调整——下游全部消费 clip.startSec/endSec。
@@ -403,7 +412,7 @@ export async function exportClips(
         const pct = Math.floor(fraction * 50); // 2% 粒度节流
         if (pct !== lastPct) {
           lastPct = pct;
-          onProgress?.({ current: i + 1, total: clips.length, clipId: clip.id, stage: "cutting", fraction });
+          onProgress?.({ current: i + 1, total: totalUnits, clipId: clip.id, stage: "cutting", fraction });
         }
       };
 
@@ -631,7 +640,7 @@ export async function exportClips(
         translatedLines: transLines.length,
         shotSnap,
       });
-      onProgress?.({ current: i + 1, total: clips.length, clipId: clip.id, stage: "done" });
+      onProgress?.({ current: i + 1, total: totalUnits, clipId: clip.id, stage: "done" });
     }
 
     // 精华合集:同批切片编码参数一致,流复制拼接秒级完成零画质损失;
@@ -732,6 +741,31 @@ export async function exportClips(
       }),
     };
     await writeFile(join(outDir, "clips.json"), JSON.stringify(metadata, null, 2), "utf8").catch(() => {});
+
+    // 多画幅:整条管线用 vertical:false 递归再跑一遍到「横屏/」子目录——
+    // 横屏字幕布局/封面/回执全部自动正确;失败静默,绝不拖垮已出的竖屏版。
+    // 进度事件续接主循环(current 偏移 N,total 沿用翻倍后的 totalUnits)。
+    if (alsoLandscape) {
+      const subResults = await exportClips(
+        inputPath,
+        clips,
+        join(outDir, "横屏"),
+        // 标题贴片/悬念句大字是竖屏短视频形态,横屏版去掉(标题交给平台标题字段);
+        // 字幕沿用横屏布局(底部小号),封面/回执/SRT 在子目录各自成套
+        { ...options, vertical: false, alsoLandscape: false, faceTrack: false, compilation: false, timeline: false, titleCard: false, openingHook: false },
+        onProgress
+          ? (p) => onProgress({ ...p, current: p.current + clips.length, total: totalUnits })
+          : undefined,
+        signal
+      ).catch((e) => {
+        if (signal?.aborted) throw e;
+        return [] as ExportedClip[];
+      });
+      // 横屏版并入结果:id 取负避免与竖屏版/合集(id 0)相撞
+      for (const r of subResults) {
+        results.push({ ...r, id: -Math.abs(r.id) - 1, title: `${r.title}(横屏)` });
+      }
+    }
 
     return results;
   } finally {

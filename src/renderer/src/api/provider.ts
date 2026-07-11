@@ -151,6 +151,17 @@ const browserMock: HotClipApi = {
         durationSec: results.reduce((a, r) => a + r.durationSec, 0),
       });
     }
+    // 多画幅:横屏原画幅版落「横屏/」子目录(演示条目)
+    if (options?.alsoLandscape && options?.vertical) {
+      for (const r of results.filter((x) => x.id > 0)) {
+        results.push({
+          ...r,
+          id: -r.id - 1,
+          title: `${r.title}(横屏)`,
+          path: r.path.replace("/我的直播回放-2026-07-04/", "/我的直播回放-2026-07-04/横屏/"),
+        });
+      }
+    }
     return results;
   },
   onExportProgress(cb) {
