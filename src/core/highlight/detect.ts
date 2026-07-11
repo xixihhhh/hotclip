@@ -236,13 +236,26 @@ export interface DetectOutcome {
 }
 
 /** Full detection pass. */
+/**
+ * 商品词确定性并入候选 keywords:片文本真实包含才算命中(拉丁忽略大小写),
+ * 去重保序——关键词字幕的商品强调、发布文案的话题都从这里受益。纯函数。
+ */
+export function mergeProductKeywords(keywords: string[], clipText: string, products: string[]): string[] {
+  if (products.length === 0) return keywords;
+  const lower = clipText.toLowerCase();
+  const hits = products.map((p) => p.trim()).filter((p) => p && lower.includes(p.toLowerCase()));
+  const seen = new Set(keywords.map((k) => k.toLowerCase()));
+  return [...keywords, ...hits.filter((h) => !seen.has(h.toLowerCase()))];
+}
+
 export async function detectHighlights(
   transcript: Transcript,
   llm: LlmConfig,
   signal?: AbortSignal,
   signals?: MediaSignals,
   prefilter?: PrefilterConfig | null,
-  length?: ClipLength
+  length?: ClipLength,
+  products?: string[]
 ): Promise<DetectOutcome> {
   if (transcript.segments.length === 0) return { candidates: [] };
 
@@ -265,7 +278,7 @@ export async function detectHighlights(
 
   const content = await chatComplete(
     llm,
-    highlightSystemPrompt(promptTranscript, length),
+    highlightSystemPrompt(promptTranscript, length, products ?? []),
     buildHighlightPrompt(promptTranscript, 6, signals),
     signal
   );
@@ -289,8 +302,13 @@ export async function detectHighlights(
       reason: sel.reason,
       boundary: resolved.boundary,
       // keep only keywords the clip actually contains — hallucinated ones
-      // would silently no-op in caption highlighting anyway
-      keywords: sel.keywords.filter((k) => resolved.text.toLowerCase().includes(k.toLowerCase())),
+      // would silently no-op in caption highlighting anyway;商品词命中的
+      // 确定性补齐(不依赖 LLM 记得写),关键词字幕/发布文案都能吃到
+      keywords: mergeProductKeywords(
+        sel.keywords.filter((k) => resolved.text.toLowerCase().includes(k.toLowerCase())),
+        resolved.text,
+        products ?? []
+      ),
       recommended: true,
       reviewNote: "",
     });

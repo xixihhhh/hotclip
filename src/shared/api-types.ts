@@ -313,7 +313,9 @@ export interface HotClipApi {
     diarize?: boolean,
     prefilter?: PrefilterConfig | null,
     vision?: PrefilterConfig | null,
-    length?: ClipLength
+    length?: ClipLength,
+    /** 商品讲解模式:商品词列表(带货直播按商品选段,命中词并入候选 keywords)。 */
+    products?: string[]
   ) => Promise<DetectHighlightsResult>;
   /** Cut the selected highlights into mp4 files; resolves with the file list. */
   exportClips: (filePath: string, clips: HighlightCandidate[], options?: ExportOptions) => Promise<ExportedClip[]>;

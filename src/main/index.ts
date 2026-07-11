@@ -278,7 +278,7 @@ ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: 
 
 ipcMain.handle(
   "hotclip:detect-highlights",
-  async (_event, transcript: unknown, llm: unknown, filePath: unknown, diarize: unknown, prefilter: unknown, vision: unknown, length: unknown) => {
+  async (_event, transcript: unknown, llm: unknown, filePath: unknown, diarize: unknown, prefilter: unknown, vision: unknown, length: unknown, products: unknown) => {
     let t = transcript as Transcript;
     const config = llm as LlmConfig;
     if (!t || !Array.isArray(t.segments)) throw new Error("detect-highlights requires a transcript");
@@ -353,7 +353,11 @@ ipcMain.handle(
     // 时长档:非法值回落标准档
     const clipLength =
       length === "short" || length === "long" || length === "standard" ? length : undefined;
-    const outcome = await detectHighlights(t, config, undefined, signals, localFilter, clipLength);
+    // 商品词:白名单清洗(字符串数组,单词 ≤30 字,最多 20 个)
+    const productWords = Array.isArray(products)
+      ? products.filter((p): p is string => typeof p === "string" && p.trim().length > 0).map((p) => p.trim().slice(0, 30)).slice(0, 20)
+      : [];
+    const outcome = await detectHighlights(t, config, undefined, signals, localFilter, clipLength, productWords);
     return { candidates: outcome.candidates, transcript: labeled, funnel: outcome.funnel, vision: visionStats, emotion: emotionStats, danmaku: danmakuStats };
   }
 );

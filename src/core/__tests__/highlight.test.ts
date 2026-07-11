@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { normalizeText, buildTokenIndex, matchQuote, resolveSelection } from "../highlight/match";
-import { parseSelections, dropOverlaps, parseReviews, applyReviews, normalizeScores, clipLengthBounds } from "../highlight/detect";
+import { parseSelections, dropOverlaps, parseReviews, applyReviews, normalizeScores, clipLengthBounds, mergeProductKeywords } from "../highlight/detect";
 import {
   buildHighlightPrompt,
   renderTranscriptLines,
@@ -357,5 +357,52 @@ describe("renderSignals / signal injection", () => {
     const tx = makeTranscript(["第一句话。", "第二句话。"]);
     expect(buildHighlightPrompt(tx, 6, signals)).toContain("画面与声音信号");
     expect(buildHighlightPrompt(tx)).not.toContain("画面与声音信号");
+  });
+});
+
+describe("商品讲解模式 (product mode)", () => {
+  it("传商品词时 system prompt 追加商品段(中英),不传时不追加", () => {
+    const zh = makeTranscript(["第一句话。", "第二句话。"]);
+    expect(highlightSystemPrompt(zh)).not.toContain("商品讲解模式");
+    const zhSys = highlightSystemPrompt(zh, "standard", ["抽纸", "面霜"]);
+    expect(zhSys).toContain("【商品讲解模式】");
+    expect(zhSys).toContain("抽纸、面霜");
+    expect(zhSys).toContain("憋单");
+    expect(zhSys).toContain("keywords 必须包含");
+    const en: Transcript = { ...makeTranscript(["First sentence here.", "Second sentence there."]), language: "en" };
+    const enSys = highlightSystemPrompt(en, "standard", ["tissue"]);
+    expect(enSys).toContain("[Product mode]");
+    expect(enSys).toContain("tissue");
+    // 英文稿的商品段不夹带中文
+    expect(/[一-鿿]/.test(enSys)).toBe(false);
+  });
+
+  it("商品段与时长档改写可叠加", () => {
+    const zh = makeTranscript(["第一句话。", "第二句话。"]);
+    const sys = highlightSystemPrompt(zh, "short", ["抽纸"]);
+    expect(sys).toContain("时长 10~30 秒(硬要求,宁短勿超)");
+    expect(sys).toContain("【商品讲解模式】");
+  });
+
+  it("mergeProductKeywords:命中的商品词确定性并入 keywords", () => {
+    expect(mergeProductKeywords(["吸水", "实测"], "这款抽纸的吸水速度你们看", ["抽纸", "面霜"])).toEqual([
+      "吸水",
+      "实测",
+      "抽纸",
+    ]);
+  });
+
+  it("mergeProductKeywords:空商品词表原样返回;未命中不并入", () => {
+    expect(mergeProductKeywords(["a"], "任意文本", [])).toEqual(["a"]);
+    expect(mergeProductKeywords(["a"], "没提到商品", ["抽纸"])).toEqual(["a"]);
+  });
+
+  it("mergeProductKeywords:拉丁词大小写不敏感命中且去重", () => {
+    // 命中匹配大小写不敏感
+    expect(mergeProductKeywords([], "The new iPhone case is great", ["iphone"])).toEqual(["iphone"]);
+    // 已在 keywords 里(大小写不同)不重复并入
+    expect(mergeProductKeywords(["iPhone"], "the iphone case", ["IPHONE"])).toEqual(["iPhone"]);
+    // 空白商品词被忽略
+    expect(mergeProductKeywords([], "some text", ["  ", ""])).toEqual([]);
   });
 });

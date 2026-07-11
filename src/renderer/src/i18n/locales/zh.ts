@@ -203,6 +203,8 @@ export const zh = {
     lengthStandard: "时长:标准",
     lengthLong: "时长:长·40-90s",
     lengthHint: "切片目标时长档,点击循环切换并重新检测——短:快节奏竖屏(抖音/TikTok 完播友好);标准:8-40 秒;长:B站/播客金句段",
+    productsPlaceholder: "商品词,逗号分隔(带货模式)",
+    productsHint: "填写直播间在讲的商品词(如:抽纸,面霜),回车生效并重新检测——优先圈出讲解/试用/价格片段,排除憋单和纯互动段;命中商品词会并入切片关键词并打上标记",
     editTitleHint: "改标题——导出文件名、标题贴片、发布文案都会用它",
   },
   brand: {

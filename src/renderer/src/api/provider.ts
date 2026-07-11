@@ -236,7 +236,7 @@ const browserMock: HotClipApi = {
   openUrl(url) {
     window.open(url, "_blank", "noreferrer");
   },
-  async detectHighlights(transcript, _llm, _filePath, diarize, prefilter, vision, _length): Promise<DetectHighlightsResult> {
+  async detectHighlights(transcript, _llm, _filePath, diarize, prefilter, vision, _length, products): Promise<DetectHighlightsResult> {
     await sleep(1500);
     // 浏览器预览:开了本地初筛就演示一份漏斗统计
     const funnel = prefilter
@@ -279,6 +279,14 @@ const browserMock: HotClipApi = {
       pick(1, 2, 2, "十几块和两块多的纸巾差在哪", "很多朋友问我,这个和超市里十几块的有什么区别", 81, "悬念提问开场,击中比价心理"),
       pick(0, 1, 3, "欢迎来到直播间", "大家好,欢迎来到我的直播间", 38, "开场白"),
     ];
+    // 商品讲解模式:与主进程同款——命中的商品词确定性并入候选 keywords
+    if (products && products.length > 0) {
+      for (const c of candidates) {
+        const hits = products.filter((p) => p.trim() && c.text.toLowerCase().includes(p.trim().toLowerCase()));
+        const seen = new Set(c.keywords.map((k) => k.toLowerCase()));
+        c.keywords = [...c.keywords, ...hits.filter((h) => !seen.has(h.toLowerCase()))];
+      }
+    }
     // Multi-speaker demo: label the transcript by alternating segments so the
     // browser preview can show per-speaker caption coloring end-to-end.
     if (diarize) {

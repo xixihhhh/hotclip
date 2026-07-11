@@ -63,14 +63,47 @@ export const CLIP_LENGTH_RANGES: Record<ClipLength, { minSec: number; maxSec: nu
   long: { minSec: 40, maxSec: 90 },
 };
 
-export function highlightSystemPrompt(transcript: Transcript, length: ClipLength = "standard"): string {
-  const base = isChineseTranscript(transcript) ? HIGHLIGHT_SYSTEM_PROMPT_ZH : HIGHLIGHT_SYSTEM_PROMPT_EN;
-  if (length === "standard") return base;
-  // 时长行按档改写(硬约束进 system prompt,选段时就按目标节奏挑)
-  const { minSec, maxSec } = CLIP_LENGTH_RANGES[length];
-  return base
-    .replace("时长 8~40 秒", `时长 ${minSec}~${maxSec} 秒(硬要求,宁短勿超)`)
-    .replace("Length 8–40 seconds", `Length ${minSec}–${maxSec} seconds (hard requirement)`);
+export function highlightSystemPrompt(
+  transcript: Transcript,
+  length: ClipLength = "standard",
+  products: string[] = []
+): string {
+  const zh = isChineseTranscript(transcript);
+  let base = zh ? HIGHLIGHT_SYSTEM_PROMPT_ZH : HIGHLIGHT_SYSTEM_PROMPT_EN;
+  if (length !== "standard") {
+    // 时长行按档改写(硬约束进 system prompt,选段时就按目标节奏挑)
+    const { minSec, maxSec } = CLIP_LENGTH_RANGES[length];
+    base = base
+      .replace("时长 8~40 秒", `时长 ${minSec}~${maxSec} 秒(硬要求,宁短勿超)`)
+      .replace("Length 8–40 seconds", `Length ${minSec}–${maxSec} seconds (hard requirement)`);
+  }
+  if (products.length > 0) base += productSection(products, zh);
+  return base;
+}
+
+/**
+ * 商品讲解模式的选段偏好(判据来自带货切片实操调研):转化排序为
+ * 演示/实测 > 卖点讲解 > 价格机制 > 催单 > 答疑;憋单/高压催单段有
+ * 平台违规风险,明确排除。话术信号词帮 LLM 定位讲解区间的起止。
+ */
+export function productSection(products: string[], zh: boolean): string {
+  const list = products.join(zh ? "、" : ", ");
+  if (zh) {
+    return (
+      `\n\n【商品讲解模式】用户指定了商品词:${list}。本场是带货直播,只选与这些商品直接相关的片段,按转化价值排序:` +
+      `①试用/上身/实测演示(眼见为实,最优先) ②核心卖点讲解(材质/成分/对比,"这款是什么面料""上身效果") ` +
+      `③价格与机制("原价X今天只要Y""买一送一""叠加优惠券") ④催单只保留紧邻讲解或上链接的部分("三二一,上链接"是天然收尾),不单独成片 ⑤答疑打消顾虑(尺码/成分/售后)。` +
+      `讲解区间常以"接下来/下一个/X号链接给大家讲"开始、"我们看下一款"结束,可据此定位。` +
+      `一律不选:与商品无关的闲聊寒暄、等人垫场、纯憋单拉互动("点赞到X万才上链接"——平台判违规,切出去会限流)、同一句机制话术机械循环、讲解被打断或商品不完整的碎片。` +
+      `每条候选的 keywords 必须包含它命中的商品词。`
+    );
+  }
+  return (
+    `\n\n[Product mode] The user specified product keywords: ${list}. This is a live-selling stream — only pick segments directly about these products, ranked by conversion value: ` +
+    `(1) try-on/live-demo moments (seeing is believing), (2) key selling-point explanations, (3) price & bundle mechanics, (4) call-to-action lines only when adjacent to a demo/link drop (never standalone), (5) objection-handling Q&A. ` +
+    `Skip idle chat, stalling-for-engagement segments (platforms flag these as violations), repeated price-script loops, and fragments where the pitch is cut off. ` +
+    `Each candidate's keywords must include the product words it matches.`
+  );
 }
 
 /** True when the transcript carries diarization with more than one speaker. */

@@ -152,6 +152,8 @@ export const en = {
     lengthStandard: "Length: standard",
     lengthLong: "Length: long · 40-90s",
     lengthHint: "Target clip length — click to cycle and re-detect. Short: fast vertical pace (TikTok watch-through friendly); Standard: 8-40s; Long: podcast/YouTube punch segments",
+    productsPlaceholder: "Product words, comma-separated (live-selling mode)",
+    productsHint: "Enter the products being pitched (e.g. tissue, face cream); press Enter to re-detect — prioritizes demo/pitch/price segments, excludes stalling and pure engagement-bait; matched product words are merged into clip keywords and tagged",
     editTitleHint: "Edit title — used for the file name, title card and post copy",
     llmStart: "Save & find highlights",
     selectedCount: "{n} selected",

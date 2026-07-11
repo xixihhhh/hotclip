@@ -9,6 +9,7 @@ import {
   LuSparkles,
   LuArrowLeft,
   LuClock3,
+  LuShoppingCart,
   LuCrosshair,
   LuKeyRound,
   LuExternalLink,
@@ -117,6 +118,15 @@ export function HighlightsView({
   const [editingTitle, setEditingTitle] = useState<number | null>(null);
   /** 切片时长档(短=快节奏竖屏,长=B站/播客金句段);切换即重新检测,选择持久化。 */
   const clipLength = prefs.clipLength;
+  /** 商品讲解模式:商品词列表(带货直播按商品选段),持久化本机。 */
+  const [products, setProducts] = useState<string[]>(() => {
+    try {
+      const p = JSON.parse(localStorage.getItem("hotclip-products") ?? "[]");
+      return Array.isArray(p) ? p.filter((x): x is string => typeof x === "string") : [];
+    } catch {
+      return [];
+    }
+  });
   /** 审阅台当前打开的候选 id;null = 关闭。 */
   const [reviewId, setReviewId] = useState<number | null>(null);
   /** 品牌样式模板弹窗。 */
@@ -124,7 +134,7 @@ export function HighlightsView({
   const brandState = useBrandStore();
   const startedRef = useRef(false);
 
-  const run = useCallback(async (useDiarize: boolean, lengthArg?: ClipLength): Promise<void> => {
+  const run = useCallback(async (useDiarize: boolean, lengthArg?: ClipLength, productsArg?: string[]): Promise<void> => {
     setDetecting(true);
     setError(null);
     try {
@@ -135,7 +145,8 @@ export function HighlightsView({
         useDiarize,
         prefilter.enabled ? { baseUrl: prefilter.baseUrl, model: prefilter.model } : null,
         vision.enabled ? { baseUrl: vision.baseUrl, model: vision.model } : null,
-        lengthArg ?? clipLength
+        lengthArg ?? clipLength,
+        productsArg ?? products
       );
       setCandidates(result.candidates);
       setFunnel(result.funnel ?? null);
@@ -151,7 +162,23 @@ export function HighlightsView({
     } finally {
       setDetecting(false);
     }
-  }, [transcript, config, filePath, onTranscriptLabeled, prefilter, vision, clipLength]);
+  }, [transcript, config, filePath, onTranscriptLabeled, prefilter, vision, clipLength, products]);
+
+  // 商品词提交:解析(逗号/顿号分隔)→ 持久化 → 变了就按新词重新检测
+  const commitProducts = useCallback(
+    (raw: string): void => {
+      const next = [...new Set(raw.split(/[,，、;；]/).map((s) => s.trim()).filter(Boolean))].slice(0, 20);
+      if (JSON.stringify(next) === JSON.stringify(products)) return;
+      setProducts(next);
+      try {
+        localStorage.setItem("hotclip-products", JSON.stringify(next));
+      } catch {
+        /* 持久化尽力而为 */
+      }
+      void run(diarize, undefined, next);
+    },
+    [products, diarize, run]
+  );
 
   // 时长档循环切换:短 → 标准 → 长,切换即按新档重新检测
   const LENGTH_CYCLE: ClipLength[] = ["standard", "short", "long"];
@@ -460,6 +487,18 @@ export function HighlightsView({
                 <LuClock3 className={`h-3.5 w-3.5 ${clipLength !== "standard" ? "text-ember" : ""}`} />
                 {t(clipLength === "short" ? "lengthShort" : clipLength === "long" ? "lengthLong" : "lengthStandard")}
               </button>
+              <input
+                defaultValue={products.join(",")}
+                placeholder={t("productsPlaceholder")}
+                title={t("productsHint")}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                }}
+                onBlur={(e) => commitProducts(e.target.value)}
+                className={`w-44 rounded-lg border px-3 py-2 text-xs outline-none transition-colors focus:border-ember/60 ${
+                  products.length > 0 ? "border-ember/60 bg-ember/10 text-fg" : "border-line bg-panel-2 text-mut"
+                }`}
+              />
               <button
                 type="button"
                 title={t("optDiarizeHint")}
@@ -554,6 +593,17 @@ export function HighlightsView({
                     <LuSparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ember/70" />
                     {c.reason}
                   </p>
+                )}
+                {/* 商品讲解模式:这条候选命中的商品词 */}
+                {products.length > 0 && c.keywords.some((k) => products.includes(k)) && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    {c.keywords.filter((k) => products.includes(k)).map((k) => (
+                      <span key={k} className="chip inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10.5px] text-ember">
+                        <LuShoppingCart className="h-3 w-3" />
+                        {k}
+                      </span>
+                    ))}
+                  </div>
                 )}
                 {c.scoreDims && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
