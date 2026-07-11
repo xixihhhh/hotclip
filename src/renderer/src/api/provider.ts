@@ -14,7 +14,9 @@ import type {
   DetectHighlightsResult,
   ExportProgressEvent,
   WatchEvent,
+  GlossaryEntry,
 } from "../../../shared/api-types";
+import { applyGlossaryToTranscript, sanitizeGlossary } from "../../../shared/glossary";
 
 const MOCK_MEDIA: MediaInfo = {
   durationSec: 5427.4, // 1:30:27 — a typical podcast episode
@@ -69,6 +71,15 @@ const emitWatch = (e: Omit<WatchEvent, "at">): void => {
   if (watchRunning) watchListeners.forEach((cb) => cb({ ...e, at: Date.now() }));
 };
 let mockExportCancelled = false;
+// 浏览器预览的词表持久化:localStorage 模拟主进程的 glossary.json
+const GLOSSARY_LS_KEY = "hotclip-glossary";
+function mockGlossaryLoad(): GlossaryEntry[] {
+  try {
+    return sanitizeGlossary(JSON.parse(localStorage.getItem(GLOSSARY_LS_KEY) ?? "[]"));
+  } catch {
+    return [];
+  }
+}
 
 /** Browser-mode mock: deterministic fake data with realistic staged latency. */
 const browserMock: HotClipApi = {
@@ -103,7 +114,8 @@ const browserMock: HotClipApi = {
     }
     emit({ fraction: 1, stage: "finalizing" });
     await sleep(250);
-    return mockTranscript();
+    // 与主进程同款:转写结果返回前自动应用热词词表
+    return applyGlossaryToTranscript(mockTranscript(), mockGlossaryLoad()).transcript;
   },
   onTranscribeProgress(cb) {
     progressListeners.add(cb);
@@ -192,6 +204,13 @@ const browserMock: HotClipApi = {
   },
   async checkUpdate() {
     return null; // 浏览器预览不做更新提示
+  },
+  async glossaryGet() {
+    await sleep(80);
+    return mockGlossaryLoad();
+  },
+  async glossarySet(entries) {
+    localStorage.setItem(GLOSSARY_LS_KEY, JSON.stringify(sanitizeGlossary(entries)));
   },
   openUrl(url) {
     window.open(url, "_blank", "noreferrer");

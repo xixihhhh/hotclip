@@ -15,12 +15,17 @@ import {
   LuTarget,
   LuCloudUpload,
   LuPencil,
+  LuBookOpen,
+  LuReplaceAll,
+  LuX,
 } from "react-icons/lu";
 import { useT } from "../i18n/store";
 import { getApi } from "../api/provider";
 import { useAsrStore } from "../stores/asr-store";
 import { editSegmentText } from "../../../shared/edit-transcript";
-import type { Transcript, TranscribeProgressEvent, AsrEngineInfo } from "../../../shared/api-types";
+import { diffReplacement, applyGlossaryToTranscript, countGlossaryHits, upsertGlossaryEntry } from "../../../shared/glossary";
+import { GlossaryModal } from "./GlossaryModal";
+import type { Transcript, TranscribeProgressEvent, AsrEngineInfo, GlossaryEntry } from "../../../shared/api-types";
 
 function formatClock(totalSeconds: number): string {
   const s = Math.floor(totalSeconds);
@@ -82,17 +87,41 @@ export function TranscribeView({
   const [error, setError] = useState<string | null>(null);
   /** 逐句稿纠错:当前编辑中的句 id。 */
   const [editingSeg, setEditingSeg] = useState<number | null>(null);
+  /** 热词词表管理弹窗。 */
+  const [glossaryOpen, setGlossaryOpen] = useState(false);
+  /** 刚提取出的「错→对」候选:提示应用到全片并加入词表。 */
+  const [pending, setPending] = useState<{ entry: GlossaryEntry; count: number } | null>(null);
 
   // ASR 错字当场改:替换句文本并按字符宽度重建该句词级时间轴。
   // 两个 setState 平级调用——绝不能在 updater 里更新父组件(渲染期非法)。
   const commitSegEdit = (segId: number, value: string): void => {
     setEditingSeg(null);
     if (!transcript) return;
+    const prevText = transcript.segments.find((s) => s.id === segId)?.text ?? "";
     const next = editSegmentText(transcript, segId, value);
     if (next !== transcript) {
       setTranscript(next);
       onEdited?.(next);
+      // 术语纠错闭环:这次修改若是「错词→对词」,提示一键全片替换+入词表
+      const entry = diffReplacement(prevText, value);
+      setPending(entry ? { entry, count: countGlossaryHits(next, [entry]) } : null);
     }
+  };
+
+  // 应用到全片(标记被改句)并把词条持久化进词表——下次转写自动生效
+  const confirmPending = (): void => {
+    if (!pending || !transcript) return;
+    const { transcript: fixed, replaced } = applyGlossaryToTranscript(transcript, [pending.entry]);
+    if (replaced > 0) {
+      setTranscript(fixed);
+      onEdited?.(fixed);
+    }
+    const api = getApi();
+    void api
+      .glossaryGet()
+      .then((list) => api.glossarySet(upsertGlossaryEntry(list, pending.entry)))
+      .catch(() => {});
+    setPending(null);
   };
   const unsubRef = useRef<(() => void) | null>(null);
 
@@ -304,6 +333,14 @@ export function TranscribeView({
             <div className="flex items-center gap-2.5">
               <button
                 type="button"
+                onClick={() => setGlossaryOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3.5 py-2 text-xs text-mut transition-colors hover:border-mut hover:text-fg"
+              >
+                <LuBookOpen className="h-3.5 w-3.5" />
+                {t("glossaryBtn")}
+              </button>
+              <button
+                type="button"
                 onClick={onBack}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3.5 py-2 text-xs text-mut transition-colors hover:border-mut hover:text-fg"
               >
@@ -322,6 +359,35 @@ export function TranscribeView({
               )}
             </div>
           </div>
+
+          {/* 术语纠错闭环:改一处 → 全片替换 + 入词表 */}
+          {pending && (
+            <div className="card mt-4 flex flex-wrap items-center gap-3 rounded-xl border !border-ember/40 bg-ember/5 px-4 py-3">
+              <p className="min-w-0 flex-1 text-[12.5px] leading-relaxed">
+                {pending.count > 0
+                  ? t("applyAllMany", { wrong: pending.entry.wrong, right: pending.entry.right, n: pending.count })
+                  : t("applyAllZero", { wrong: pending.entry.wrong, right: pending.entry.right })}
+              </p>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={confirmPending}
+                  className="btn-flame inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-[12px] font-bold text-white"
+                >
+                  <LuReplaceAll className="h-3.5 w-3.5" />
+                  {pending.count > 0 ? t("applyAllBtn") : t("applyAllZeroBtn")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPending(null)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-line px-3 py-1.5 text-[12px] text-mut transition-colors hover:border-mut hover:text-fg"
+                >
+                  <LuX className="h-3.5 w-3.5" />
+                  {t("applyAllIgnore")}
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="card mt-5 max-h-[46vh] overflow-y-auto rounded-2xl p-2">
             {transcript.segments.map((seg) => (
@@ -344,6 +410,14 @@ export function TranscribeView({
                 ) : (
                   <p className="flex min-w-0 items-baseline gap-1.5 text-[14px] leading-relaxed">
                     <span className="min-w-0">{seg.text}</span>
+                    {seg.glossaryApplied && (
+                      <span
+                        title={t("glossaryFixedHint")}
+                        className="chip shrink-0 rounded px-1.5 py-0.5 text-[9.5px] text-ember"
+                      >
+                        {t("glossaryFixedBadge")}
+                      </span>
+                    )}
                     <button
                       type="button"
                       title={t("editSegHint")}
@@ -359,6 +433,8 @@ export function TranscribeView({
           </div>
         </section>
       )}
+
+      {glossaryOpen && <GlossaryModal onClose={() => setGlossaryOpen(false)} />}
     </div>
   );
 }

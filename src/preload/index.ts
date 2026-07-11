@@ -41,6 +41,8 @@ const api: HotClipApi = {
   },
   checkUpdate: () => ipcRenderer.invoke("hotclip:check-update"),
   openUrl: (url) => ipcRenderer.send("hotclip:open-url", url),
+  glossaryGet: () => ipcRenderer.invoke("hotclip:glossary-get"),
+  glossarySet: (entries) => ipcRenderer.invoke("hotclip:glossary-set", entries),
 };
 
 contextBridge.exposeInMainWorld("hotclip", api);

@@ -5,7 +5,8 @@
  */
 import { join, dirname, basename, extname } from "path";
 import { stat } from "fs/promises";
-import type { LlmConfig, Transcript, HighlightCandidate } from "../shared/api-types";
+import type { GlossaryEntry, LlmConfig, Transcript, HighlightCandidate } from "../shared/api-types";
+import { applyGlossaryToTranscript } from "../shared/glossary";
 import { SenseVoiceEngine } from "./transcribe/sensevoice";
 import { readTranscriptCache, writeTranscriptCache } from "./transcribe/cache";
 import { detectHighlights } from "./highlight/detect";
@@ -23,6 +24,8 @@ export interface AutoClipConfig {
   outDir?: string;
   /** 字幕字体目录(烧录 CJK 一致性)。 */
   fontsDir?: string;
+  /** 热词词表(转写后自动应用;字幕/找爆点/文案全用修正后文本)。 */
+  glossary?: GlossaryEntry[];
   maxClips?: number;
   vertical?: boolean;
   captions?: boolean;
@@ -38,17 +41,26 @@ export interface AutoClipResult {
   exported: ExportedClip[];
 }
 
-/** 端侧转写(SenseVoice,带缓存;首次自动下载模型)。 */
-export async function transcribeCached(videoPath: string, modelsRoot: string, cacheDir: string): Promise<Transcript> {
+/**
+ * 端侧转写(SenseVoice,带缓存;首次自动下载模型)。缓存永远存 ASR 原始
+ * 结果,词表在读取侧应用——词表更新后同素材重放替换即可,不重跑 ASR。
+ */
+export async function transcribeCached(
+  videoPath: string,
+  modelsRoot: string,
+  cacheDir: string,
+  glossary?: GlossaryEntry[]
+): Promise<Transcript> {
   const s = await stat(videoPath).catch(() => null);
   if (!s || !s.isFile()) throw new Error(`文件不存在或不可读: ${videoPath}`);
   const fileStat = { size: s.size, mtimeMs: s.mtimeMs };
+  const applied = (t: Transcript): Transcript => applyGlossaryToTranscript(t, glossary ?? []).transcript;
   const cached = await readTranscriptCache(cacheDir, videoPath, fileStat, "sensevoice");
-  if (cached) return cached;
+  if (cached) return applied(cached);
   const engine = new SenseVoiceEngine(modelsRoot);
   const t = await engine.transcribe(videoPath);
   await writeTranscriptCache(cacheDir, videoPath, fileStat, "sensevoice", t).catch(() => {});
-  return t;
+  return applied(t);
 }
 
 /** 找爆点(与桌面端同款证据链:响度/镜头 + 表情峰值,全部 fail-open)。 */
@@ -85,7 +97,7 @@ export async function detectForPipeline(
 /** 全托管一条龙:转写 → 找爆点 → 导出推荐条(竖屏/字幕/跳剪/响度默认全开)。 */
 export async function autoClip(videoPath: string, cfg: AutoClipConfig): Promise<AutoClipResult> {
   cfg.onStage?.("transcribing");
-  const transcript = await transcribeCached(videoPath, cfg.modelsRoot, cfg.cacheDir);
+  const transcript = await transcribeCached(videoPath, cfg.modelsRoot, cfg.cacheDir, cfg.glossary);
   cfg.onStage?.("detecting");
   const candidates = await detectForPipeline(videoPath, transcript, cfg);
   const publishable = candidates.filter((c) => c.recommended);

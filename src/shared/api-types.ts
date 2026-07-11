@@ -40,6 +40,14 @@ export interface TranscriptSegment {
   words: TranscriptWord[];
   /** Dominant diarization speaker id (0-based); absent when not diarized. */
   speaker?: number;
+  /** 本句被热词词表自动修正过(逐句稿/审阅台打标记用)。 */
+  glossaryApplied?: boolean;
+}
+
+/** 热词词表词条:ASR 惯性错词 → 正确写法(人名/品牌/术语)。 */
+export interface GlossaryEntry {
+  wrong: string;
+  right: string;
 }
 
 export interface Transcript {
@@ -325,6 +333,10 @@ export interface HotClipApi {
   checkUpdate: () => Promise<UpdateInfo | null>;
   /** 打开外部链接(仅白名单域,当前只放行本项目 GitHub)。 */
   openUrl: (url: string) => void;
+  /** 读热词词表(持久化在本地,转写后自动应用)。 */
+  glossaryGet: () => Promise<GlossaryEntry[]>;
+  /** 整表写回热词词表(增删改统一走这里)。 */
+  glossarySet: (entries: GlossaryEntry[]) => Promise<void>;
 }
 
 /** 新版本检查结果。 */

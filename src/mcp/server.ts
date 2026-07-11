@@ -14,6 +14,7 @@ import { homedir } from "os";
 import { join, basename } from "path";
 import type { LlmConfig } from "../shared/api-types";
 import { transcribeCached, detectForPipeline, autoClip } from "../core/pipeline";
+import { loadGlossary } from "../core/glossary-store";
 import { handleMcpMessage, type JsonRpcMessage } from "./protocol";
 
 /** 与 Electron 的 app.getPath("userData") 同路径——模型/缓存两边共享。 */
@@ -53,7 +54,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
   const videoPath = String(args.videoPath);
 
   if (name === "transcribe_video") {
-    const t = await transcribeCached(videoPath, modelsRoot(), cacheDir());
+    const t = await transcribeCached(videoPath, modelsRoot(), cacheDir(), await loadGlossary(userDataDir()));
     const lines = t.segments.map((s) => `[${fmtClock(s.startSec)}] ${s.text}`).join("\n");
     const capped = lines.length > 60_000 ? `${lines.slice(0, 60_000)}\n…(截断)` : lines;
     return `语言:${t.language} 时长:${fmtClock(t.durationSec)} 共 ${t.segments.length} 句\n${capped}`;
@@ -61,7 +62,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
 
   if (name === "detect_highlights") {
     const llm = llmFromEnv();
-    const transcript = await transcribeCached(videoPath, modelsRoot(), cacheDir());
+    const transcript = await transcribeCached(videoPath, modelsRoot(), cacheDir(), await loadGlossary(userDataDir()));
     const candidates = await detectForPipeline(videoPath, transcript, {
       modelsRoot: modelsRoot(),
       llm,
@@ -98,6 +99,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
       captions: args.captions !== false,
       outDir: typeof args.outDir === "string" && args.outDir.trim() ? args.outDir : undefined,
       fontsDir: join(process.cwd(), "resources", "fonts"),
+      glossary: await loadGlossary(userDataDir()),
     });
     if (outcome.exported.length === 0) {
       return "AI 复评后没有建议发布的切片(候选都被判定为弱钩子)。可用 detect_highlights 查看全部候选与复评意见。";

@@ -29,6 +29,8 @@ import { generatePublishCopies } from "@core/publish";
 import { FolderWatcher, isVideoFile, isSeen, type SeenMap, type WatchedFile } from "@core/watch";
 import { collectDanmakuSignal } from "@core/danmaku";
 import { checkForUpdate } from "@core/update-check";
+import { loadGlossary, saveGlossary } from "@core/glossary-store";
+import { applyGlossaryToTranscript } from "../shared/glossary";
 import { autoClip } from "@core/pipeline";
 import { collectSignals } from "@core/signals";
 import { exportClips, sanitizeFilename } from "@core/export";
@@ -243,9 +245,12 @@ ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: 
     } catch {
       fileStat = undefined;
     }
+    // 缓存永远存 ASR 原始结果,词表在返回侧应用——词表更新后同素材
+    // 重放替换即可生效,不重跑 ASR
+    const glossary = await loadGlossary(app.getPath("userData"));
     if (fileStat) {
       const cached = await readTranscriptCache(transcriptCacheDir(), filePath, fileStat, resolvedEngineId);
-      if (cached) return cached;
+      if (cached) return applyGlossaryToTranscript(cached, glossary).transcript;
     }
     // cloud engines take the user's key for this one call — never persisted here
     const engine =
@@ -261,7 +266,7 @@ ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: 
     if (fileStat && result?.segments?.length) {
       void writeTranscriptCache(transcriptCacheDir(), filePath, fileStat, resolvedEngineId, result);
     }
-    return result;
+    return applyGlossaryToTranscript(result, glossary).transcript;
   } finally {
     transcribing = false;
   }
@@ -529,6 +534,7 @@ ipcMain.handle("hotclip:watch-start", async (event, dir: unknown, llm: unknown) 
           cacheDir: transcriptCacheDir(),
           llm: config,
           fontsDir,
+          glossary: await loadGlossary(app.getPath("userData")),
           onStage: (stage) => emit({ type: stage, file, path: f.path }),
         });
         await markSeen();
@@ -558,6 +564,12 @@ ipcMain.handle("hotclip:check-update", async () => {
   if (updateCache !== undefined) return updateCache;
   updateCache = await checkForUpdate(app.getVersion());
   return updateCache;
+});
+
+// ---- 热词词表:错词→对词,转写后自动应用(桌面/MCP/录播监听共用一份) ----
+ipcMain.handle("hotclip:glossary-get", async () => loadGlossary(app.getPath("userData")));
+ipcMain.handle("hotclip:glossary-set", async (_event, entries: unknown) => {
+  await saveGlossary(app.getPath("userData"), Array.isArray(entries) ? entries : []);
 });
 
 // 外链只放行本项目 GitHub(防任意 URL 注入系统浏览器)
