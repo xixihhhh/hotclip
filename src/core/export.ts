@@ -498,8 +498,10 @@ export async function exportClips(
       // 到原位置原样重复是直播切片圈通行做法;任一步失败回退原片,绝不拖垮该条
       let coldOpenSec: number | null = null;
       let coldOpenPlan: ReturnType<typeof planColdOpen> = null;
-      if (options.coldOpen && !audioOnly && !webStyle && clip.hook && clip.words && clip.words.length > 0) {
-        coldOpenPlan = planColdOpen(clip.words, clip.hook, clip.startSec);
+      // 钩子文本在 meta.hook(证据链字段),不在顶层——读错位置会让高潮前置永远不触发
+      const coldOpenHook = clip.meta?.hook?.trim();
+      if (options.coldOpen && !audioOnly && !webStyle && coldOpenHook && clip.words && clip.words.length > 0) {
+        coldOpenPlan = planColdOpen(clip.words, coldOpenHook, clip.startSec);
         const coPlan = coldOpenPlan;
         if (coPlan) {
           const miniPath = outPath.replace(/\.mp4$/, ".hook.mp4");
