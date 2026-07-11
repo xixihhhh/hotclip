@@ -24,6 +24,7 @@ import {
   LuZap,
   LuVolume2,
   LuAudioWaveform,
+  LuListVideo,
   LuChevronLeft,
   LuChevronRight,
   LuPlay,
@@ -107,7 +108,7 @@ export function HighlightsView({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   // 出片偏好持久化:上次的开关组合下次直接生效(解构保持下方 JSX 引用不变)
   const { prefs, setPref } = useRenderPrefs();
-  const { vertical, captionStyle, jumpCut, cleanFillers, trimUi, titleCard, openingHook, normalizeLoudness, denoise, translate, publishCopy, subtitleFile, timeline, aigcLabel } = prefs;
+  const { vertical, captionStyle, jumpCut, cleanFillers, trimUi, titleCard, openingHook, normalizeLoudness, denoise, compilation, translate, publishCopy, subtitleFile, timeline, aigcLabel } = prefs;
   const [diarize, setDiarize] = useState(false);
   // 中文源译英,其余译中——短视频出海/引进的两个主方向
   const targetLang = (transcript.language || "").startsWith("zh") ? "en" : "zh";
@@ -793,6 +794,17 @@ export function HighlightsView({
                 </button>
                 <button
                   type="button"
+                  title={t("optCompilationHint")}
+                  onClick={() => setPref({ compilation: !compilation })}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                    compilation ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
+                  }`}
+                >
+                  <LuListVideo className={`h-3.5 w-3.5 ${compilation ? "text-ember" : ""}`} />
+                  {t("optCompilation")}
+                </button>
+                <button
+                  type="button"
                   title={t("optAigcHint")}
                   onClick={() => setPref({ aigcLabel: !aigcLabel })}
                   className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
@@ -820,7 +832,7 @@ export function HighlightsView({
                 type="button"
                 disabled={selected.size === 0}
                 onClick={() =>
-                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, cleanFillers, trimUi, titleCard, openingHook, normalizeLoudness, denoise, brand: activeBrandStyle(brandState), translate: translate ? { targetLang, llm: config } : undefined, publishCopy: publishCopy ? { llm: config } : undefined, subtitleFile, timeline, aigcLabel })
+                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, cleanFillers, trimUi, titleCard, openingHook, normalizeLoudness, denoise, compilation, brand: activeBrandStyle(brandState), translate: translate ? { targetLang, llm: config } : undefined, publishCopy: publishCopy ? { llm: config } : undefined, subtitleFile, timeline, aigcLabel })
                 }
                 className="btn-flame inline-flex items-center gap-1.5 rounded-lg px-6 py-2.5 text-[14px] font-bold text-white disabled:opacity-40"
               >

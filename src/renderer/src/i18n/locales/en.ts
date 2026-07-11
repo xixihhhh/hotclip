@@ -167,6 +167,8 @@ export const en = {
     optLoudnessHint: "Normalize audio to the -14 LUFS social target (TikTok/Reels/Shorts) so a batch of clips plays at one consistent, not-too-quiet volume",
     optDenoise: "Denoise",
     optDenoiseHint: "Cut the hiss and mains hum common in livestream VODs (basic denoise: highpass + spectral subtraction, speech stays intact); leave off for clean sources",
+    optCompilation: "Compilation",
+    optCompilationHint: "Splice this batch into one compilation video in timeline order (stream copy — instant, zero quality loss, hard cuts between clips), plus a YouTube/Bilibili chapter timestamp file ready to paste into the description; needs ≥2 selected clips",
     optTranslateEn: "Bilingual · EN",
     optTranslateZh: "Bilingual · ZH",
     optTranslateHint: "Your configured LLM translates each sentence and burns it in as a smaller second caption track below the main one — bilingual clips for going global in one step; translation failures are silently skipped",

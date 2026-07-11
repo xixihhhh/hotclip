@@ -121,7 +121,7 @@ const browserMock: HotClipApi = {
     progressListeners.add(cb);
     return () => progressListeners.delete(cb);
   },
-  async exportClips(_filePath, clips) {
+  async exportClips(_filePath, clips, options) {
     mockExportCancelled = false;
     const results = [];
     for (let i = 0; i < clips.length; i++) {
@@ -139,6 +139,16 @@ const browserMock: HotClipApi = {
         path: `/Movies/HotClip/我的直播回放-2026-07-04/0${i + 1}-${clips[i].title}.mp4`,
         sizeBytes: 8_400_000 + i * 1_700_000,
         durationSec: clips[i].endSec - clips[i].startSec,
+      });
+    }
+    // 与主进程同款:精华合集按时间序流复制拼接,附章节时间戳
+    if (options?.compilation && results.length > 1) {
+      results.push({
+        id: 0,
+        title: "精华合集",
+        path: "/Movies/HotClip/我的直播回放-2026-07-04/00-精华合集.mp4",
+        sizeBytes: results.reduce((a, r) => a + r.sizeBytes, 0),
+        durationSec: results.reduce((a, r) => a + r.durationSec, 0),
       });
     }
     return results;

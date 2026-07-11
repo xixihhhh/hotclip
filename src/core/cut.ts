@@ -10,6 +10,7 @@
  *    seconds off on livestream VODs with sparse keyframes) — preview only.
  */
 import { spawn } from "child_process";
+import { writeFile, rm } from "fs/promises";
 import { resolveFfmpegPath } from "./binaries";
 import { toFfmpegTime } from "./time";
 
@@ -356,5 +357,30 @@ export async function cutClip(
     // ffmpeg errors bury the cause at the end of stderr — surface only the tail
     const tail = msg.split("\n").slice(-6).join("\n");
     throw new Error(`ffmpeg cut failed (${toFfmpegTime(startSec)}→${toFfmpegTime(endSec)}): ${tail}`);
+  }
+}
+
+/** concat demuxer 列表文件内容(路径里的单引号按其语法转义)。 */
+export function buildConcatList(paths: string[]): string {
+  return paths.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n") + "\n";
+}
+
+/**
+ * 精华合集的拼接参数:同一批导出的切片编码参数一致,流复制(-c copy)
+ * 秒级完成、零画质损失;合集惯例是硬切,不加转场(转场要整体重编码)。
+ */
+export function buildConcatArgs(listPath: string, outputPath: string): string[] {
+  return ["-hide_banner", "-y", "-f", "concat", "-safe", "0", "-i", listPath, "-c", "copy", "-movflags", "+faststart", outputPath];
+}
+
+/** 把多条已导出切片按序拼成一支合集。列表文件落在输出旁,跑完即删。 */
+export async function concatClips(paths: string[], outputPath: string, signal?: AbortSignal): Promise<void> {
+  if (paths.length < 2) throw new Error("compilation requires at least two clips");
+  const listPath = `${outputPath}.list.txt`;
+  await writeFile(listPath, buildConcatList(paths), "utf8");
+  try {
+    await runFfmpeg(buildConcatArgs(listPath, outputPath), { signal });
+  } finally {
+    await rm(listPath, { force: true });
   }
 }

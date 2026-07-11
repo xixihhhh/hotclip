@@ -11,7 +11,7 @@ import { join, basename } from "path";
 import { resolveFfmpegPath } from "./binaries";
 
 const execFileAsync = promisify(execFile);
-import { cutClip, cutJumpClip } from "./cut";
+import { cutClip, cutJumpClip, concatClips } from "./cut";
 import { computeJumpCut } from "./gaps";
 import { clampTranslationLines, remapTranslationLines, type TranslationLine } from "./translate";
 import { postTextFile, type PublishCopy } from "./publish";
@@ -133,6 +133,8 @@ export interface ExportRenderOptions {
   normalizeLoudness?: boolean;
   /** 基础降噪:压直播回放常见底噪/电流声(高通×2+afftdn,先于响度标准化)。 */
   denoise?: boolean;
+  /** 精华合集:导出的切片按时间序流复制拼成一支合集(≥2 条才生成)。 */
+  compilation?: boolean;
   /** 切点吸附镜头边界(TransNetV2,需 modelsRoot);检测失败静默回退不吸附。 */
   snapToShots?: boolean;
   /** 品牌样式预设(高亮色/字号/位置/水印);缺省走内置默认,输出不变。 */
@@ -180,6 +182,29 @@ export function sanitizeFilename(name: string, fallback = "clip"): string {
 /** "01-标题.mp4" — index keeps timeline order even after fs sorting. */
 export function clipFilename(index: number, title: string): string {
   return `${String(index).padStart(2, "0")}-${sanitizeFilename(title)}.mp4`;
+}
+
+/** 章节时间戳里的时刻:YouTube/B站章节格式(超一小时自动带小时位)。 */
+function chapterClock(sec: number): string {
+  const s = Math.max(0, Math.floor(sec));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = String(s % 60).padStart(2, "0");
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
+}
+
+/**
+ * 合集的章节时间戳文本(YouTube 章节/B站简介都认这个格式,粘贴即用):
+ * 每条切片一行「0:00 标题」,时刻为该条在合集里的起点(累计时长)。
+ */
+export function buildChapters(items: Array<{ title: string; durationSec: number }>): string {
+  let t = 0;
+  const lines = items.map((it) => {
+    const line = `${chapterClock(t)} ${it.title}`;
+    t += it.durationSec;
+    return line;
+  });
+  return lines.join("\n") + "\n";
 }
 
 /** Cut all clips sequentially (ffmpeg saturates cores per encode anyway). */
@@ -531,6 +556,38 @@ export async function exportClips(
       onProgress?.({ current: i + 1, total: clips.length, clipId: clip.id, stage: "done" });
     }
 
+    // 精华合集:同批切片编码参数一致,流复制拼接秒级完成零画质损失;
+    // 合集惯例硬切不加转场;失败静默跳过,绝不拖垮已导出的单条切片
+    let compilationFile: string | null = null;
+    if (options.compilation && results.length > 1) {
+      const compPath = join(outDir, "00-精华合集.mp4");
+      const totalSec = results.reduce((a, r) => a + r.durationSec, 0);
+      const ok = await concatClips(results.map((r) => r.path), compPath, signal)
+        .then(() => true)
+        .catch((e) => {
+          // 用户取消要向上抛(与单条切片同一语义),其余失败静默
+          if (signal?.aborted) throw e;
+          return false;
+        });
+      if (ok) {
+        const cs = await stat(compPath).catch(() => null);
+        compilationFile = basename(compPath);
+        // 章节时间戳:YouTube 章节/B站简介粘贴即用,B站还可照此拆分P
+        await writeFile(
+          compPath.replace(/\.mp4$/, ".chapters.txt"),
+          buildChapters(results.map((r) => ({ title: r.title, durationSec: r.durationSec }))),
+          "utf8"
+        ).catch(() => {});
+        results.push({
+          id: 0,
+          title: "精华合集",
+          path: compPath,
+          sizeBytes: cs?.size ?? 0,
+          durationSec: totalSec,
+        });
+      }
+    }
+
     // 时间线 EDL:切点(含跳剪内部剪)交给剪辑软件重链源片精修;失败不拖垮导出
     if (options.timeline && edlClips.length > 0) {
       const fps = srcInfo && srcInfo.fps > 0 ? srcInfo.fps : 30;
@@ -557,6 +614,7 @@ export async function exportClips(
         openingHook: Boolean(options.openingHook),
         normalizeLoudness: Boolean(options.normalizeLoudness),
         denoise: Boolean(options.denoise),
+        compilation: compilationFile,
         snapToShots: Boolean(options.snapToShots),
         // 双语字幕回执:目标语言;实际每条烧了几行见 clips[].render.translatedLines
         translateLang: options.translateLang ?? null,

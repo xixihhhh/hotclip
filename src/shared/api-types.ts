@@ -206,6 +206,8 @@ export interface ExportOptions {
   normalizeLoudness?: boolean;
   /** 基础降噪:压直播回放常见底噪/电流声(高通×2+afftdn,先于响度标准化)。 */
   denoise?: boolean;
+  /** 精华合集:切片按时间序流复制拼成一支合集,附章节时间戳文本。 */
+  compilation?: boolean;
   /** 品牌样式预设(高亮色/字号/位置/水印);缺省走内置默认。 */
   brand?: BrandStyle;
   /** 双语字幕:整句译文烧成主字幕下方的小号翻译轨;翻译失败静默跳过。 */

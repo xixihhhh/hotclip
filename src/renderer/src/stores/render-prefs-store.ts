@@ -18,6 +18,7 @@ export interface RenderPrefs {
   openingHook: boolean;
   normalizeLoudness: boolean;
   denoise: boolean;
+  compilation: boolean;
   translate: boolean;
   publishCopy: boolean;
   subtitleFile: boolean;
@@ -37,6 +38,7 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   openingHook: true,
   normalizeLoudness: true,
   denoise: false, // 素材千差万别,降噪宁保守默认关
+  compilation: false, // 合集是额外产物,默认关
   translate: false,
   publishCopy: false,
   subtitleFile: false,
