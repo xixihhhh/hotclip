@@ -27,6 +27,13 @@ import { toFfmpegTime } from "./time";
 export const LOUDNORM_FILTER = "loudnorm=I=-14:TP=-1.5:LRA=11";
 /** Output sample rate forced alongside loudnorm to cap its 192kHz output. */
 export const LOUDNORM_OUT_RATE = "48000";
+/**
+ * 基础降噪链:双 80Hz 高通(24dB/oct,压 50Hz 电流声及其嗡嗡感)+ afftdn
+ * 谱减降噪(nr=24 取温和档防真人声伪影,tn=1 随时段跟踪噪底)。合成实测:
+ * 静音段底噪 -7.7dB、语音段仅 -0.2dB。定位是零成本基础降噪,不是 AI 修音。
+ * 永远排在 loudnorm 之前——先去噪再标准化,否则响度归一会把噪底一起抬起来。
+ */
+export const DENOISE_FILTER = "highpass=f=80,highpass=f=80,afftdn=nr=24:nf=-40:tn=1";
 
 export type CutMode = "accurate" | "copy";
 
@@ -51,6 +58,8 @@ export interface CutOptions {
   fontsDir?: string;
   /** Normalize output audio to the -14 LUFS social target (EBU R128 loudnorm). */
   normalizeLoudness?: boolean;
+  /** 基础降噪:压直播回放常见的底噪/电流声(高通×2 + afftdn,先于 loudnorm)。 */
+  denoise?: boolean;
   /** 品牌水印:PNG 烧进画面一角(在字幕之上)。 */
   watermark?: WatermarkSpec;
   /** 容器元数据(如 AIGC 隐式标识);copy 模式同样写入。 */
@@ -193,10 +202,12 @@ export function buildCutArgs(
     throw new Error(`invalid cut range: start=${startSec} end=${endSec}`);
   }
   const filters = buildVideoFilters(options);
-  // Any video filter — or loudness normalization (an audio filter) — forces a
+  // Any video filter — or an audio filter (loudnorm/denoise) — forces a
   // re-encode, so silently upgrade copy → accurate.
   const mode =
-    filters.length > 0 || options.watermark || options.normalizeLoudness ? "accurate" : (options.mode ?? "accurate");
+    filters.length > 0 || options.watermark || options.normalizeLoudness || options.denoise
+      ? "accurate"
+      : (options.mode ?? "accurate");
   const start = Math.max(0, startSec);
   const duration = endSec - start;
 
@@ -212,6 +223,11 @@ export function buildCutArgs(
 
   const crf = Number.isFinite(options.crf) ? String(options.crf) : "18";
   const preset = options.preset ?? "veryfast";
+  // 音频链固定顺序:降噪 → 响度标准化(loudnorm 必须看到去噪后的音频)
+  const audioChain = [
+    ...(options.denoise ? [DENOISE_FILTER] : []),
+    ...(options.normalizeLoudness ? [LOUDNORM_FILTER] : []),
+  ];
   return [
     ...common,
     ...(filters.length > 0 || options.watermark ? ["-vf", composeVideoFilter(filters, options.watermark)] : []),
@@ -219,7 +235,8 @@ export function buildCutArgs(
     "-preset", preset,
     "-crf", crf,
     "-pix_fmt", "yuv420p",
-    ...(options.normalizeLoudness ? ["-af", LOUDNORM_FILTER, "-ar", LOUDNORM_OUT_RATE] : []),
+    ...(audioChain.length > 0 ? ["-af", audioChain.join(",")] : []),
+    ...(options.normalizeLoudness ? ["-ar", LOUDNORM_OUT_RATE] : []),
     "-c:a", "aac",
     "-b:a", "192k",
     "-movflags", "+faststart",
@@ -258,9 +275,13 @@ export function buildJumpCutArgs(
   const post = buildVideoFilters(options);
   const wm = options.watermark;
   const concatOut = post.length > 0 || wm ? "[vc]" : "[vout]";
-  // Normalize the *spliced* audio (loudnorm must see the final concatenated
-  // stream, not each segment) — concat into a raw label, then loudnorm → [aout].
-  const audioOut = options.normalizeLoudness ? "[araw]" : "[aout]";
+  // Process the *spliced* audio (denoise/loudnorm must see the final
+  // concatenated stream, not each segment) — concat → [araw] → chain → [aout].
+  const audioChain = [
+    ...(options.denoise ? [DENOISE_FILTER] : []),
+    ...(options.normalizeLoudness ? [LOUDNORM_FILTER] : []),
+  ];
+  const audioOut = audioChain.length > 0 ? "[araw]" : "[aout]";
   parts.push(`${labels.join("")}concat=n=${segments.length}:v=1:a=1${concatOut}${audioOut}`);
   if (wm) {
     // 水印永远最后叠(在字幕之上):后处理链 → [vmain],movie 源 → [wm],overlay 收口
@@ -272,7 +293,7 @@ export function buildJumpCutArgs(
   } else if (post.length > 0) {
     parts.push(`[vc]${post.join(",")}[vout]`);
   }
-  if (options.normalizeLoudness) parts.push(`[araw]${LOUDNORM_FILTER}[aout]`);
+  if (audioChain.length > 0) parts.push(`[araw]${audioChain.join(",")}[aout]`);
 
   const crf = Number.isFinite(options.crf) ? String(options.crf) : "18";
   const preset = options.preset ?? "veryfast";

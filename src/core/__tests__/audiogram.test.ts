@@ -60,6 +60,19 @@ describe("buildAudiogramArgs", () => {
     expect(args[args.indexOf("-map") + 1]).toBe("[vout]");
   });
 
+  it("降噪在响度标准化之前:[a0]→降噪[adn]→loudnorm[anorm]→asplit", () => {
+    const args = buildAudiogramArgs("/a.mp3", "/out.mp4", range, {
+      spec: SPEC,
+      denoise: true,
+      normalizeLoudness: true,
+    });
+    const fc = args[args.indexOf("-filter_complex") + 1];
+    expect(fc).toContain("afftdn");
+    expect(fc.indexOf("afftdn")).toBeLessThan(fc.indexOf("loudnorm")); // 先去噪再标准化
+    expect(fc).toContain("[adn]loudnorm");
+    expect(fc).toContain("[anorm]asplit=2");
+  });
+
   it("空段/非法段抛错", () => {
     expect(() => buildAudiogramArgs("/a.mp3", "/o.mp4", [], { spec: SPEC })).toThrow();
     expect(() => buildAudiogramArgs("/a.mp3", "/o.mp4", [{ startSec: 5, endSec: 5 }], { spec: SPEC })).toThrow();

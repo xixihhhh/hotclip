@@ -204,6 +204,8 @@ export interface ExportOptions {
   openingHook?: boolean;
   /** Match audio to the -14 LUFS social loudness target (EBU R128). */
   normalizeLoudness?: boolean;
+  /** 基础降噪:压直播回放常见底噪/电流声(高通×2+afftdn,先于响度标准化)。 */
+  denoise?: boolean;
   /** 品牌样式预设(高亮色/字号/位置/水印);缺省走内置默认。 */
   brand?: BrandStyle;
   /** 双语字幕:整句译文烧成主字幕下方的小号翻译轨;翻译失败静默跳过。 */

@@ -8,7 +8,7 @@
  * 成品音频生成波形(所以跳剪后的波形与声音天然同步)。纯参数构建可单测;
  * ffmpeg 执行隔离在 runAudiogram。
  */
-import { escapeFilterPath, watermarkStages, metadataArgs, runFfmpeg, type WatermarkSpec } from "./cut";
+import { escapeFilterPath, watermarkStages, metadataArgs, runFfmpeg, DENOISE_FILTER, type WatermarkSpec } from "./cut";
 import { isValidHex } from "./brand";
 
 /** 深色底(与应用「灼热片场」底色同源)。 */
@@ -49,6 +49,8 @@ export interface AudiogramOptions {
   subtitlePath?: string;
   fontsDir?: string;
   normalizeLoudness?: boolean;
+  /** 基础降噪(与视频路径同一条链,先于响度标准化)。 */
+  denoise?: boolean;
   watermark?: WatermarkSpec;
   /** 容器元数据(如 AIGC 隐式标识)。 */
   metadata?: Record<string, string>;
@@ -89,7 +91,12 @@ export function buildAudiogramArgs(
     parts.push(`${segLabels.join("")}concat=n=${ranges.length}:v=0:a=1[acat]`);
     audioLabel = "[acat]";
   }
-  // 2) 可选响度标准化(在拼接后的完整音频上做,与视频路径一致)
+  // 2a) 可选降噪(拼接后的完整音频上,先去噪再标准化——loudnorm 要看到干净音频)
+  if (options.denoise) {
+    parts.push(`${audioLabel}${DENOISE_FILTER}[adn]`);
+    audioLabel = "[adn]";
+  }
+  // 2b) 可选响度标准化(在拼接后的完整音频上做,与视频路径一致)
   if (options.normalizeLoudness) {
     parts.push(`${audioLabel}${LOUDNORM},aresample=48000[anorm]`);
     audioLabel = "[anorm]";

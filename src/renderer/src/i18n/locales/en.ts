@@ -163,6 +163,8 @@ export const en = {
     optCleanFillersHint: "Remove um/uh hesitations and stutter repeats; removals are listed in clips.json",
     optLoudness: "Match loudness",
     optLoudnessHint: "Normalize audio to the -14 LUFS social target (TikTok/Reels/Shorts) so a batch of clips plays at one consistent, not-too-quiet volume",
+    optDenoise: "Denoise",
+    optDenoiseHint: "Cut the hiss and mains hum common in livestream VODs (basic denoise: highpass + spectral subtraction, speech stays intact); leave off for clean sources",
     optTranslateEn: "Bilingual · EN",
     optTranslateZh: "Bilingual · ZH",
     optTranslateHint: "Your configured LLM translates each sentence and burns it in as a smaller second caption track below the main one — bilingual clips for going global in one step; translation failures are silently skipped",

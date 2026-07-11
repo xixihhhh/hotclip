@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCutArgs, buildJumpCutArgs, buildVideoFilters, escapeFilterPath, metadataArgs, parseFfmpegProgress, LOUDNORM_FILTER, LOUDNORM_OUT_RATE } from "../cut";
+import { buildCutArgs, buildJumpCutArgs, buildVideoFilters, escapeFilterPath, metadataArgs, parseFfmpegProgress, LOUDNORM_FILTER, LOUDNORM_OUT_RATE, DENOISE_FILTER } from "../cut";
 
 describe("buildCutArgs", () => {
   it("accurate mode: fast seek before -i, re-encode, faststart", () => {
@@ -119,6 +119,44 @@ describe("loudness normalization", () => {
     ];
     expect(fc).toContain(":a=1[vout][aout]");
     expect(fc).not.toContain("loudnorm");
+  });
+});
+
+describe("denoise (基础降噪)", () => {
+  it("链路含双高通与 afftdn,不含 aresample", () => {
+    expect(DENOISE_FILTER).toContain("highpass=f=80,highpass=f=80");
+    expect(DENOISE_FILTER).toContain("afftdn");
+    expect(DENOISE_FILTER).not.toContain("aresample");
+  });
+
+  it("普通切割:仅降噪 → -af 只有降噪链,无 -ar,且强制重编码", () => {
+    const args = buildCutArgs("/v/in.mp4", "/v/out.mp4", 0, 5, { mode: "copy", denoise: true });
+    expect(args).toContain("libx264"); // copy 被升级
+    expect(args[args.indexOf("-af") + 1]).toBe(DENOISE_FILTER);
+    expect(args).not.toContain("-ar");
+  });
+
+  it("普通切割:降噪+响度 → 降噪排在 loudnorm 之前,-ar 照常", () => {
+    const args = buildCutArgs("/v/in.mp4", "/v/out.mp4", 0, 5, { denoise: true, normalizeLoudness: true });
+    expect(args[args.indexOf("-af") + 1]).toBe(`${DENOISE_FILTER},${LOUDNORM_FILTER}`);
+    expect(args[args.indexOf("-ar") + 1]).toBe(LOUDNORM_OUT_RATE);
+  });
+
+  it("跳剪:拼接后整段过降噪链([araw] → 降噪,loudnorm → [aout])", () => {
+    const segs = [{ startSec: 10, endSec: 12 }, { startSec: 15, endSec: 17 }];
+    const args = buildJumpCutArgs("/v/in.mp4", "/v/out.mp4", 10, segs, { denoise: true, normalizeLoudness: true });
+    const fc = args[args.indexOf("-filter_complex") + 1];
+    expect(fc).toContain(":a=1[vout][araw]");
+    expect(fc).toContain(`[araw]${DENOISE_FILTER},${LOUDNORM_FILTER}[aout]`);
+  });
+
+  it("跳剪:仅降噪也走 [araw] 链,不带 loudnorm/-ar", () => {
+    const segs = [{ startSec: 10, endSec: 12 }, { startSec: 15, endSec: 17 }];
+    const args = buildJumpCutArgs("/v/in.mp4", "/v/out.mp4", 10, segs, { denoise: true });
+    const fc = args[args.indexOf("-filter_complex") + 1];
+    expect(fc).toContain(`[araw]${DENOISE_FILTER}[aout]`);
+    expect(fc).not.toContain("loudnorm");
+    expect(args).not.toContain("-ar");
   });
 });
 

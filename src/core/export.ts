@@ -96,6 +96,8 @@ export interface ClipRenderOutcome {
   fillersRemoved: number;
   /** True when audio was matched to the -14 LUFS social loudness target. */
   loudnessNormalized: boolean;
+  /** True 表示走了基础降噪链(高通×2+afftdn)。 */
+  denoised: boolean;
   /** True when the AI teaser was burned in as an opening hook. */
   openingHookBurned: boolean;
   /** 实际烧进画面的译文行数;没开双语/翻译失败为 0。 */
@@ -129,6 +131,8 @@ export interface ExportRenderOptions {
   fontsDir?: string;
   /** Match audio to the -14 LUFS social loudness target (EBU R128 loudnorm). */
   normalizeLoudness?: boolean;
+  /** 基础降噪:压直播回放常见底噪/电流声(高通×2+afftdn,先于响度标准化)。 */
+  denoise?: boolean;
   /** 切点吸附镜头边界(TransNetV2,需 modelsRoot);检测失败静默回退不吸附。 */
   snapToShots?: boolean;
   /** 品牌样式预设(高亮色/字号/位置/水印);缺省走内置默认,输出不变。 */
@@ -378,13 +382,14 @@ export async function exportClips(
         ? { comment: `AIGC=true; Label=AI-assisted-editing; Tool=HotClip; ContentId=${basename(outPath)}` }
         : undefined;
       const cutOptions = trackPlan
-        ? { trackPlan, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, watermark, metadata: aigcMeta }
+        ? { trackPlan, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, watermark, metadata: aigcMeta }
         : {
             uiCrop,
             vertical: options.vertical,
             subtitlePath,
             fontsDir: subtitlePath ? options.fontsDir : undefined,
             normalizeLoudness: options.normalizeLoudness,
+            denoise: options.denoise,
             watermark,
             metadata: aigcMeta,
           };
@@ -400,6 +405,7 @@ export async function exportClips(
             subtitlePath,
             fontsDir: subtitlePath ? options.fontsDir : undefined,
             normalizeLoudness: options.normalizeLoudness,
+            denoise: options.denoise,
             watermark,
             metadata: aigcMeta,
           },
@@ -517,6 +523,7 @@ export async function exportClips(
         edit: summarizeEdit(origDur, plan),
         fillersRemoved: fillerHits.length,
         loudnessNormalized: Boolean(options.normalizeLoudness),
+        denoised: Boolean(options.denoise),
         openingHookBurned: Boolean(openingHook),
         translatedLines: transLines.length,
         shotSnap,
@@ -549,6 +556,7 @@ export async function exportClips(
         titleCard: Boolean(options.titleCard),
         openingHook: Boolean(options.openingHook),
         normalizeLoudness: Boolean(options.normalizeLoudness),
+        denoise: Boolean(options.denoise),
         snapToShots: Boolean(options.snapToShots),
         // 双语字幕回执:目标语言;实际每条烧了几行见 clips[].render.translatedLines
         translateLang: options.translateLang ?? null,

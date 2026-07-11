@@ -145,6 +145,8 @@ export const zh = {
     optCleanFillersHint: "自动剪掉 嗯/呃 等语气词和结巴重复,剪了什么会列进 clips.json",
     optLoudness: "响度标准化",
     optLoudnessHint: "把音量统一到 -14 LUFS 社媒标准(抖音/TikTok/视频号 同款),整批切片音量一致、不再忽大忽小或太小声",
+    optDenoise: "降噪",
+    optDenoiseHint: "压掉直播回放常见的底噪和 50Hz 电流声(基础降噪:高通+谱减,人声几乎无损);素材本身干净就不用开",
     optTranslateEn: "双语字幕·译英",
     optTranslateZh: "双语字幕·译中",
     optTranslateHint: "用你配置的 LLM 把每句话整句翻译,烧成主字幕下方的小号译文轨——出海双语片一步到位;翻译失败自动跳过,不影响出片",
