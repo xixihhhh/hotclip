@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCutArgs, buildJumpCutArgs, buildVideoFilters, escapeFilterPath, metadataArgs, LOUDNORM_FILTER, LOUDNORM_OUT_RATE } from "../cut";
+import { buildCutArgs, buildJumpCutArgs, buildVideoFilters, escapeFilterPath, metadataArgs, parseFfmpegProgress, LOUDNORM_FILTER, LOUDNORM_OUT_RATE } from "../cut";
 
 describe("buildCutArgs", () => {
   it("accurate mode: fast seek before -i, re-encode, faststart", () => {
@@ -136,5 +136,17 @@ describe("metadataArgs (AIGC 隐式标识)", () => {
     expect(jump.join(" ")).toContain("-metadata comment=AIGC=true");
     const copy = buildCutArgs("/i.mp4", "/o.mp4", 0, 5, { metadata: meta, mode: "copy" });
     expect(copy.join(" ")).toContain("-metadata comment=AIGC=true");
+  });
+});
+
+describe("parseFfmpegProgress (切片内实时进度)", () => {
+  it("解析 out_time_us(微秒)为秒;老字段 out_time_ms 同样按微秒", () => {
+    expect(parseFfmpegProgress("frame=100\nout_time_us=2500000\nprogress=continue\n")).toBe(2.5);
+    expect(parseFfmpegProgress("out_time_ms=1500000\n")).toBe(1.5);
+  });
+
+  it("无进度字段/垃圾块返回 null", () => {
+    expect(parseFfmpegProgress("speed=2.5x\n")).toBeNull();
+    expect(parseFfmpegProgress("")).toBeNull();
   });
 });

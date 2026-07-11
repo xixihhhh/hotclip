@@ -114,8 +114,11 @@ const browserMock: HotClipApi = {
     const results = [];
     for (let i = 0; i < clips.length; i++) {
       if (mockExportCancelled) throw new Error("export cancelled");
-      emitExport({ current: i + 1, total: clips.length, clipId: clips[i].id, stage: "cutting" });
-      await sleep(1100);
+      // 演示切片内实时编码进度
+      for (let f = 0; f <= 1; f += 0.25) {
+        emitExport({ current: i + 1, total: clips.length, clipId: clips[i].id, stage: "cutting", fraction: f });
+        await sleep(220);
+      }
       if (mockExportCancelled) throw new Error("export cancelled");
       emitExport({ current: i + 1, total: clips.length, clipId: clips[i].id, stage: "done" });
       results.push({

@@ -274,6 +274,8 @@ export interface ExportProgressEvent {
   total: number;
   clipId: number;
   stage: "cutting" | "done";
+  /** 当前切片的编码进度 0-1(ffmpeg 实时回报);切片间事件缺省。 */
+  fraction?: number;
 }
 
 export interface HotClipApi {

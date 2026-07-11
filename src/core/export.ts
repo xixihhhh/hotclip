@@ -159,6 +159,8 @@ export interface ExportProgressEvent {
   total: number;
   clipId: number;
   stage: "cutting" | "done";
+  /** 当前切片的编码进度 0-1(ffmpeg 实时回报);切片间事件缺省。 */
+  fraction?: number;
 }
 
 /** Whitelist-sanitize: keep letters (all scripts incl. CJK), digits, space, dash, underscore. */
@@ -360,6 +362,17 @@ export async function exportClips(
       let webRenderFailed = false;
       // Web captions: cut to a base file first, then composite words on top.
       const cutTarget = webStyle ? outPath.replace(/\.mp4$/, ".base.mp4") : outPath;
+      // 切片内实时进度:ffmpeg 已编码秒数 → 当前切片 0-1,节流后随进度事件上报
+      let lastPct = -1;
+      const onTimeSec = (sec: number): void => {
+        const fraction = Math.max(0, Math.min(1, sec / Math.max(0.1, clipDuration)));
+        const pct = Math.floor(fraction * 50); // 2% 粒度节流
+        if (pct !== lastPct) {
+          lastPct = pct;
+          onProgress?.({ current: i + 1, total: clips.length, clipId: clip.id, stage: "cutting", fraction });
+        }
+      };
+
       // AIGC 隐式标识:内容属性 + 服务者 + 内容编号写进容器元数据(《标识办法》)
       const aigcMeta = options.aigcLabel
         ? { comment: `AIGC=true; Label=AI-assisted-editing; Tool=HotClip; ContentId=${basename(outPath)}` }
@@ -390,14 +403,15 @@ export async function exportClips(
             watermark,
             metadata: aigcMeta,
           },
-          signal
+          signal,
+          onTimeSec
         );
       } else if (plan && plan.segments.length > 1) {
-        await cutJumpClip(inputPath, cutTarget, clip.startSec, plan.segments, cutOptions, signal);
+        await cutJumpClip(inputPath, cutTarget, clip.startSec, plan.segments, cutOptions, signal, onTimeSec);
       } else {
         // single kept segment → plain cut (honoring trimmed lead-in/tail)
         const range = plan?.segments[0] ?? { startSec: clip.startSec, endSec: clip.endSec };
-        await cutClip(inputPath, cutTarget, range.startSec, range.endSec, cutOptions, signal);
+        await cutClip(inputPath, cutTarget, range.startSec, range.endSec, cutOptions, signal, onTimeSec);
       }
       if (webStyle) {
         // Overlay geometry must match the base clip exactly, whatever the cut

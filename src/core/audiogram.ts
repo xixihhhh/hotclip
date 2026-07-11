@@ -8,13 +8,8 @@
  * 成品音频生成波形(所以跳剪后的波形与声音天然同步)。纯参数构建可单测;
  * ffmpeg 执行隔离在 runAudiogram。
  */
-import { execFile } from "child_process";
-import { promisify } from "util";
-import { resolveFfmpegPath } from "./binaries";
-import { escapeFilterPath, watermarkStages, metadataArgs, type WatermarkSpec } from "./cut";
+import { escapeFilterPath, watermarkStages, metadataArgs, runFfmpeg, type WatermarkSpec } from "./cut";
 import { isValidHex } from "./brand";
-
-const execFileAsync = promisify(execFile);
 
 /** 深色底(与应用「灼热片场」底色同源)。 */
 const BG_COLOR = "0x141110";
@@ -145,8 +140,9 @@ export async function runAudiogram(
   outputPath: string,
   ranges: Array<{ startSec: number; endSec: number }>,
   options: AudiogramOptions,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onTimeSec?: (sec: number) => void
 ): Promise<void> {
   const args = buildAudiogramArgs(inputPath, outputPath, ranges, options);
-  await execFileAsync(resolveFfmpegPath(), args, { maxBuffer: 64 * 1024 * 1024, signal });
+  await runFfmpeg(args, { signal, onTimeSec });
 }

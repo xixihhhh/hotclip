@@ -62,7 +62,13 @@ export function ExportView({
   }, []);
 
   const currentClip = progress ? clips.find((c) => c.id === progress.clipId) : null;
-  const pct = progress ? Math.round(((progress.current - (progress.stage === "cutting" ? 0.5 : 0)) / progress.total) * 100) : 0;
+  // 总进度 = 已完成条数 + 当前条的实时编码进度(ffmpeg 回报;无 fraction 时按半条估)
+  const doneFrac = progress
+    ? progress.stage === "done"
+      ? progress.current
+      : progress.current - 1 + (progress.fraction ?? 0.5)
+    : 0;
+  const pct = progress ? Math.round((doneFrac / progress.total) * 100) : 0;
 
   return (
     <div className="rise-in flex w-full max-w-2xl flex-col items-center">

@@ -9,12 +9,9 @@
  *  - "copy": stream copy. Near-instant but cuts snap to keyframes (can be
  *    seconds off on livestream VODs with sparse keyframes) — preview only.
  */
-import { execFile } from "child_process";
-import { promisify } from "util";
+import { spawn } from "child_process";
 import { resolveFfmpegPath } from "./binaries";
 import { toFfmpegTime } from "./time";
-
-const execFileAsync = promisify(execFile);
 
 /**
  * Social loudness target (EBU R128): -14 LUFS integrated, -1.5 dBTP true-peak
@@ -63,6 +60,45 @@ export interface CutOptions {
 /** -metadata k=v 参数对(纯函数,cut 与 audiogram 共用)。 */
 export function metadataArgs(metadata?: Record<string, string>): string[] {
   return Object.entries(metadata ?? {}).flatMap(([k, v]) => ["-metadata", `${k}=${v}`]);
+}
+
+/** 解析 ffmpeg -progress 输出块里的 out_time_us/out_time_ms → 已编码秒数。 */
+export function parseFfmpegProgress(chunk: string): number | null {
+  // out_time_us 是微秒;老字段 out_time_ms 名字带 ms 实际也是微秒(ffmpeg 历史坑)
+  const m = chunk.match(/out_time_us=(\d+)/) ?? chunk.match(/out_time_ms=(\d+)/);
+  if (!m) return null;
+  const us = Number(m[1]);
+  return Number.isFinite(us) ? us / 1_000_000 : null;
+}
+
+/**
+ * spawn 版 ffmpeg 执行:-progress pipe:1 流式回报已编码秒数(切片内实时
+ * 进度),stderr 只留尾部(报错定位),AbortSignal 直接 kill 子进程。
+ * cut/jump-cut/audiogram 三条出片路径共用。
+ */
+export async function runFfmpeg(
+  args: string[],
+  opts: { signal?: AbortSignal; onTimeSec?: (sec: number) => void } = {}
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(resolveFfmpegPath(), ["-progress", "pipe:1", "-nostats", ...args], {
+      stdio: ["ignore", "pipe", "pipe"],
+      signal: opts.signal,
+    });
+    let stderrTail = "";
+    child.stderr.on("data", (d: Buffer) => {
+      stderrTail = (stderrTail + d.toString()).slice(-4000);
+    });
+    child.stdout.on("data", (d: Buffer) => {
+      const sec = parseFfmpegProgress(d.toString());
+      if (sec !== null) opts.onTimeSec?.(sec);
+    });
+    child.on("error", (e) => reject(e)); // 含 AbortError
+    child.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(stderrTail.split("\n").slice(-6).join("\n") || `ffmpeg exited ${code}`));
+    });
+  });
 }
 
 /** 水印参数(widthPx 由调用方按输出宽度算好传入)。 */
@@ -268,12 +304,12 @@ export async function cutJumpClip(
   clipStartSec: number,
   segments: Array<{ startSec: number; endSec: number }>,
   options: CutOptions = {},
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onTimeSec?: (sec: number) => void
 ): Promise<void> {
   const args = buildJumpCutArgs(inputPath, outputPath, clipStartSec, segments, options);
   try {
-    // signal 直达子进程:取消时 node 会 kill ffmpeg,长切片也能即时中断
-    await execFileAsync(resolveFfmpegPath(), args, { maxBuffer: 32 * 1024 * 1024, signal });
+    await runFfmpeg(args, { signal, onTimeSec });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     const tail = msg.split("\n").slice(-6).join("\n");
@@ -288,12 +324,12 @@ export async function cutClip(
   startSec: number,
   endSec: number,
   options: CutOptions = {},
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onTimeSec?: (sec: number) => void
 ): Promise<void> {
   const args = buildCutArgs(inputPath, outputPath, startSec, endSec, options);
   try {
-    // signal 直达子进程:取消时 node 会 kill ffmpeg,长切片也能即时中断
-    await execFileAsync(resolveFfmpegPath(), args, { maxBuffer: 32 * 1024 * 1024, signal });
+    await runFfmpeg(args, { signal, onTimeSec });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     // ffmpeg errors bury the cause at the end of stderr — surface only the tail
