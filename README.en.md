@@ -1,10 +1,10 @@
-# HotClip — Turn Long Videos & Livestream Replays into Viral Vertical Shorts
+# HotClip — Free Open-Source AI Clip Generator: Turn Long Videos & Livestream VODs into Viral Vertical Shorts
 
 [简体中文](README.md) | **English**
 
-> **Pan hours of long-form video for gold.** Podcasts · livestream replays · lectures · vlogs → AI highlight detection (quotables, conflict, peak moments) → 9:16 auto-reframe + word-level animated captions → ready to post on TikTok / Reels / Shorts / Douyin / Bilibili.
+> **HotClip is a free, open-source AI clipping tool (Windows / macOS desktop app) that auto-cuts long videos, livestream VODs, podcasts and lectures into vertical 9:16 shorts — AI highlight detection (quotables, conflict, peak moments), auto captions (word-level karaoke), auto-reframe, silence trimming — 100% local, no watermark, no uploads, no credits, no length caps.**
 >
-> **No credits, no watermark, no uploads, no length caps — it runs 100% on your machine.** A free, open-source alternative to OpusClip, Klap, Vizard and SubMagic, shipped as a beginner-friendly Windows / macOS desktop app. Human-in-the-loop by design: AI nominates the highlights with evidence, you make the call.
+> Ready to post on TikTok / Reels / Shorts / Douyin / Bilibili. A free, open-source alternative to OpusClip, Klap, Vizard and SubMagic, beginner-friendly, no code required. Human-in-the-loop by design: AI nominates the highlights with evidence, you make the call.
 
 <p>
   <a href="https://github.com/xixihhhh/hotclip/releases/latest"><img src="https://img.shields.io/github/v/release/xixihhhh/hotclip?label=release&color=ff5722" alt="Latest release"></a>
