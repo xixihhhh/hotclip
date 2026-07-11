@@ -168,6 +168,8 @@ export const zh = {
     optTitleCardHint: "把 AI 起的爆款标题烧进顶部安全区,切片标配",
     optOpeningHook: "开场钩子",
     optOpeningHookHint: "把 AI 写的悬念句大字烧在开头 2 秒当文字钩子(黄金3秒留人),无悬念句的片自动不加",
+    optColdOpen: "高潮前置",
+    optColdOpenHint: "把切片里最炸的钩子句(1-4 秒)剪到开头再接完整正片,播到原位置原样重复——直播切片圈通行的完播率手法;钩子定位失败、或它本来就在开头 10 秒内时自动跳过",
     optBrand: "样式模板",
     optBrandHint: "品牌预设:高亮色/字号/字幕位置/logo水印,一次配置每条切片复用",
     optTrimUi: "去录屏UI",

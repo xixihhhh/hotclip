@@ -186,6 +186,8 @@ export const en = {
     optTitleCardHint: "Burn the AI-written title into the top safe zone",
     optOpeningHook: "Hook intro",
     optOpeningHookHint: "Burn the AI teaser big over the first ~2s as an opening text hook (grab-them-in-3s); clips without a teaser skip it",
+    optColdOpen: "Cold open",
+    optColdOpenHint: "Splice the clip's hottest hook line (1-4s) to the very front, then play the full clip — it repeats at its original spot, the standard retention trick in clip editing; skipped automatically when the hook can't be located or already sits within the first 10s",
     optBrand: "Brand style",
     optBrandHint: "Brand preset: highlight color / font size / caption position / logo watermark — set once, reused on every clip",
     optTrimUi: "Strip screen UI",

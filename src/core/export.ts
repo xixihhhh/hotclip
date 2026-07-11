@@ -3,7 +3,7 @@
  * video into ready-to-post mp4s. Pure helpers (naming) + one effectful runner.
  * Optional render passes: 9:16 vertical reframe and burned-in karaoke captions.
  */
-import { mkdir, stat, writeFile, rm, mkdtemp } from "fs/promises";
+import { mkdir, stat, writeFile, rm, mkdtemp, rename } from "fs/promises";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { tmpdir } from "os";
@@ -12,6 +12,7 @@ import { resolveFfmpegPath } from "./binaries";
 
 const execFileAsync = promisify(execFile);
 import { cutClip, cutJumpClip, concatClips } from "./cut";
+import { planColdOpen } from "./coldopen";
 import { computeJumpCut } from "./gaps";
 import { clampTranslationLines, remapTranslationLines, type TranslationLine } from "./translate";
 import { postTextFile, type PublishCopy } from "./publish";
@@ -98,6 +99,8 @@ export interface ClipRenderOutcome {
   loudnessNormalized: boolean;
   /** True 表示走了基础降噪链(高通×2+afftdn)。 */
   denoised: boolean;
+  /** 高潮前置迷你片时长(秒);没开/钩子定位失败/被守卫跳过为 null。 */
+  coldOpenSec: number | null;
   /** True when the AI teaser was burned in as an opening hook. */
   openingHookBurned: boolean;
   /** 实际烧进画面的译文行数;没开双语/翻译失败为 0。 */
@@ -135,6 +138,8 @@ export interface ExportRenderOptions {
   denoise?: boolean;
   /** 精华合集:导出的切片按时间序流复制拼成一支合集(≥2 条才生成)。 */
   compilation?: boolean;
+  /** 高潮前置:钩子句剪成迷你片拼到切片开头再接完整正片(cold-open)。 */
+  coldOpen?: boolean;
   /** 切点吸附镜头边界(TransNetV2,需 modelsRoot);检测失败静默回退不吸附。 */
   snapToShots?: boolean;
   /** 品牌样式预设(高亮色/字号/位置/水印);缺省走内置默认,输出不变。 */
@@ -480,6 +485,64 @@ export async function exportClips(
           console.error(`overlay pass failed for clip ${clip.id}, shipped base:`, e);
         }
       }
+      // 高潮前置(cold-open):钩子句剪成迷你片拼到正片前——前 3 秒决定完播,
+      // 到原位置原样重复是直播切片圈通行做法;任一步失败回退原片,绝不拖垮该条
+      let coldOpenSec: number | null = null;
+      let coldOpenPlan: ReturnType<typeof planColdOpen> = null;
+      if (options.coldOpen && !audioOnly && !webStyle && clip.hook && clip.words && clip.words.length > 0) {
+        coldOpenPlan = planColdOpen(clip.words, clip.hook, clip.startSec);
+        const coPlan = coldOpenPlan;
+        if (coPlan) {
+          const miniPath = outPath.replace(/\.mp4$/, ".hook.mp4");
+          const bodyPath = outPath.replace(/\.mp4$/, ".body.mp4");
+          const miniDur = coPlan.endSec - coPlan.startSec;
+          const ok = await (async (): Promise<boolean> => {
+            // 迷你片字幕:钩子句卡拉OK照常;悬念句/标题/AIGC 徽标烧在开头这几秒
+            // (钩子必须字幕可读——60%+ 移动端静音观看)
+            let miniAssPath: string | undefined;
+            if (assDir && needAss) {
+              miniAssPath = join(assDir, `clip-${clip.id}-hook.ass`);
+              const miniWords = wantCaptions
+                ? clip.words!.filter((w) => w.startSec >= coPlan.startSec - 1e-3 && w.endSec <= coPlan.endSec + 1e-3)
+                : [];
+              const miniAss = buildCaptionAss(miniWords, coPlan.startSec, layout, assStyle, {
+                keywords: clip.keywords,
+                titleCard: options.titleCard ? { text: clip.title, durationSec: miniDur } : undefined,
+                openingHook: openingHook ? { text: openingHook.text, durationSec: Math.min(OPENING_HOOK_SEC, miniDur) } : undefined,
+                highlightHex: options.brand?.highlightColor,
+                aigcBadge: options.aigcLabel ? { durationSec: miniDur } : undefined,
+              });
+              await writeFile(miniAssPath, miniAss, "utf8");
+            }
+            // 人脸跟随:迷你片自己算一版裁窗(keyframes 已相对段起点),失败回退中心裁
+            let miniTrack;
+            if (trackPlan && options.modelsRoot) {
+              const cp = await generateCropPlan(inputPath, coPlan.startSec, coPlan.endSec, options.modelsRoot, uiCrop).catch(() => null);
+              if (cp && cp.keyframes.length > 0) {
+                miniTrack = { cropXExpr: renderCropXExpr(cp.keyframes), cropW: cp.cropW, cropH: cp.cropH, cropY: cp.cropY };
+              }
+            }
+            const miniCutOptions = miniTrack
+              ? { trackPlan: miniTrack, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, watermark }
+              : { uiCrop, vertical: options.vertical, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, watermark };
+            await rename(outPath, bodyPath);
+            await cutClip(inputPath, miniPath, coPlan.startSec, coPlan.endSec, miniCutOptions, signal);
+            // 硬切拼接(通行做法);AIGC 隐式标识补到最终容器上
+            await concatClips([miniPath, bodyPath], outPath, signal, aigcMeta);
+            await rm(miniPath, { force: true });
+            await rm(bodyPath, { force: true });
+            return true;
+          })().catch(async (e) => {
+            if (signal?.aborted) throw e;
+            // 回退:正片就是最终产物(rename 可能未发生或已发生,两种都兜)
+            await rename(bodyPath, outPath).catch(() => {});
+            await rm(miniPath, { force: true }).catch(() => {});
+            return false;
+          });
+          if (ok) coldOpenSec = miniDur;
+        }
+      }
+
       const s = await stat(outPath);
 
       // Cover: a frame just after the hook lands, pulled from the FINISHED
@@ -490,11 +553,13 @@ export async function exportClips(
       if (!clipPeaks) {
         clipPeaks = await extractPeaks(inputPath, clip.startSec, clip.endSec).catch(() => undefined);
       }
-      const coverAt = pickCoverTime(
-        clipPeaks,
-        plan ? plan.segments : [{ startSec: clip.startSec, endSec: clip.endSec }],
-        clipDuration
-      );
+      // cold-open 让输出时间轴整体后移一个迷你片时长,封面时刻同步平移
+      const coverAt =
+        pickCoverTime(
+          clipPeaks,
+          plan ? plan.segments : [{ startSec: clip.startSec, endSec: clip.endSec }],
+          clipDuration
+        ) + (coldOpenSec ?? 0);
       const coverOk = await execFileAsync(
         resolveFfmpegPath(),
         ["-hide_banner", "-v", "error", "-ss", coverAt.toFixed(2), "-i", outPath, "-frames:v", "1", "-q:v", "2", "-y", coverPath],
@@ -504,17 +569,29 @@ export async function exportClips(
       // SRT 字幕文件:与烧录字幕同一套词/断行/时间基(跳剪重映射后),
       // 平台原生字幕上传与二次精修用
       if (options.subtitleFile && wantCaptions) {
+        const shift = coldOpenSec ?? 0; // cold-open 后正片词整体后移
         const relWords = captionWords!.map((w) => ({
           text: w.text,
-          startSec: w.startSec - captionShift,
-          endSec: w.endSec - captionShift,
+          startSec: w.startSec - captionShift + shift,
+          endSec: w.endSec - captionShift + shift,
         }));
+        // 前置的钩子迷你片:词平移到 0 起,排在正片词前(与成片画面一致)
+        if (coldOpenSec && coldOpenPlan && clip.words) {
+          const co = coldOpenPlan;
+          const miniRel = clip.words
+            .filter((w) => w.startSec >= co.startSec - 1e-3 && w.endSec <= co.endSec + 1e-3)
+            .map((w) => ({ text: w.text, startSec: w.startSec - co.startSec, endSec: w.endSec - co.startSec }));
+          relWords.unshift(...miniRel);
+        }
         const relTrans = transLines.map((l) => ({
-          startSec: l.startSec - captionShift,
-          endSec: l.endSec - captionShift,
+          startSec: l.startSec - captionShift + shift,
+          endSec: l.endSec - captionShift + shift,
           text: l.text,
         }));
-        const srt = buildSrt(srtLinesFromWords(relWords, plan?.breaks ?? [], relTrans));
+        // 断行点与词同基:正片整体平移后,跳剪的强制断行时刻也要同步平移;
+        // cold-open 接缝处强制断行(钩子行与正片首句不并行)
+        const breaks = [...(shift > 0 ? [shift] : []), ...(plan?.breaks ?? []).map((b) => b + shift)];
+        const srt = buildSrt(srtLinesFromWords(relWords, breaks, relTrans));
         if (srt.trim()) {
           await writeFile(outPath.replace(/\.mp4$/, ".srt"), srt, "utf8").catch(() => {});
         }
@@ -531,7 +608,7 @@ export async function exportClips(
         path: outPath,
         coverPath: coverOk ? coverPath : undefined,
         sizeBytes: s.size,
-        durationSec: clipDuration,
+        durationSec: clipDuration + (coldOpenSec ?? 0),
       });
       if (fillerHits.length > 0) {
         removedFillersByClip.set(clip.id, fillerHits.map((h) => h.text.trim()));
@@ -549,6 +626,7 @@ export async function exportClips(
         fillersRemoved: fillerHits.length,
         loudnessNormalized: Boolean(options.normalizeLoudness),
         denoised: Boolean(options.denoise),
+        coldOpenSec,
         openingHookBurned: Boolean(openingHook),
         translatedLines: transLines.length,
         shotSnap,
@@ -614,6 +692,7 @@ export async function exportClips(
         openingHook: Boolean(options.openingHook),
         normalizeLoudness: Boolean(options.normalizeLoudness),
         denoise: Boolean(options.denoise),
+        coldOpen: Boolean(options.coldOpen),
         compilation: compilationFile,
         snapToShots: Boolean(options.snapToShots),
         // 双语字幕回执:目标语言;实际每条烧了几行见 clips[].render.translatedLines

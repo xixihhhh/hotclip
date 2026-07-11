@@ -366,20 +366,26 @@ export function buildConcatList(paths: string[]): string {
 }
 
 /**
- * 精华合集的拼接参数:同一批导出的切片编码参数一致,流复制(-c copy)
- * 秒级完成、零画质损失;合集惯例是硬切,不加转场(转场要整体重编码)。
+ * 拼接参数:同一管线导出的分片编码参数一致,流复制(-c copy)秒级完成、
+ * 零画质损失;硬切衔接(合集/高潮前置的通行做法,转场要整体重编码)。
+ * metadata 用于把容器元数据(如 AIGC 隐式标识)补到拼接产物上。
  */
-export function buildConcatArgs(listPath: string, outputPath: string): string[] {
-  return ["-hide_banner", "-y", "-f", "concat", "-safe", "0", "-i", listPath, "-c", "copy", "-movflags", "+faststart", outputPath];
+export function buildConcatArgs(listPath: string, outputPath: string, metadata?: Record<string, string>): string[] {
+  return ["-hide_banner", "-y", "-f", "concat", "-safe", "0", "-i", listPath, "-c", "copy", "-movflags", "+faststart", ...metadataArgs(metadata), outputPath];
 }
 
-/** 把多条已导出切片按序拼成一支合集。列表文件落在输出旁,跑完即删。 */
-export async function concatClips(paths: string[], outputPath: string, signal?: AbortSignal): Promise<void> {
-  if (paths.length < 2) throw new Error("compilation requires at least two clips");
+/** 把多条已导出分片按序流复制拼接。列表文件落在输出旁,跑完即删。 */
+export async function concatClips(
+  paths: string[],
+  outputPath: string,
+  signal?: AbortSignal,
+  metadata?: Record<string, string>
+): Promise<void> {
+  if (paths.length < 2) throw new Error("concat requires at least two clips");
   const listPath = `${outputPath}.list.txt`;
   await writeFile(listPath, buildConcatList(paths), "utf8");
   try {
-    await runFfmpeg(buildConcatArgs(listPath, outputPath), { signal });
+    await runFfmpeg(buildConcatArgs(listPath, outputPath, metadata), { signal });
   } finally {
     await rm(listPath, { force: true });
   }
