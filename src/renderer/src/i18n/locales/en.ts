@@ -120,6 +120,8 @@ export const en = {
     reviewBrowserStub: "Browser preview has no local video; the desktop app shows the actual footage here",
     reviewNoVideo: "This format can't be previewed in-app (export still works). Use the timeline and the text below to verify cut points",
     reviewDragHint: "Drag the handles to fine-tune — they snap to word boundaries; click the track to seek",
+    reviewSafeZone: "Safe zone",
+    reviewSafeZoneHint: "Overlay the selected platform's UI occlusion areas (action rail / caption area / status bar) — captions or subjects inside the red zones will be covered after posting; the dashed frame is the 9:16 vertical crop (face-tracking may shift it, this shows the center fallback)",
     reviewTextEmpty: "No speech in the current range",
     reviewReset: "Restore AI cut points",
     reviewSave: "Save cut points",

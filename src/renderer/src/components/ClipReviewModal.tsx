@@ -16,15 +16,44 @@ import {
   LuFilm,
   LuChevronLeft,
   LuChevronRight,
+  LuSmartphone,
 } from "react-icons/lu";
-import { useT } from "../i18n/store";
+import { useT, useLocaleStore } from "../i18n/store";
 import { getApi } from "../api/provider";
 import { adjustClipBoundary } from "../../../shared/boundary";
 import { contextWindow, wordsInWindow, snapToWordEdge, clampDrag, clipText } from "../../../shared/review";
+import { SAFE_ZONE_PLATFORMS, zonesFor, fitContain, cropRect9x16 } from "../../../shared/safe-zones";
 import type { Transcript, HighlightCandidate, AudioPeaks } from "../../../shared/api-types";
 
 /** 查结尾:只回放最后这么多秒。 */
 const TAIL_PREVIEW_SEC = 2.5;
+/** 安全区偏好持久化(开关 + 平台选择)。 */
+const SAFEZONE_LS_KEY = "hotclip-safezone";
+
+function loadSafeZonePref(): { on: boolean; platform: string } {
+  try {
+    const p = JSON.parse(localStorage.getItem(SAFEZONE_LS_KEY) ?? "{}") as { on?: unknown; platform?: unknown };
+    return { on: p.on === true, platform: typeof p.platform === "string" ? p.platform : SAFE_ZONE_PLATFORMS[0].id };
+  } catch {
+    return { on: false, platform: SAFE_ZONE_PLATFORMS[0].id };
+  }
+}
+
+/** 平台遮挡区遮罩:百分比定位,挂在「代表 9:16 画面」的父盒里,事件全穿透。 */
+function SafeZoneMasks({ platformId }: { platformId: string }): React.JSX.Element {
+  const p = zonesFor(platformId);
+  return (
+    <>
+      {p.zones.map((z, i) => (
+        <div
+          key={i}
+          className="pointer-events-none absolute rounded-[2px] border border-red-400/50 bg-red-500/20"
+          style={{ left: `${z.x * 100}%`, top: `${z.y * 100}%`, width: `${z.w * 100}%`, height: `${z.h * 100}%` }}
+        />
+      ))}
+    </>
+  );
+}
 /** 吸附容差(像素)——换算成秒后交给 snapToWordEdge。 */
 const SNAP_TOLERANCE_PX = 8;
 
@@ -61,6 +90,34 @@ export function ClipReviewModal({
   const [playing, setPlaying] = useState(false);
   const [playheadSec, setPlayheadSec] = useState(clip.startSec);
   const [videoFailed, setVideoFailed] = useState(false);
+  // 安全区预览:开关+平台选择持久化;裁窗几何随容器尺寸/视频纵横比实时算
+  const [safeZone, setSafeZone] = useState(loadSafeZonePref);
+  const [videoAr, setVideoAr] = useState(16 / 9);
+  const [contSize, setContSize] = useState({ w: 0, h: 0 });
+  const videoBoxRef = useRef<HTMLDivElement>(null);
+  const locale = useLocaleStore((s) => s.locale);
+
+  const setSafeZonePref = (patch: Partial<{ on: boolean; platform: string }>): void => {
+    setSafeZone((prev) => {
+      const next = { ...prev, ...patch };
+      try {
+        localStorage.setItem(SAFEZONE_LS_KEY, JSON.stringify(next));
+      } catch {
+        /* 持久化尽力而为 */
+      }
+      return next;
+    });
+  };
+
+  // 视频显示盒尺寸跟踪(窗口缩放/视频加载都要重算裁窗)
+  useEffect(() => {
+    const el = videoBoxRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setContSize({ w: el.clientWidth, h: el.clientHeight }));
+    ro.observe(el);
+    setContSize({ w: el.clientWidth, h: el.clientHeight });
+    return () => ro.disconnect();
+  }, []);
 
   // 窗口按打开时的切点固定,波形只取一次;整句伸缩可能越窗,显示时钳到边缘
   const win = useMemo(
@@ -285,15 +342,19 @@ export function ClipReviewModal({
           </button>
         </div>
 
-        {/* 视频预览 */}
-        <div className="mt-4 overflow-hidden rounded-xl bg-black/60">
+        {/* 视频预览(相对定位承载安全区遮罩) */}
+        <div ref={videoBoxRef} className="relative mt-4 overflow-hidden rounded-xl bg-black/60">
           {showVideo ? (
             <video
               ref={videoRef}
               src={src}
               playsInline
               className="mx-auto max-h-[36vh] w-full object-contain"
-              onLoadedMetadata={() => seekTo(boundsRef.current.startSec)}
+              onLoadedMetadata={(e) => {
+                const v = e.currentTarget;
+                if (v.videoWidth > 0 && v.videoHeight > 0) setVideoAr(v.videoWidth / v.videoHeight);
+                seekTo(boundsRef.current.startSec);
+              }}
               onPlay={() => setPlaying(true)}
               onPause={() => {
                 setPlaying(false);
@@ -307,8 +368,29 @@ export function ClipReviewModal({
               <p className="max-w-md text-[12.5px] leading-relaxed text-mut">
                 {src === "" ? t("reviewBrowserStub") : t("reviewNoVideo")}
               </p>
+              {/* 浏览器预览没有画面:给一块 9:16 演示框,遮罩形态照常可看 */}
+              {safeZone.on && (
+                <div
+                  className="relative mx-auto mt-2 rounded-md border border-dashed border-fg/40 bg-panel-2"
+                  style={{ aspectRatio: "9/16", height: "26vh" }}
+                >
+                  <SafeZoneMasks platformId={safeZone.platform} />
+                </div>
+              )}
             </div>
           )}
+          {/* 安全区遮罩:先画 9:16 中心裁窗(竖屏成片范围),再叠平台遮挡区 */}
+          {safeZone.on && showVideo && contSize.w > 0 && (() => {
+            const box = cropRect9x16(fitContain(contSize.w, contSize.h, videoAr));
+            return (
+              <div
+                className="pointer-events-none absolute border border-dashed border-fg/40"
+                style={{ left: box.x, top: box.y, width: box.w, height: box.h }}
+              >
+                <SafeZoneMasks platformId={safeZone.platform} />
+              </div>
+            );
+          })()}
         </div>
 
         {/* 播放控制 + 时码 */}
@@ -332,6 +414,30 @@ export function ClipReviewModal({
             <LuSkipForward className="h-3.5 w-3.5" />
             {t("reviewPlayEnd")}
           </button>
+          <button
+            type="button"
+            title={t("reviewSafeZoneHint")}
+            onClick={() => setSafeZonePref({ on: !safeZone.on })}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-[12.5px] font-semibold transition-colors ${
+              safeZone.on ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut hover:text-fg"
+            }`}
+          >
+            <LuSmartphone className={`h-3.5 w-3.5 ${safeZone.on ? "text-ember" : ""}`} />
+            {t("reviewSafeZone")}
+          </button>
+          {safeZone.on && (
+            <select
+              value={safeZone.platform}
+              onChange={(e) => setSafeZonePref({ platform: e.target.value })}
+              className="rounded-lg border border-line bg-panel-2 px-2 py-2 text-[11.5px] text-mut outline-none focus:border-ember/60"
+            >
+              {SAFE_ZONE_PLATFORMS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name[locale === "zh" ? "zh" : "en"]}
+                </option>
+              ))}
+            </select>
+          )}
           <span className="chip ml-auto rounded-md px-2.5 py-1 font-mono text-[11.5px]">
             {formatClock(startSec)} → {formatClock(endSec)}
             <span className="ml-2 text-ember">{t("durationChip", { n: Math.round(endSec - startSec) })}</span>
