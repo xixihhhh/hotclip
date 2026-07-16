@@ -43,11 +43,10 @@
 
 ## What's New
 
+- **[v0.7.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.7.0)** (2026-07-16) "Self-check every cut, clip on call": **render QA** (black frames / long silences / loudness / duration / mid-word-cut re-check written into clips.json, plus 30ms edge fades at every cut), a **headless CLI + official agent skill** (one sentence in Claude Code / Codex drives the local pipeline), **one-click compilation** (with chapter timestamps), **cold-open hook splicing**, **dual-aspect export** (vertical + landscape in one run) and a **product mode** for live-selling clips; plus hotword glossary, one-click denoise, caption safe-zone preview, audiogram for audio-only sources, AIGC labeling, smart cover frames, cancellable exports with real-time progress
 - **[v0.6.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.6.0)** (2026-07-10) "See the picture, join the ecosystem": a **six-signal evidence chain** (+on-device vision peaks · facial-emotion peaks · live-chat density), **bilingual caption burn-in**, a **local MCP server** (one sentence to Claude drives the whole pipeline), **24/7 recording watch folder**, a publish kit (post copy / SRT / EDL timeline) and clip-length presets / prefs memory / inline title editing
 - **[v0.5.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.5.0)** (2026-07-09) "Pick right, ship steady": a **clip review workbench** (preview clips in-app, drag cut points on a waveform timeline), **shot-snapped cut points** (TransNetV2 — cuts land on real shot changes), **brand style templates** (highlight color / size / position / logo watermark), and an **on-device two-stage funnel** (local small-LLM pre-filter — an order of magnitude less LLM cost on long videos); plus opening-hook burn-in and -14 LUFS loudness normalization
 - **[v0.4.3](https://github.com/xixihhhh/hotclip/releases/tag/v0.4.3)** (2026-07-06) Engineering base: local transcript cache (reopen the same file and jump straight to highlight picking) + clips.json processing receipt (auditable record of what the AI did to each clip)
-- **[v0.4.2](https://github.com/xixihhhh/hotclip/releases/tag/v0.4.2)** (2026-07-05) Caption readability: semantic line breaking (wraps at real clause boundaries instead of chopping mid-phrase) + anti-flicker
-
 Full history in [Releases](https://github.com/xixihhhh/hotclip/releases).
 
 ## How It Works
@@ -140,9 +139,10 @@ HotClip fills the gap from both sides:
 
 See the full [product plan](docs/PRODUCT-PLAN.md) (Chinese). Highlights:
 
-- **v0.5 — cut smarter**: candidate review workbench (drag to fine-tune boundaries, one-click regenerate) · shot-boundary detection (cuts snap to shot edges) · caption style templates / brand presets · on-device small-LLM pre-filtering
+- ~~**v0.5 — cut smarter**: candidate review workbench · shot-boundary detection · caption style templates / brand presets · on-device small-LLM pre-filtering~~ ✅ shipped
 - ~~**v0.6 — see the frame**: visual highlight signals · facial-emotion peaks · translated captions~~ ✅ shipped (plus MCP server / watch folder / danmaku signal pulled forward)
-- **v0.7 — publish from the app**: multi-platform one-click publishing & scheduling · CapCut/JianYing draft export · English ASR upgrade (Parakeet)
+- ~~**v0.7 — self-check every cut, clip on call**: render QA · headless CLI + agent skill · compilation · cold-open · dual-aspect · product mode~~ ✅ shipped
+- **Next — publish from the app**: multi-platform one-click publishing & scheduling · CapCut/JianYing draft export · English ASR upgrade (Parakeet)
 
 Want a say in what ships first? Tell us in [Discussions](https://github.com/xixihhhh/hotclip/discussions).
 

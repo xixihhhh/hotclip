@@ -43,11 +43,10 @@
 
 ## 最近更新
 
+- **[v0.7.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.7.0)**（2026-07-16）「切完自检、随叫随剪」:**出片自我质检**（黑屏/长静音/响度/时长/切点半词复核写进 clips.json,每个切点 30ms 淡化防爆音）+ **Headless CLI 与官方 Agent Skill**（Claude Code / Codex 一句话驱动本地切片）+ **精华合集一键成片**（附章节时间戳）+ **高潮前置**（钩子句剪到开头）+ **一键双画幅**（竖屏+横屏同出）+ **商品讲解模式**（带货切片）;另含热词词表、一键降噪、字幕安全区预览、纯音频波形成片、AIGC 标识、智能封面、导出可取消与实时进度
 - **[v0.6.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.6.0)**（2026-07-10）「看得见画面、接得上生态」:**六路证据链**（+视觉爆点信号 · 表情峰值 · 弹幕热度）+ **双语字幕烧录** + **本地 MCP Server**（Claude 一句话驱动切片）+ **录播监听 7×24 无人值守** + 发布文案/SRT/EDL 时间线三件交付套件 + 时长档/偏好记忆/标题即点即改
 - **[v0.5.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.5.0)**（2026-07-09）「选得准、批量稳」:**切片审阅台**（导出前应用内看片,波形时间轴拖手柄逐词微调切点）+ **镜头切点吸附**（TransNetV2,切点吸到真实镜头切换）+ **品牌样式模板**（高亮色/字号/位置/logo水印）+ **端侧两级漏斗**（本地小模型初筛,长视频 LLM 成本降一个量级）;另含开场钩子黄金3秒烧录、响度标准化 -14 LUFS
 - **[v0.4.3](https://github.com/xixihhhh/hotclip/releases/tag/v0.4.3)**（2026-07-06）工程底座:转写结果本地缓存（同文件重开秒进挑爆点）+ clips.json 处理产出回执（AI 对每条片做了什么，可审计）
-- **[v0.4.2](https://github.com/xixihhhh/hotclip/releases/tag/v0.4.2)**（2026-07-05）字幕可读性:语义断行（顺标点/结构助词换行，不再拦腰截断）+ 防闪烁
-
 完整更新历史见 [Releases](https://github.com/xixihhhh/hotclip/releases)。
 
 ## 🚧 项目状态
@@ -65,6 +64,7 @@
 | 安装包发布(Windows exe + 绿色版 zip + macOS dmg) | ✅ [已发布](https://github.com/xixihhhh/hotclip/releases/latest) |
 | v0.5「选得准、批量稳」(切片审阅台 · 镜头切点吸附 · 品牌样式模板 · 端侧两级漏斗) | ✅ [已发布](https://github.com/xixihhhh/hotclip/releases/tag/v0.5.0) |
 | v0.6「看得见画面、接得上生态」(六路证据链 · 双语字幕 · MCP Server · 录播监听 · 弹幕信号 · 发布套件) | ✅ [已发布](https://github.com/xixihhhh/hotclip/releases/tag/v0.6.0) |
+| v0.7「切完自检、随叫随剪」(出片质检 · Headless CLI · Agent Skill · 精华合集 · 高潮前置 · 双画幅 · 商品模式) | ✅ [已发布](https://github.com/xixihhhh/hotclip/releases/tag/v0.7.0) |
 | 多平台发布 · 剪映草稿导出 · 英文 ASR 升级 | 🗺️ [规划中](docs/PRODUCT-PLAN.md) |
 
 ## 一键切片,三步出片
