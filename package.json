@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
     "mcp": "tsx src/mcp/server.ts",
+    "cli": "tsx src/cli/index.ts",
     "start": "electron-vite preview",
     "pack:dir": "electron-vite build && electron-builder --dir",
     "dist": "electron-vite build && electron-builder --publish never"

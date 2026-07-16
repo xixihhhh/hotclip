@@ -10,34 +10,11 @@
  * 模型与转写缓存目录与桌面 App 共享(下载一次两边都能用)。
  */
 import { createInterface } from "readline";
-import { homedir } from "os";
 import { join, basename } from "path";
-import type { LlmConfig } from "../shared/api-types";
 import { transcribeCached, detectForPipeline, autoClip } from "../core/pipeline";
 import { loadGlossary } from "../core/glossary-store";
+import { userDataDir, modelsRoot, cacheDir, llmFromEnv } from "../core/appenv";
 import { handleMcpMessage, type JsonRpcMessage } from "./protocol";
-
-/** 与 Electron 的 app.getPath("userData") 同路径——模型/缓存两边共享。 */
-export function userDataDir(platform: NodeJS.Platform = process.platform): string {
-  if (platform === "darwin") return join(homedir(), "Library", "Application Support", "hotclip");
-  if (platform === "win32") return join(process.env.APPDATA ?? join(homedir(), "AppData", "Roaming"), "hotclip");
-  return join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "hotclip");
-}
-
-const modelsRoot = (): string => join(userDataDir(), "models");
-const cacheDir = (): string => join(userDataDir(), "transcript-cache");
-
-/** LLM 配置来自环境变量;缺配置时给 Agent 一段能照做的指引。 */
-function llmFromEnv(): LlmConfig {
-  const baseUrl = process.env.HOTCLIP_LLM_BASE_URL ?? "";
-  const model = process.env.HOTCLIP_LLM_MODEL ?? "";
-  if (!baseUrl || !model) {
-    throw new Error(
-      "缺少 LLM 配置:请在 MCP server 的 env 里设置 HOTCLIP_LLM_BASE_URL 与 HOTCLIP_LLM_MODEL(OpenAI 兼容端点;本地 Ollama 为 http://localhost:11434/v1,免 key;云端另需 HOTCLIP_LLM_API_KEY)"
-    );
-  }
-  return { baseUrl, apiKey: process.env.HOTCLIP_LLM_API_KEY ?? "ollama", model };
-}
 
 function fmtClock(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -107,10 +84,17 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
     const list = outcome.exported
       .map((r) => {
         const c = outcome.candidates.find((x) => x.id === r.id);
-        return `- ${basename(r.path)} (${Math.round(r.durationSec)}s, 评分 ${c?.score ?? "?"}) ${c?.title ?? ""}`;
+        // 出片质检告警直接随条目回给 Agent——Agent 只需复核告警条,不用逐条回放
+        const qaNote = r.qa && r.qa.status === "warn" ? `\n  ⚠ 质检:${r.qa.issues.join(";")}` : "";
+        return `- ${basename(r.path)} (${Math.round(r.durationSec)}s, 评分 ${c?.score ?? "?"}) ${c?.title ?? ""}${qaNote}`;
       })
       .join("\n");
-    return `已导出 ${outcome.exported.length} 条切片到 ${outcome.outDir}\n${list}\n附带 clips.json(标题/评分/时间码/回执)与每条封面 JPG。`;
+    const warned = outcome.exported.filter((r) => r.qa?.status === "warn").length;
+    const qaLine =
+      warned > 0
+        ? `出片质检:${warned} 条有告警(详见条目与 clips.json 的 qa 字段)`
+        : "出片质检:全部通过(黑屏/长静音/响度/时长/切点复核)";
+    return `已导出 ${outcome.exported.length} 条切片到 ${outcome.outDir}\n${list}\n${qaLine}\n附带 clips.json(标题/评分/时间码/回执/质检)与每条封面 JPG。`;
   }
 
   throw new Error(`未实现的工具: ${name}`);
