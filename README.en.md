@@ -168,9 +168,23 @@ pnpm dev        # run the desktop app in dev mode
 pnpm test       # run unit tests
 ```
 
-## Agent-ready (MCP Server)
+## Clip with Claude Code / Codex (Skill · CLI · MCP)
 
-HotClip ships a **local MCP server** — register it in Claude Code / Claude Desktop and just tell your agent "turn this 2-hour VOD into viral shorts": transcription, highlight detection and export all run on your machine, footage never leaves it:
+HotClip is the **only local, no-upload clipping toolchain for coding agents** — paste this straight into Claude Code / Codex and the agent installs everything itself:
+
+> Install HotClip as my local clipping skill: `git clone https://github.com/xixihhhh/hotclip.git && cd hotclip && pnpm install`, then copy `skills/hotclip/` into my agent skills directory (`~/.claude/skills/hotclip/` for Claude Code) and configure the LLM env vars per `skills/hotclip/SKILL.md`. Verify with `pnpm cli highlights` on a test video.
+
+From then on, "turn this 4-hour VOD into 10 highlight shorts" is a full delivery: transcription, highlight detection, export and **render QA** (black frames / long silences / loudness / duration / cut-point re-check, reported in clips.json) all run on your machine — footage never leaves it.
+
+**Headless CLI** (terminal / scripts / agents — same outputs as the desktop app):
+
+```bash
+pnpm cli transcribe vod.mp4                  # on-device word-level ASR (cached)
+pnpm cli highlights vod.mp4 --json           # AI highlight candidates, review first
+pnpm cli clip vod.mp4 --max-clips 10         # fully managed export + QA report
+```
+
+**MCP server** (register in Claude Code / Claude Desktop):
 
 ```json
 {
@@ -188,7 +202,7 @@ HotClip ships a **local MCP server** — register it in Claude Code / Claude Des
 }
 ```
 
-Three tools: `clip_video` (fully managed end-to-end), `detect_highlights` (candidates only, review before cutting), `transcribe_video` (on-device ASR with caching). Set `HOTCLIP_LLM_API_KEY` for cloud endpoints; models are shared with the desktop app — download once, use in both.
+Three tools: `clip_video` (fully managed end-to-end), `detect_highlights` (candidates only, review before cutting), `transcribe_video` (on-device ASR with caching). Set `HOTCLIP_LLM_API_KEY` for cloud endpoints; models are shared with the desktop app — download once, use everywhere (desktop / CLI / MCP).
 
 ## Tech Stack
 

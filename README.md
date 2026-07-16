@@ -195,9 +195,23 @@ pnpm dev        # 启动桌面应用(开发模式)
 pnpm test       # 跑单元测试
 ```
 
-## 被 Agent 调用(MCP Server)
+## 让 Claude Code / Codex 帮你切片(Skill · CLI · MCP)
 
-HotClip 自带**本地 MCP Server**——在 Claude Code / Claude Desktop 里注册后,直接对 Agent 说「把这个 2 小时录播切成爆点短视频」,转写、找爆点、出片全在你机器上跑,素材不出电脑:
+HotClip 是**唯一本地不上传的切片 Agent 工具链**——把下面这段话直接粘给 Claude Code / Codex,Agent 会自己完成安装并把 HotClip 装成随叫随到的剪辑技能:
+
+> 请安装 HotClip 作为我的本地切片技能:`git clone https://github.com/xixihhhh/hotclip.git && cd hotclip && pnpm install`,然后把 `skills/hotclip/` 复制到我的 Agent skills 目录(Claude Code 为 `~/.claude/skills/hotclip/`),并按 `skills/hotclip/SKILL.md` 里的说明配置 LLM 环境变量。装好后用一段测试视频跑 `pnpm cli highlights` 验证。
+
+之后一句「把这个 4 小时录播切 10 条爆点」就是完整交付:转写、找爆点、出片、**出片质检**(黑屏/长静音/响度/时长/切点复核,报告进 clips.json)全在你机器上跑,素材不出电脑。
+
+**Headless CLI**(终端/脚本/Agent 通用,与桌面端产物完全一致):
+
+```bash
+pnpm cli transcribe 直播回放.mp4                 # 端侧逐字转写(带缓存)
+pnpm cli highlights 直播回放.mp4 --json          # AI 爆点候选,先审后剪
+pnpm cli clip 直播回放.mp4 --max-clips 10        # 全托管出片 + 质检报告
+```
+
+**MCP Server**(Claude Code / Claude Desktop 注册即用):
 
 ```json
 {
@@ -215,7 +229,7 @@ HotClip 自带**本地 MCP Server**——在 Claude Code / Claude Desktop 里注
 }
 ```
 
-三个工具:`clip_video`(全托管一条龙)、`detect_highlights`(只出候选清单,先审后剪)、`transcribe_video`(端侧转写,带缓存)。云端 LLM 另设 `HOTCLIP_LLM_API_KEY`;模型与桌面 App 共享,下载一次两边可用。
+三个工具:`clip_video`(全托管一条龙)、`detect_highlights`(只出候选清单,先审后剪)、`transcribe_video`(端侧转写,带缓存)。云端 LLM 另设 `HOTCLIP_LLM_API_KEY`;模型与桌面 App 共享,下载一次三边(桌面/CLI/MCP)可用。
 
 ## 技术栈
 
