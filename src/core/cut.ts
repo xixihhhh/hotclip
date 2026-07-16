@@ -36,6 +36,25 @@ export const LOUDNORM_OUT_RATE = "48000";
  */
 export const DENOISE_FILTER = "highpass=f=80,highpass=f=80,afftdn=nr=24:nf=-40:tn=1";
 
+/**
+ * 切点边缘音频淡化时长:重编码切割的边界几乎必然落在波形非零点上,
+ * 产生可闻的「咔哒」爆音;30ms 短到听不出淡化,却足以把边界钳到零附近。
+ * 跳剪/高潮前置/合集的每段两端各自淡出+淡入,硬切拼缝天然平滑。
+ */
+export const EDGE_FADE_SEC = 0.03;
+
+/**
+ * 段边缘淡入淡出 filter(纯函数)。段太短(≤4×淡化时长)不淡——
+ * 淡化会吃掉整段能量,反而比爆音更可闻。
+ */
+export function edgeFadeFilters(durationSec: number): string[] {
+  if (!(durationSec > EDGE_FADE_SEC * 4)) return [];
+  return [
+    `afade=t=in:st=0:d=${EDGE_FADE_SEC}`,
+    `afade=t=out:st=${(durationSec - EDGE_FADE_SEC).toFixed(3)}:d=${EDGE_FADE_SEC}`,
+  ];
+}
+
 export type CutMode = "accurate" | "copy";
 
 export interface CutOptions {
@@ -225,9 +244,11 @@ export function buildCutArgs(
   const crf = Number.isFinite(options.crf) ? String(options.crf) : "18";
   const preset = options.preset ?? "veryfast";
   // 音频链固定顺序:降噪 → 响度标准化(loudnorm 必须看到去噪后的音频)
+  // → 边缘淡化(放最后,loudnorm 的动态增益才不会把淡化抬回去)
   const audioChain = [
     ...(options.denoise ? [DENOISE_FILTER] : []),
     ...(options.normalizeLoudness ? [LOUDNORM_FILTER] : []),
+    ...edgeFadeFilters(duration),
   ];
   return [
     ...common,
@@ -270,7 +291,10 @@ export function buildJumpCutArgs(
     const a = Math.max(0, s.startSec - seek);
     const b = Math.max(a, s.endSec - seek);
     parts.push(`[0:v]trim=start=${a.toFixed(3)}:end=${b.toFixed(3)},setpts=PTS-STARTPTS[v${i}]`);
-    parts.push(`[0:a]atrim=start=${a.toFixed(3)}:end=${b.toFixed(3)},asetpts=PTS-STARTPTS[a${i}]`);
+    // 每段两端 30ms 淡化:相邻段的淡出+淡入在拼缝处相接,消掉跳剪爆音
+    const fades = edgeFadeFilters(b - a);
+    const fadeSuffix = fades.length > 0 ? `,${fades.join(",")}` : "";
+    parts.push(`[0:a]atrim=start=${a.toFixed(3)}:end=${b.toFixed(3)},asetpts=PTS-STARTPTS${fadeSuffix}[a${i}]`);
     labels.push(`[v${i}][a${i}]`);
   });
   const post = buildVideoFilters(options);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCutArgs, buildJumpCutArgs, buildVideoFilters, escapeFilterPath, metadataArgs, parseFfmpegProgress, LOUDNORM_FILTER, LOUDNORM_OUT_RATE, DENOISE_FILTER } from "../cut";
+import { buildCutArgs, buildJumpCutArgs, buildVideoFilters, escapeFilterPath, metadataArgs, parseFfmpegProgress, edgeFadeFilters, LOUDNORM_FILTER, LOUDNORM_OUT_RATE, DENOISE_FILTER, EDGE_FADE_SEC } from "../cut";
 
 describe("buildCutArgs", () => {
   it("accurate mode: fast seek before -i, re-encode, faststart", () => {
@@ -83,14 +83,14 @@ describe("loudness normalization", () => {
     const args = buildCutArgs("/v/in.mp4", "/v/out.mp4", 0, 5, { normalizeLoudness: true });
     const af = args.indexOf("-af");
     expect(af).toBeGreaterThan(-1);
-    expect(args[af + 1]).toBe(LOUDNORM_FILTER);
+    expect(args[af + 1].startsWith(LOUDNORM_FILTER)).toBe(true); // 边缘淡化排在其后
     expect(args[args.indexOf("-ar") + 1]).toBe(LOUDNORM_OUT_RATE);
     expect(af).toBeLessThan(args.indexOf("-c:a")); // filter precedes the encoder
   });
 
-  it("plain cut: no audio filter when disabled", () => {
+  it("plain cut: 关掉响度后 -af 只剩边缘淡化,无 loudnorm", () => {
     const args = buildCutArgs("/v/in.mp4", "/v/out.mp4", 0, 5);
-    expect(args).not.toContain("-af");
+    expect(args[args.indexOf("-af") + 1]).toBe("afade=t=in:st=0:d=0.03,afade=t=out:st=4.970:d=0.03");
     expect(args.join(" ")).not.toContain("loudnorm");
   });
 
@@ -129,16 +129,16 @@ describe("denoise (基础降噪)", () => {
     expect(DENOISE_FILTER).not.toContain("aresample");
   });
 
-  it("普通切割:仅降噪 → -af 只有降噪链,无 -ar,且强制重编码", () => {
+  it("普通切割:仅降噪 → -af 以降噪链开头(后接边缘淡化),无 -ar,且强制重编码", () => {
     const args = buildCutArgs("/v/in.mp4", "/v/out.mp4", 0, 5, { mode: "copy", denoise: true });
     expect(args).toContain("libx264"); // copy 被升级
-    expect(args[args.indexOf("-af") + 1]).toBe(DENOISE_FILTER);
+    expect(args[args.indexOf("-af") + 1].startsWith(DENOISE_FILTER)).toBe(true);
     expect(args).not.toContain("-ar");
   });
 
   it("普通切割:降噪+响度 → 降噪排在 loudnorm 之前,-ar 照常", () => {
     const args = buildCutArgs("/v/in.mp4", "/v/out.mp4", 0, 5, { denoise: true, normalizeLoudness: true });
-    expect(args[args.indexOf("-af") + 1]).toBe(`${DENOISE_FILTER},${LOUDNORM_FILTER}`);
+    expect(args[args.indexOf("-af") + 1].startsWith(`${DENOISE_FILTER},${LOUDNORM_FILTER}`)).toBe(true);
     expect(args[args.indexOf("-ar") + 1]).toBe(LOUDNORM_OUT_RATE);
   });
 
@@ -157,6 +157,37 @@ describe("denoise (基础降噪)", () => {
     expect(fc).toContain(`[araw]${DENOISE_FILTER}[aout]`);
     expect(fc).not.toContain("loudnorm");
     expect(args).not.toContain("-ar");
+  });
+});
+
+describe("edgeFadeFilters (切点边缘 30ms 淡化防爆音)", () => {
+  it("正常段:头淡入 + 尾淡出,尾部时刻 = 段长 - 淡化时长", () => {
+    const fades = edgeFadeFilters(2);
+    expect(fades).toEqual([
+      `afade=t=in:st=0:d=${EDGE_FADE_SEC}`,
+      `afade=t=out:st=${(2 - EDGE_FADE_SEC).toFixed(3)}:d=${EDGE_FADE_SEC}`,
+    ]);
+  });
+
+  it("超短段(≤4×淡化时长)不淡:淡化会吃掉整段能量", () => {
+    expect(edgeFadeFilters(0.1)).toEqual([]);
+    expect(edgeFadeFilters(0)).toEqual([]);
+  });
+
+  it("copy 模式不受影响:流复制无法加滤镜", () => {
+    const args = buildCutArgs("/v/in.mp4", "/v/out.mp4", 10, 20, { mode: "copy" });
+    expect(args.join(" ")).not.toContain("afade");
+  });
+
+  it("跳剪:每段两端各自淡化,拼缝处淡出+淡入相接", () => {
+    const segs = [{ startSec: 10, endSec: 12 }, { startSec: 15, endSec: 17 }];
+    const args = buildJumpCutArgs("/v/in.mp4", "/v/out.mp4", 10, segs);
+    const fc = args[args.indexOf("-filter_complex") + 1];
+    // 两段各带一对淡化(2 段 × in/out)
+    expect(fc.match(/afade=t=in/g)).toHaveLength(2);
+    expect(fc.match(/afade=t=out/g)).toHaveLength(2);
+    // 淡化挂在 asetpts 之后、进 concat 之前(段内相对时间轴)
+    expect(fc).toContain(`asetpts=PTS-STARTPTS,afade=t=in:st=0:d=${EDGE_FADE_SEC},afade=t=out:st=1.970:d=${EDGE_FADE_SEC}[a0]`);
   });
 });
 

@@ -8,7 +8,7 @@
  * 成品音频生成波形(所以跳剪后的波形与声音天然同步)。纯参数构建可单测;
  * ffmpeg 执行隔离在 runAudiogram。
  */
-import { escapeFilterPath, watermarkStages, metadataArgs, runFfmpeg, DENOISE_FILTER, type WatermarkSpec } from "./cut";
+import { escapeFilterPath, watermarkStages, metadataArgs, runFfmpeg, DENOISE_FILTER, edgeFadeFilters, type WatermarkSpec } from "./cut";
 import { isValidHex } from "./brand";
 
 /** 深色底(与应用「灼热片场」底色同源)。 */
@@ -83,7 +83,10 @@ export function buildAudiogramArgs(
   ranges.forEach((r, i) => {
     const from = Math.max(0, r.startSec - base);
     const to = Math.max(from, r.endSec - base);
-    parts.push(`[0:a]atrim=start=${from.toFixed(3)}:end=${to.toFixed(3)},asetpts=PTS-STARTPTS[a${i}]`);
+    // 每段两端 30ms 淡化(与视频路径同一策略):跳剪拼缝不爆音
+    const fades = edgeFadeFilters(to - from);
+    const fadeSuffix = fades.length > 0 ? `,${fades.join(",")}` : "";
+    parts.push(`[0:a]atrim=start=${from.toFixed(3)}:end=${to.toFixed(3)},asetpts=PTS-STARTPTS${fadeSuffix}[a${i}]`);
     segLabels.push(`[a${i}]`);
   });
   let audioLabel = "[a0]";

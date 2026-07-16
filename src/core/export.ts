@@ -28,6 +28,7 @@ import { detectShotBoundaries, snapClipToShots, SNAP_MAX_OUT_SEC } from "./shots
 import { buildCaptionAss, VERTICAL_LAYOUT, HORIZONTAL_LAYOUT, type CaptionStyle } from "./subtitle";
 import { buildOverlayPayload, isWebCaptionStyle, type OverlayRenderFn, type WebCaptionStyle } from "./caption-overlay/payload";
 import { probeMedia } from "./probe";
+import { runClipQa, type ClipQaReport } from "./qa";
 import { applyBrandToLayout } from "./brand";
 import type { TranscriptWord, BrandStyle } from "../shared/api-types";
 import type { WatermarkSpec } from "./cut";
@@ -154,6 +155,12 @@ export interface ExportRenderOptions {
   timeline?: boolean;
   /** AIGC 标识:左上角「AI 生成」显式标识 + 容器元数据隐式标识(《标识办法》)。 */
   aigcLabel?: boolean;
+  /**
+   * 出片自我质检(默认开):每条成片渲染后解码扫描黑屏/长静音/响度/时长
+   * 偏差,并复核切点是否压在词中间;报告进 clips.json 的 qa 字段。
+   * 显式 false 关闭(如超长批量赶时间)。
+   */
+  qa?: boolean;
 }
 
 export interface ExportedClip {
@@ -164,6 +171,8 @@ export interface ExportedClip {
   coverPath?: string;
   sizeBytes: number;
   durationSec: number;
+  /** 出片质检报告;质检关闭或检测失败为 null/undefined。 */
+  qa?: ClipQaReport | null;
 }
 
 export interface ExportProgressEvent {
@@ -556,6 +565,23 @@ export async function exportClips(
 
       const s = await stat(outPath);
 
+      // 出片自我质检:解码扫描黑屏/长静音/响度/时长偏差,再复核切点是否
+      // 压在词中间——回执说「AI 干了什么」,质检说「干得好不好」。
+      // 检测失败静默置空,绝不拖垮导出(与封面/SRT 同一兜底语义)。
+      let qaReport: ClipQaReport | null = null;
+      if (options.qa !== false) {
+        qaReport = await runClipQa(outPath, {
+          expectedDurationSec: clipDuration + (coldOpenSec ?? 0),
+          loudnessNormalized: Boolean(options.normalizeLoudness),
+          words: clip.words,
+          segments: plan ? plan.segments : [{ startSec: clip.startSec, endSec: clip.endSec }],
+          signal,
+        }).catch((e) => {
+          if (signal?.aborted) throw e;
+          return null;
+        });
+      }
+
       // Cover: a frame just after the hook lands, pulled from the FINISHED
       // clip so captions/title plate are baked in — platform-upload ready.
       const coverPath = outPath.replace(/\.mp4$/, ".jpg");
@@ -620,6 +646,7 @@ export async function exportClips(
         coverPath: coverOk ? coverPath : undefined,
         sizeBytes: s.size,
         durationSec: clipDuration + (coldOpenSec ?? 0),
+        qa: qaReport,
       });
       if (fillerHits.length > 0) {
         removedFillersByClip.set(clip.id, fillerHits.map((h) => h.text.trim()));
@@ -711,6 +738,7 @@ export async function exportClips(
         subtitleFile: Boolean(options.subtitleFile),
         timeline: Boolean(options.timeline),
         aigcLabel: Boolean(options.aigcLabel),
+        qa: options.qa !== false,
         // 品牌预设回执:用了什么色/档位/水印,矩阵管线可核对品牌一致性
         brand: options.brand
           ? {
@@ -736,6 +764,8 @@ export async function exportClips(
           keywords: spec?.keywords ?? [],
           removedFillers: removedFillersByClip.get(r.id) ?? [],
           render: renderByClip.get(r.id) ?? null,
+          // 出片质检报告:pass/warn + 告警清单(黑屏/静音/响度/时长/半词)
+          qa: r.qa ?? null,
           // 发布文案(标题/话题/简介),同内容也落在 mp4 旁的 .post.txt
           publish: spec?.publish ?? null,
           ...(spec?.meta ?? {}),
