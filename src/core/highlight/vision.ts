@@ -4,21 +4,19 @@
  * 的行业通病(表情包式画面/肢体梗/场景炸点在转写文本里是空白)。
  *
  * 抽帧时刻优先取 Tier-0 信号(响度峰值/镜头密集段)圈出的窗口中点——它们是
- * "这里可能有画面"的免费先验;剩余额度均匀铺满全片防漏。全程 fail-open:
- * 端点不可用/单帧失败/预算耗尽都不能拖垮检测,最差退回纯文本结果。
- * 纯函数(规划/解析/并段)可单测;ffmpeg 与 HTTP 通过注入点替换。
+ * "这里可能有画面"的免费先验;剩余额度均匀铺满全片防漏。研判按 3×3 接触表
+ * 批量走:九帧拼一张带序号的九宫格,一次调用出九个分——调用次数比逐帧降
+ * 一个量级(27 帧只要 3 次)。全程 fail-open:端点不可用/单表失败/预算耗尽
+ * 都不能拖垮检测,最差退回纯文本结果。
+ * 纯函数(规划/解析/并段)可单测;拼图与 HTTP 通过注入点替换。
  */
-import { execFile } from "child_process";
-import { promisify } from "util";
 import type { LlmConfig } from "../../shared/api-types";
-import { resolveFfmpegPath } from "../binaries";
+import { chunkCells, composeContactSheetJpeg } from "../contact-sheet";
 import type { MediaSignals, TimeRange } from "../signals";
 import { stripThinkBlocks } from "./prefilter";
 
-const execFileAsync = promisify(execFile);
-
-/** 全片抽帧上限——端侧 VL 单帧秒级,20 帧把最坏耗时压在一分钟量级。 */
-export const VISION_MAX_FRAMES = 20;
+/** 全片抽帧上限——接触表批量研判后一次调用看九帧,27 帧=3 次调用。 */
+export const VISION_MAX_FRAMES = 27;
 /** 两帧最小间隔:同一个画面高潮抽两帧是浪费额度。 */
 export const VISION_MIN_SPACING_SEC = 8;
 /** energy(0-10) 达到该值的帧才算"画面高能"。 */
@@ -27,7 +25,7 @@ export const VISION_ENERGY_THRESHOLD = 7;
 export const VISION_PEAK_PAD_SEC = 3.5;
 /** 相邻高能时段间隔小于该值时并成一段。 */
 export const VISION_MERGE_GAP_SEC = 10;
-/** 单帧研判超时;总预算见 budgetMs(默认 180s,超预算带着已得结果收工)。 */
+/** 单表研判超时;总预算见 budgetMs(默认 180s,超预算带着已得结果收工)。 */
 export const VISION_CALL_TIMEOUT_MS = 60_000;
 const VISION_BUDGET_MS = 180_000;
 /** 成功研判帧数低于该值时证据太薄,宁可不给信号也不给噪声。 */
@@ -61,7 +59,8 @@ export type VisionChatFn = (
   signal?: AbortSignal
 ) => Promise<string>;
 
-export type FrameExtractor = (videoPath: string, tSec: number) => Promise<string | null>;
+/** 接触表拼图注入点(times → base64 jpeg;失败 null)。 */
+export type SheetComposer = (videoPath: string, times: number[]) => Promise<string | null>;
 
 /**
  * 规划抽帧时刻:先取信号窗口中点(按时间序),再用均匀网格补满额度;
@@ -93,10 +92,17 @@ export function planFrameTimes(
   return picked.sort((a, b) => a - b);
 }
 
-/** 解析单帧研判输出:{"energy":0-10,"note":"…"}。垃圾输出返回 null。 */
-export function parseVisionVerdict(content: string): { energy: number; note: string } | null {
+/**
+ * 解析接触表批量研判输出:{"cells":[{"i":1,"energy":0-10,"note":"…"}…]}。
+ * 只收 1..cellCount 内的合法格(重复取首个,energy 夹回 0-10);
+ * 一个合法格都没有(垃圾输出)返回 null。
+ */
+export function parseSheetVerdicts(
+  content: string,
+  cellCount: number
+): Array<{ i: number; energy: number; note: string }> | null {
   const cleaned = stripThinkBlocks(content);
-  const match = cleaned.match(/\{[\s\S]*?\}/);
+  const match = cleaned.match(/\{[\s\S]*\}/);
   if (!match) return null;
   let obj: unknown;
   try {
@@ -104,13 +110,24 @@ export function parseVisionVerdict(content: string): { energy: number; note: str
   } catch {
     return null;
   }
-  const rec = obj as { energy?: unknown; note?: unknown };
-  const energy = Number(rec.energy);
-  if (!Number.isFinite(energy)) return null;
-  return {
-    energy: Math.max(0, Math.min(10, energy)),
-    note: typeof rec.note === "string" ? rec.note.trim().slice(0, 40) : "",
-  };
+  const cells = (obj as { cells?: unknown }).cells;
+  if (!Array.isArray(cells)) return null;
+  const seen = new Set<number>();
+  const out: Array<{ i: number; energy: number; note: string }> = [];
+  for (const c of cells) {
+    const rec = c as { i?: unknown; energy?: unknown; note?: unknown };
+    const i = Number(rec.i);
+    const energy = Number(rec.energy);
+    if (!Number.isInteger(i) || i < 1 || i > cellCount || seen.has(i)) continue;
+    if (!Number.isFinite(energy)) continue;
+    seen.add(i);
+    out.push({
+      i,
+      energy: Math.max(0, Math.min(10, energy)),
+      note: typeof rec.note === "string" ? rec.note.trim().slice(0, 40) : "",
+    });
+  }
+  return out.length > 0 ? out : null;
 }
 
 /** 高能帧 → 时段(±pad),按间隔并段,夹进 [0, duration]。纯函数。 */
@@ -140,36 +157,23 @@ export function visualPeakRanges(
   return out;
 }
 
-export function visionSystemPrompt(): string {
+export function visionSystemPrompt(cellCount: number): string {
   return [
-    "你在为短视频切片评估单帧画面的\"爆点能量\"。",
-    "energy 0-10:夸张表情/激烈肢体动作/多人冲突或互动高潮/醒目道具或文字梗/场面炸裂给高分;",
+    `你在为短视频切片评估画面的"爆点能量"。图是 ${cellCount} 帧拼成的接触表,`,
+    "从左到右、从上到下编号 1 起(每格左上角有白色序号;多余黑格忽略)。",
+    "逐格打分 energy 0-10:夸张表情/激烈肢体动作/多人冲突或互动高潮/醒目道具或文字梗/场面炸裂给高分;",
     "静态口播、空镜、PPT、普通对坐聊天给低分(0-3)。",
-    '严格只输出 JSON:{"energy":0-10,"note":"≤15字画面描述"},不要输出其他内容。',
+    `严格只输出 JSON:{"cells":[{"i":1,"energy":0-10,"note":"≤15字画面描述"}…]},共 ${cellCount} 项,不要输出其他内容。`,
   ].join("\n");
 }
 
-/** 默认抽帧实现:ffmpeg 缩到 448 宽的 mjpeg 走管道,不落临时文件。 */
-export async function extractFrameJpeg(videoPath: string, tSec: number): Promise<string | null> {
-  try {
-    const ffmpeg = resolveFfmpegPath();
-    const { stdout } = await execFileAsync(
-      ffmpeg,
-      [
-        "-hide_banner", "-loglevel", "error",
-        "-ss", tSec.toFixed(2),
-        "-i", videoPath,
-        "-frames:v", "1",
-        "-vf", "scale=448:-2",
-        "-f", "image2pipe", "-c:v", "mjpeg", "-q:v", "6",
-        "-",
-      ],
-      { encoding: "buffer", maxBuffer: 8 * 1024 * 1024 }
-    );
-    return stdout.length > 0 ? stdout.toString("base64") : null;
-  } catch {
-    return null;
-  }
+/** 接触表的用户提示:报出每格对应的片内时刻,帮模型对齐语境。 */
+export function sheetUserPrompt(times: number[]): string {
+  const clock = (t: number): string => {
+    const s = Math.floor(t);
+    return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  };
+  return `逐格评估画面爆点能量。各格时刻:${times.map((t, i) => `${i + 1}=${clock(t)}`).join(" ")}`;
 }
 
 /** 默认研判实现:OpenAI 兼容多模态 chat(Ollama /v1 同样支持 image_url)。 */
@@ -204,10 +208,11 @@ export const visionChatComplete: VisionChatFn = async (llm, system, userText, im
 };
 
 /**
- * 采集视觉爆点信号。fail-open:
- * - 单帧抽帧/研判失败 → 跳过该帧继续;
+ * 采集视觉爆点信号(接触表批量:九帧一张九宫格,一次调用出九个分)。
+ * fail-open:
+ * - 单表拼图/研判失败 → 跳过该表继续;
  * - 成功帧不足 MIN_SCORED_FRAMES → 返回 null(证据太薄不给信号);
- * - 超总预算 → 停止抽帧,用已得的帧收工;
+ * - 超总预算 → 停止研判,用已得的帧收工;
  * - 上游 AbortSignal 取消 → 原样上抛(整个检测要停)。
  */
 export async function collectVisionSignal(opts: {
@@ -216,36 +221,39 @@ export async function collectVisionSignal(opts: {
   config: VisionConfig;
   signals?: MediaSignals;
   signal?: AbortSignal;
-  extractFrame?: FrameExtractor;
+  /** 序号标注字体文件(默认拼图用;缺省不烧序号)。 */
+  fontFile?: string;
+  composeSheet?: SheetComposer;
   chat?: VisionChatFn;
   budgetMs?: number;
 }): Promise<VisionOutcome | null> {
   const {
     videoPath, durationSec, config, signals, signal,
-    extractFrame = extractFrameJpeg,
+    composeSheet = (v, ts) => composeContactSheetJpeg(v, ts, { fontFile: opts.fontFile }),
     chat = visionChatComplete,
     budgetMs = VISION_BUDGET_MS,
   } = opts;
   const times = planFrameTimes(durationSec, signals);
   if (times.length === 0) return null;
   const llm: LlmConfig = { baseUrl: config.baseUrl, apiKey: "ollama", model: config.model };
-  const system = visionSystemPrompt();
   const deadline = Date.now() + budgetMs;
   const scored: Array<{ t: number; energy: number }> = [];
-  for (const t of times) {
+  for (const group of chunkCells(times)) {
     if (signal?.aborted) throw new Error("aborted");
     if (Date.now() > deadline) break; // 预算耗尽,带着已得结果收工
-    const jpeg = await extractFrame(videoPath, t);
-    if (!jpeg) continue;
+    const sheet = await composeSheet(videoPath, group);
+    if (!sheet) continue;
     try {
       const timeout = AbortSignal.timeout(Math.max(1, Math.min(VISION_CALL_TIMEOUT_MS, deadline - Date.now())));
       const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
-      const content = await chat(llm, system, "评估这一帧的画面爆点能量。", jpeg, combined);
-      const verdict = parseVisionVerdict(content);
-      if (verdict) scored.push({ t, energy: verdict.energy });
+      const content = await chat(llm, visionSystemPrompt(group.length), sheetUserPrompt(group), sheet, combined);
+      const verdicts = parseSheetVerdicts(content, group.length);
+      if (verdicts) {
+        for (const v of verdicts) scored.push({ t: group[v.i - 1], energy: v.energy });
+      }
     } catch (e) {
       if (signal?.aborted) throw e; // 上游主动取消要中断整个检测
-      // 其余错误跳过该帧(端点冷启动/单帧超时都不致命)
+      // 其余错误跳过该表(端点冷启动/单表超时都不致命)
     }
   }
   if (scored.length < MIN_SCORED_FRAMES) return null;

@@ -334,7 +334,16 @@ ipcMain.handle(
             new Promise<null>((r) => setTimeout(() => r(null), 120_000)),
           ]).catch(() => null),
           visionCfg
-            ? collectVisionSignal({ videoPath: filePath, durationSec: media.durationSec, config: visionCfg, signals }).catch(() => null)
+            ? collectVisionSignal({
+                videoPath: filePath,
+                durationSec: media.durationSec,
+                config: visionCfg,
+                signals,
+                // 接触表九宫格的序号标注字体(与字幕同一捆绑字体)
+                fontFile: app.isPackaged
+                  ? join(process.resourcesPath, "fonts", "SourceHanSansSC-Bold.otf")
+                  : join(app.getAppPath(), "resources", "fonts", "SourceHanSansSC-Bold.otf"),
+              }).catch(() => null)
             : Promise.resolve(null),
         ]);
         if (emotionOutcome || visionOutcome) {

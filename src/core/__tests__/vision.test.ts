@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   planFrameTimes,
-  parseVisionVerdict,
+  parseSheetVerdicts,
+  sheetUserPrompt,
   visualPeakRanges,
   collectVisionSignal,
   VISION_MAX_FRAMES,
@@ -57,28 +58,47 @@ describe("planFrameTimes", () => {
   });
 });
 
-describe("parseVisionVerdict", () => {
-  it("解析标准 JSON 输出", () => {
-    expect(parseVisionVerdict('{"energy": 8, "note": "两人激烈争论"}')).toEqual({
-      energy: 8,
-      note: "两人激烈争论",
-    });
+describe("parseSheetVerdicts", () => {
+  it("解析标准九宫格批量输出", () => {
+    const content = '{"cells":[{"i":1,"energy":8,"note":"两人激烈争论"},{"i":2,"energy":3,"note":"静态口播"}]}';
+    expect(parseSheetVerdicts(content, 9)).toEqual([
+      { i: 1, energy: 8, note: "两人激烈争论" },
+      { i: 2, energy: 3, note: "静态口播" },
+    ]);
   });
 
   it("剥掉 think 块与包裹文本后仍能解析", () => {
-    const content = '<think>这帧看起来…</think>好的,评分如下:{"energy":3,"note":"静态口播"}';
-    expect(parseVisionVerdict(content)).toEqual({ energy: 3, note: "静态口播" });
+    const content = '<think>先看第一格…</think>结果:{"cells":[{"i":1,"energy":3,"note":"口播"}]}';
+    expect(parseSheetVerdicts(content, 9)).toEqual([{ i: 1, energy: 3, note: "口播" }]);
   });
 
-  it("energy 越界被夹回 0-10", () => {
-    expect(parseVisionVerdict('{"energy": 99, "note": ""}')?.energy).toBe(10);
-    expect(parseVisionVerdict('{"energy": -3, "note": ""}')?.energy).toBe(0);
+  it("越界格号丢弃、重复格取首个、energy 夹回 0-10", () => {
+    const content =
+      '{"cells":[{"i":0,"energy":9},{"i":10,"energy":9},{"i":2,"energy":99},{"i":2,"energy":1},{"i":3,"energy":-4}]}';
+    expect(parseSheetVerdicts(content, 9)).toEqual([
+      { i: 2, energy: 10, note: "" },
+      { i: 3, energy: 0, note: "" },
+    ]);
+  });
+
+  it("cellCount 之外的格被过滤(最后一张不满格)", () => {
+    const content = '{"cells":[{"i":1,"energy":5},{"i":8,"energy":5}]}';
+    expect(parseSheetVerdicts(content, 2)).toEqual([{ i: 1, energy: 5, note: "" }]);
   });
 
   it("垃圾输出返回 null", () => {
-    expect(parseVisionVerdict("这一帧很精彩")).toBeNull();
-    expect(parseVisionVerdict('{"note":"没有分数"}')).toBeNull();
-    expect(parseVisionVerdict("")).toBeNull();
+    expect(parseSheetVerdicts("这一批都很精彩", 9)).toBeNull();
+    expect(parseSheetVerdicts('{"cells":"没有数组"}', 9)).toBeNull();
+    expect(parseSheetVerdicts('{"cells":[{"i":1,"note":"没有分数"}]}', 9)).toBeNull();
+    expect(parseSheetVerdicts("", 9)).toBeNull();
+  });
+});
+
+describe("sheetUserPrompt", () => {
+  it("报出每格的 mm:ss 时刻", () => {
+    const p = sheetUserPrompt([65, 130.6]);
+    expect(p).toContain("1=01:05");
+    expect(p).toContain("2=02:10");
   });
 });
 
@@ -110,21 +130,30 @@ describe("visualPeakRanges", () => {
   });
 });
 
-describe("collectVisionSignal", () => {
+describe("collectVisionSignal (接触表批量)", () => {
   const config = { baseUrl: "http://localhost:11434/v1", model: "qwen3-vl:4b" };
-  const okFrame = async (): Promise<string> => "ZmFrZQ=="; // "fake" 的 base64
+  const okSheet = async (): Promise<string> => "ZmFrZQ=="; // "fake" 的 base64
+  /** 满格九个分的批量输出(不满格由解析端按 cellCount 过滤)。 */
+  const cellsJson = (energy: number): string =>
+    JSON.stringify({ cells: Array.from({ length: 9 }, (_, k) => ({ i: k + 1, energy, note: "" })) });
 
-  it("正常路径:抽帧研判并圈出高能时段", async () => {
-    const chat: VisionChatFn = async (_llm, _sys, _user, _img) => '{"energy": 9, "note": "炸裂"}';
+  it("正常路径:一表九帧批量研判并圈出高能时段", async () => {
+    let calls = 0;
+    const chat: VisionChatFn = async () => {
+      calls++;
+      return cellsJson(9);
+    };
     const outcome = await collectVisionSignal({
       videoPath: "/v.mp4",
       durationSec: 300,
       config,
-      extractFrame: okFrame,
+      composeSheet: okSheet,
       chat,
     });
     expect(outcome).not.toBeNull();
     expect(outcome!.stats.framesScored).toBe(outcome!.stats.framesTotal);
+    // 27 帧只用 3 次调用——接触表批量的意义所在
+    expect(calls).toBe(Math.ceil(outcome!.stats.framesTotal / 9));
     expect(outcome!.visualPeaks.length).toBeGreaterThan(0);
     expect(outcome!.stats.peakCount).toBe(outcome!.visualPeaks.length);
   });
@@ -137,24 +166,24 @@ describe("collectVisionSignal", () => {
       videoPath: "/v.mp4",
       durationSec: 300,
       config,
-      extractFrame: okFrame,
+      composeSheet: okSheet,
       chat,
     });
     expect(outcome).toBeNull();
   });
 
-  it("个别帧失败不影响整体", async () => {
+  it("个别表失败不影响整体", async () => {
     let n = 0;
     const chat: VisionChatFn = async () => {
       n++;
-      if (n % 3 === 0) throw new Error("单帧超时");
-      return '{"energy": 2, "note": "口播"}';
+      if (n === 2) throw new Error("单表超时");
+      return cellsJson(2);
     };
     const outcome = await collectVisionSignal({
       videoPath: "/v.mp4",
       durationSec: 300,
       config,
-      extractFrame: okFrame,
+      composeSheet: okSheet,
       chat,
     });
     expect(outcome).not.toBeNull();
@@ -162,13 +191,13 @@ describe("collectVisionSignal", () => {
     expect(outcome!.visualPeaks).toEqual([]); // 全是低分,不给假信号
   });
 
-  it("抽帧全失败(如纯音频) → null", async () => {
-    const chat: VisionChatFn = async () => '{"energy": 9, "note": ""}';
+  it("拼图全失败(如纯音频) → null", async () => {
+    const chat: VisionChatFn = async () => cellsJson(9);
     const outcome = await collectVisionSignal({
       videoPath: "/audio.mp3",
       durationSec: 300,
       config,
-      extractFrame: async () => null,
+      composeSheet: async () => null,
       chat,
     });
     expect(outcome).toBeNull();
@@ -177,36 +206,38 @@ describe("collectVisionSignal", () => {
   it("上游取消原样上抛", async () => {
     const ac = new AbortController();
     ac.abort();
-    const chat: VisionChatFn = async () => '{"energy": 5, "note": ""}';
+    const chat: VisionChatFn = async () => cellsJson(5);
     await expect(
       collectVisionSignal({
         videoPath: "/v.mp4",
         durationSec: 300,
         config,
         signal: ac.signal,
-        extractFrame: okFrame,
+        composeSheet: okSheet,
         chat,
       })
     ).rejects.toThrow();
   });
 
-  it("预算耗尽带着已得结果收工(不足最少帧数则 null)", async () => {
+  it("预算耗尽带着已得结果收工", async () => {
     let calls = 0;
     const chat: VisionChatFn = async () => {
       calls++;
-      await new Promise((r) => setTimeout(r, 20));
-      return '{"energy": 8, "note": ""}';
+      await new Promise((r) => setTimeout(r, 40));
+      return cellsJson(8);
     };
     const outcome = await collectVisionSignal({
       videoPath: "/v.mp4",
       durationSec: 600,
       config,
-      extractFrame: okFrame,
+      composeSheet: okSheet,
       chat,
-      budgetMs: 90, // 只够跑 4-5 帧
+      budgetMs: 30, // 只够跑一张表
     });
-    expect(calls).toBeLessThan(VISION_MAX_FRAMES);
-    // 是否非 null 取决于时序,但两种结局都必须自洽
-    if (outcome) expect(outcome.stats.framesScored).toBeGreaterThanOrEqual(3);
+    expect(calls).toBeLessThan(Math.ceil(VISION_MAX_FRAMES / 9));
+    // 首张表总能完成 → 至少九帧在手,信号成立
+    expect(outcome).not.toBeNull();
+    expect(outcome!.stats.framesScored).toBeGreaterThanOrEqual(9);
+    expect(outcome!.stats.framesScored).toBeLessThan(outcome!.stats.framesTotal);
   });
 });
