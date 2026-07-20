@@ -174,4 +174,16 @@ describe("assessClipQa (纯判定)", () => {
     expect(r.blackSpans[0]).toEqual({ startSec: 1.23, endSec: 2.35 });
     expect(r.loudness).toEqual({ integratedLufs: -14.2, truePeakDb: -1.4 });
   });
+
+  it("违禁词命中 → 一条汇总告警,命中清单原样进报告", () => {
+    const hits = [{ term: "全网最低价", category: "绝对化用语", source: "publish" as const }];
+    const r = assessClipQa({ ...clean, contentHits: hits });
+    expect(r.status).toBe("warn");
+    expect(r.issues[0]).toContain("「全网最低价」");
+    expect(r.contentHits).toEqual(hits);
+    // 没扫 lint(缺省)不告警,contentHits 为 null
+    const off = assessClipQa(clean);
+    expect(off.status).toBe("pass");
+    expect(off.contentHits).toBeNull();
+  });
 });

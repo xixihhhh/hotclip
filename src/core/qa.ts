@@ -12,6 +12,7 @@ import { spawn } from "child_process";
 import { resolveFfmpegPath } from "./binaries";
 import { probeMedia } from "./probe";
 import { EDGE_FADE_SEC } from "./cut";
+import { formatLintIssue, type LintHit } from "./content-lint";
 import type { TranscriptWord } from "../shared/api-types";
 
 /** 一段被检出的可疑区间(成片输出时间轴,秒)。 */
@@ -37,6 +38,20 @@ export interface ClipQaReport {
   loudness: { integratedLufs: number; truePeakDb: number } | null;
   /** 落在词中间的切点数(0 = 每个切点都在词边界外,无半词风险)。 */
   midWordCuts: number | null;
+  /** 平台违禁词命中(标题/钩子/文案/字幕);没跑 lint 为 null。 */
+  contentHits: LintHit[] | null;
+  /** 自动修复记录(qa 修复循环执行过才有);见 repair.ts。 */
+  repair?: QaRepairRecord;
+}
+
+/** qa 修复循环的执行记录(进 clips.json,「AI 又改了什么」要可审计)。 */
+export interface QaRepairRecord {
+  /** 修复动作的人类可读描述(裁头/裁尾/响度重归一)。 */
+  actions: string[];
+  /** 修复前的告警清单(与修复后的 issues 对照)。 */
+  beforeIssues: string[];
+  /** true = 修复后的成片被采纳;false = 修复没让报告变好,保留原片。 */
+  applied: boolean;
 }
 
 /** 黑屏判定:0.5s 起报(短于此多为正常转场/闪黑)。 */
@@ -134,6 +149,8 @@ export interface QaAssessment {
   /** 出片时开了响度标准化才核对 -14 LUFS 目标。 */
   loudnessNormalized: boolean;
   midWordCuts: number | null;
+  /** 平台违禁词命中(调用方用 content-lint 扫好传入);缺省 = 没扫。 */
+  contentHits?: LintHit[] | null;
 }
 
 const fmtSec = (v: number): string => v.toFixed(1);
@@ -165,6 +182,8 @@ export function assessClipQa(input: QaAssessment): ClipQaReport {
   if ((input.midWordCuts ?? 0) > 0) {
     issues.push(`${input.midWordCuts} 处切点落在词中间(可能出现半词,建议回放核对)`);
   }
+  const lintIssue = formatLintIssue(input.contentHits ?? []);
+  if (lintIssue) issues.push(lintIssue);
   return {
     status: issues.length > 0 ? "warn" : "pass",
     issues,
@@ -176,6 +195,7 @@ export function assessClipQa(input: QaAssessment): ClipQaReport {
       ? { integratedLufs: Number(input.loudness.integratedLufs.toFixed(1)), truePeakDb: Number(input.loudness.truePeakDb.toFixed(1)) }
       : null,
     midWordCuts: input.midWordCuts,
+    contentHits: input.contentHits ?? null,
   };
 }
 
@@ -217,6 +237,8 @@ export interface RunClipQaOptions {
   words?: TranscriptWord[];
   /** 实际保留的源片段(跳剪后多段);与 words 同为源片绝对时间。 */
   segments?: QaSpan[];
+  /** 平台违禁词命中(content-lint 扫标题/钩子/文案/字幕的结果)。 */
+  contentHits?: LintHit[] | null;
   signal?: AbortSignal;
 }
 
@@ -231,5 +253,6 @@ export async function runClipQa(path: string, opts: RunClipQaOptions): Promise<C
     loudness: parseLoudnessSummary(stderr),
     loudnessNormalized: opts.loudnessNormalized,
     midWordCuts: opts.words && opts.segments ? countMidWordCuts(opts.words, opts.segments) : null,
+    contentHits: opts.contentHits,
   });
 }

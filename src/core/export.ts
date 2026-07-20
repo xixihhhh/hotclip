@@ -29,6 +29,8 @@ import { buildCaptionAss, VERTICAL_LAYOUT, HORIZONTAL_LAYOUT, type CaptionStyle 
 import { buildOverlayPayload, isWebCaptionStyle, type OverlayRenderFn, type WebCaptionStyle } from "./caption-overlay/payload";
 import { probeMedia } from "./probe";
 import { runClipQa, type ClipQaReport } from "./qa";
+import { lintClipContent } from "./content-lint";
+import { planRepair, applyRepair } from "./repair";
 import { applyBrandToLayout } from "./brand";
 import type { TranscriptWord, BrandStyle } from "../shared/api-types";
 import type { WatermarkSpec } from "./cut";
@@ -157,10 +159,16 @@ export interface ExportRenderOptions {
   aigcLabel?: boolean;
   /**
    * 出片自我质检(默认开):每条成片渲染后解码扫描黑屏/长静音/响度/时长
-   * 偏差,并复核切点是否压在词中间;报告进 clips.json 的 qa 字段。
-   * 显式 false 关闭(如超长批量赶时间)。
+   * 偏差,复核切点是否压在词中间,并扫标题/钩子/文案/字幕的平台违禁词;
+   * 报告进 clips.json 的 qa 字段。显式 false 关闭(如超长批量赶时间)。
    */
   qa?: boolean;
+  /**
+   * qa 修复循环(默认随 qa 开):可自愈的告警——首尾静音/黑屏裁边、响度
+   * 二遍归一——自动修复后重检,告警变少才替换成片(qa.repair 可审计)。
+   * 显式 false 只检不修。
+   */
+  qaRepair?: boolean;
 }
 
 export interface ExportedClip {
@@ -565,22 +573,61 @@ export async function exportClips(
 
       const s = await stat(outPath);
 
-      // 出片自我质检:解码扫描黑屏/长静音/响度/时长偏差,再复核切点是否
-      // 压在词中间——回执说「AI 干了什么」,质检说「干得好不好」。
+      // 出片自我质检 + 平台违禁词 lint:解码扫描黑屏/长静音/响度/时长偏差,
+      // 复核切点是否压在词中间,并扫标题/钩子/文案/字幕的平台风险词——
+      // 回执说「AI 干了什么」,质检说「干得好不好、能不能直接发」。
       // 检测失败静默置空,绝不拖垮导出(与封面/SRT 同一兜底语义)。
       let qaReport: ClipQaReport | null = null;
+      // qa 修复循环裁掉的头部时长(封面时刻/SRT 时间轴要同步前移)
+      let headTrimSec = 0;
       if (options.qa !== false) {
-        qaReport = await runClipQa(outPath, {
-          expectedDurationSec: clipDuration + (coldOpenSec ?? 0),
+        const contentHits = lintClipContent({
+          title: clip.title,
+          hook: [clip.meta?.hook, clip.meta?.teaser].filter(Boolean).join("\n") || undefined,
+          publish: clip.publish ?? null,
+          captionText: clip.words?.map((w) => w.text).join(""),
+        });
+        const qaOptsBase = {
           loudnessNormalized: Boolean(options.normalizeLoudness),
           words: clip.words,
           segments: plan ? plan.segments : [{ startSec: clip.startSec, endSec: clip.endSec }],
+          contentHits,
           signal,
-        }).catch((e) => {
+        };
+        const expected = clipDuration + (coldOpenSec ?? 0);
+        qaReport = await runClipQa(outPath, { ...qaOptsBase, expectedDurationSec: expected }).catch((e) => {
           if (signal?.aborted) throw e;
           return null;
         });
+        // qa 修复循环(一轮):可自愈的告警——首尾静音/黑屏(裁边)、响度偏差
+        // (二遍归一)——当场修掉再重检,告警变少才替换成片;修复失败或没
+        // 变好都保留原片并记录尝试(qa.repair)。
+        if (qaReport?.status === "warn" && options.qaRepair !== false) {
+          const repairPlan = planRepair(qaReport, {
+            normalizeLoudness: Boolean(options.normalizeLoudness),
+            headTrimmable: coldOpenSec === null,
+          });
+          if (repairPlan) {
+            const outcome = await applyRepair(
+              outPath,
+              repairPlan,
+              qaReport,
+              (fixedPath) =>
+                runClipQa(fixedPath, { ...qaOptsBase, expectedDurationSec: expected - repairPlan.trimmedSec }),
+              signal
+            ).catch((e) => {
+              if (signal?.aborted) throw e;
+              return null;
+            });
+            if (outcome) {
+              qaReport = outcome.report;
+              if (outcome.applied) headTrimSec = repairPlan.trimStartSec;
+            }
+          }
+        }
       }
+      // 修复裁过边的用实测时长,其余沿用管线预期时长(行为不变)
+      const finalDurationSec = qaReport?.repair?.applied ? qaReport.durationSec : clipDuration + (coldOpenSec ?? 0);
 
       // Cover: a frame just after the hook lands, pulled from the FINISHED
       // clip so captions/title plate are baked in — platform-upload ready.
@@ -590,13 +637,15 @@ export async function exportClips(
       if (!clipPeaks) {
         clipPeaks = await extractPeaks(inputPath, clip.startSec, clip.endSec).catch(() => undefined);
       }
-      // cold-open 让输出时间轴整体后移一个迷你片时长,封面时刻同步平移
-      const coverAt =
+      // cold-open 让输出时间轴整体后移一个迷你片时长,封面时刻同步平移;
+      // qa 修复裁头则整体前移,并钳进修复后的实际时长
+      const coverAtRaw =
         pickCoverTime(
           clipPeaks,
           plan ? plan.segments : [{ startSec: clip.startSec, endSec: clip.endSec }],
           clipDuration
-        ) + (coldOpenSec ?? 0);
+        ) + (coldOpenSec ?? 0) - headTrimSec;
+      const coverAt = Math.min(Math.max(0.2, coverAtRaw), Math.max(0.2, finalDurationSec - 0.2));
       const coverOk = await execFileAsync(
         resolveFfmpegPath(),
         ["-hide_banner", "-v", "error", "-ss", coverAt.toFixed(2), "-i", outPath, "-frames:v", "1", "-q:v", "2", "-y", coverPath],
@@ -606,8 +655,9 @@ export async function exportClips(
       // SRT 字幕文件:与烧录字幕同一套词/断行/时间基(跳剪重映射后),
       // 平台原生字幕上传与二次精修用
       if (options.subtitleFile && wantCaptions) {
-        const shift = coldOpenSec ?? 0; // cold-open 后正片词整体后移
-        const relWords = captionWords!.map((w) => ({
+        // cold-open 后正片词整体后移;qa 修复裁头则整体前移
+        const shift = (coldOpenSec ?? 0) - headTrimSec;
+        let relWords = captionWords!.map((w) => ({
           text: w.text,
           startSec: w.startSec - captionShift + shift,
           endSec: w.endSec - captionShift + shift,
@@ -620,11 +670,18 @@ export async function exportClips(
             .map((w) => ({ text: w.text, startSec: w.startSec - co.startSec, endSec: w.endSec - co.startSec }));
           relWords.unshift(...miniRel);
         }
-        const relTrans = transLines.map((l) => ({
-          startSec: l.startSec - captionShift + shift,
-          endSec: l.endSec - captionShift + shift,
-          text: l.text,
-        }));
+        // qa 修复裁过边:被裁掉的头尾词不再出现在画面里,SRT 同步丢弃
+        const repaired = qaReport?.repair?.applied === true;
+        if (repaired) {
+          relWords = relWords.filter((w) => w.endSec > 0.05 && w.startSec < finalDurationSec - 0.05);
+        }
+        const relTrans = transLines
+          .map((l) => ({
+            startSec: l.startSec - captionShift + shift,
+            endSec: l.endSec - captionShift + shift,
+            text: l.text,
+          }))
+          .filter((l) => !repaired || (l.endSec > 0.05 && l.startSec < finalDurationSec - 0.05));
         // 断行点与词同基:正片整体平移后,跳剪的强制断行时刻也要同步平移;
         // cold-open 接缝处强制断行(钩子行与正片首句不并行)
         const breaks = [...(shift > 0 ? [shift] : []), ...(plan?.breaks ?? []).map((b) => b + shift)];
@@ -645,7 +702,7 @@ export async function exportClips(
         path: outPath,
         coverPath: coverOk ? coverPath : undefined,
         sizeBytes: s.size,
-        durationSec: clipDuration + (coldOpenSec ?? 0),
+        durationSec: finalDurationSec,
         qa: qaReport,
       });
       if (fillerHits.length > 0) {
@@ -739,6 +796,7 @@ export async function exportClips(
         timeline: Boolean(options.timeline),
         aigcLabel: Boolean(options.aigcLabel),
         qa: options.qa !== false,
+        qaRepair: options.qa !== false && options.qaRepair !== false,
         // 品牌预设回执:用了什么色/档位/水印,矩阵管线可核对品牌一致性
         brand: options.brand
           ? {

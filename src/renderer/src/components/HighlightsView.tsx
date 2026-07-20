@@ -49,12 +49,13 @@ import { BrandStyleModal } from "./BrandStyleModal";
 import type { Transcript, HighlightCandidate, RenderToggles, CaptionStyleChoice, FunnelStats, VisionStats, EmotionStats, DanmakuStats, ClipLength } from "../../../shared/api-types";
 
 /** Click-to-cycle order for the caption style chip. */
-const CAPTION_CYCLE: CaptionStyleChoice[] = ["karaoke", "keyword", "pop", "bubble", "none"];
+const CAPTION_CYCLE: CaptionStyleChoice[] = ["karaoke", "keyword", "pop", "hormozi", "bubble", "none"];
 const CAPTION_KEY: Record<CaptionStyleChoice, string> = {
   none: "captionNone",
   karaoke: "captionKaraoke",
   keyword: "captionKeyword",
   pop: "captionPop",
+  hormozi: "captionHormozi",
   bubble: "captionBubble",
 };
 

@@ -180,6 +180,7 @@ export const zh = {
     captionKaraoke: "字幕:逐字点亮",
     captionKeyword: "字幕:智能划重点",
     captionPop: "字幕:大字弹跳",
+    captionHormozi: "字幕:大字爆点",
     captionBubble: "字幕:气泡特效",
     // LLM 设置
     llmTitle: "连接 AI 模型",

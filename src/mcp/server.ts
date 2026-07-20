@@ -86,14 +86,16 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
         const c = outcome.candidates.find((x) => x.id === r.id);
         // 出片质检告警直接随条目回给 Agent——Agent 只需复核告警条,不用逐条回放
         const qaNote = r.qa && r.qa.status === "warn" ? `\n  ⚠ 质检:${r.qa.issues.join(";")}` : "";
-        return `- ${basename(r.path)} (${Math.round(r.durationSec)}s, 评分 ${c?.score ?? "?"}) ${c?.title ?? ""}${qaNote}`;
+        // 修复循环干过活也要说(裁边/响度重归一,机器改了什么必须可见)
+        const fixNote = r.qa?.repair?.applied ? `\n  🔧 已自动修复:${r.qa.repair.actions.join("、")}` : "";
+        return `- ${basename(r.path)} (${Math.round(r.durationSec)}s, 评分 ${c?.score ?? "?"}) ${c?.title ?? ""}${qaNote}${fixNote}`;
       })
       .join("\n");
     const warned = outcome.exported.filter((r) => r.qa?.status === "warn").length;
     const qaLine =
       warned > 0
         ? `出片质检:${warned} 条有告警(详见条目与 clips.json 的 qa 字段)`
-        : "出片质检:全部通过(黑屏/长静音/响度/时长/切点复核)";
+        : "出片质检:全部通过(黑屏/长静音/响度/时长/切点/违禁词复核)";
     return `已导出 ${outcome.exported.length} 条切片到 ${outcome.outDir}\n${list}\n${qaLine}\n附带 clips.json(标题/评分/时间码/回执/质检)与每条封面 JPG。`;
   }
 

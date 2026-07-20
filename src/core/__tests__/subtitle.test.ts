@@ -281,6 +281,30 @@ describe("buildCaptionAss styles", () => {
     // chunk 2 starts when its first word starts
     expect(ass).toContain("Dialogue: 0,0:00:04.00,");
   });
+
+  it("hormozi style: 短块 + 卡拉OK点亮 + 特大字/厚描边/硬阴影/60% 高度线", () => {
+    const ass = buildCaptionAss(words, 0, VERTICAL_LAYOUT, "hormozi");
+    const dialogues = ass.match(/^Dialogue:/gm) ?? [];
+    expect(dialogues.length).toBe(2); // 8 汉字 = 16 units → 两个 10-unit 块
+    // 块内逐词 \k 点亮(与 pop 的纯弹跳不同),块级顶入定格
+    expect(ass).toContain("\\k");
+    expect(ass).toContain("{\\fscx82\\fscy82\\t(0,70,\\fscx100\\fscy100)}");
+    // 特大字 + 主色=点亮色(火焰橙)
+    const styleLine = ass.split("\n").find((l) => l.startsWith("Style: Caption,")) ?? "";
+    expect(styleLine).toContain(`,${Math.round(VERTICAL_LAYOUT.fontSize * 1.5)},`);
+    expect(styleLine).toContain("&H000D6EFF");
+    // 厚描边(+3)与硬阴影(3),位置在 40% marginV(≈60% 高度线)
+    expect(styleLine).toContain(`,1,${VERTICAL_LAYOUT.outline + 3},3,2,`);
+    expect(styleLine).toContain(`,${Math.round(VERTICAL_LAYOUT.playResY * 0.4)},`);
+  });
+
+  it("hormozi style: 拉丁词全大写,CJK 不受影响", () => {
+    const ass = buildCaptionAss([w("买", 0, 1), w("it", 1, 2), w("now", 2, 3)], 0, VERTICAL_LAYOUT, "hormozi");
+    expect(ass).toContain("IT");
+    expect(ass).toContain("NOW");
+    expect(ass).toContain("买");
+    expect(ass).not.toMatch(/\}it/);
+  });
 });
 
 describe("双语译文轨 (Trans)", () => {

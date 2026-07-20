@@ -280,8 +280,10 @@ const WHITE_INLINE = "&HFFFFFF&";
  *  - karaoke: whole line visible, words light up as spoken
  *  - keyword: whole line visible, LLM-picked keywords tinted & slightly larger
  *  - pop: 2-4 character chunks appear one at a time with a bounce
+ *  - hormozi: 大字爆点——短块、特大加粗、硬阴影、居中偏上,逐词卡拉OK点亮,
+ *    拉丁词全大写(海外带货/营销短视频通行的 Hormozi 风格)
  */
-export type CaptionStyle = "karaoke" | "keyword" | "pop";
+export type CaptionStyle = "karaoke" | "keyword" | "pop" | "hormozi";
 
 export interface CaptionOptions {
   fontName?: string;
@@ -330,9 +332,17 @@ export function transMarginV(layout: AssLayout): number {
 function assHeader(style: CaptionStyle, layout: AssLayout, fontName: string, highlightHex?: string): string[] {
   // 品牌高亮色覆盖默认火焰橙(卡拉OK点亮色 + 开场钩子文字色同源)
   const highlight = (highlightHex && hexToAssColor(highlightHex)) || EMBER_COLOR;
-  // karaoke: Primary = sung color, Secondary = not-yet-sung; others: plain white
-  const primary = style === "karaoke" ? highlight : WHITE_COLOR;
-  const fontSize = style === "pop" ? Math.round(layout.fontSize * 1.45) : layout.fontSize;
+  // karaoke/hormozi: Primary = sung color, Secondary = not-yet-sung; others: plain white
+  const primary = style === "karaoke" || style === "hormozi" ? highlight : WHITE_COLOR;
+  const fontSize =
+    style === "pop" ? Math.round(layout.fontSize * 1.45)
+    : style === "hormozi" ? Math.round(layout.fontSize * 1.5)
+    : layout.fontSize;
+  // hormozi:更厚的描边 + 硬阴影撑住大字;位置抬到 60% 高度线(比底部字幕
+  // 醒目、又避开中心人脸)——固定占位,不随品牌位置档位走
+  const outline = style === "hormozi" ? layout.outline + 3 : layout.outline;
+  const shadow = style === "hormozi" ? 3 : 0;
+  const captionMarginV = style === "hormozi" ? Math.round(layout.playResY * 0.4) : layout.marginV;
   const titleSize = Math.round(layout.fontSize * 0.82);
   const hookSize = Math.round(layout.fontSize * 1.25);
   return [
@@ -345,7 +355,7 @@ function assHeader(style: CaptionStyle, layout: AssLayout, fontName: string, hig
     "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    `Style: Caption,${fontName},${fontSize},${primary},${WHITE_COLOR},${OUTLINE_COLOR},&H7F000000,-1,0,0,0,100,100,0,0,1,${layout.outline},0,2,${layout.marginH},${layout.marginH},${layout.marginV},1`,
+    `Style: Caption,${fontName},${fontSize},${primary},${WHITE_COLOR},${OUTLINE_COLOR},&H7F000000,-1,0,0,0,100,100,0,0,1,${outline},${shadow},2,${layout.marginH},${layout.marginH},${captionMarginV},1`,
     // title card: opaque-box style (BorderStyle=3) → soft dark plate behind text
     `Style: Title,${fontName},${titleSize},${WHITE_COLOR},${WHITE_COLOR},&H73000000,&H73000000,-1,0,0,0,100,100,0,0,3,12,0,8,${layout.marginH},${layout.marginH},${titleMarginV(layout)},1`,
     // opening hook: ember text on a dark plate, big, upper-third (Alignment 8 + high MarginV)
@@ -422,6 +432,12 @@ const POP_INTRO = "{\\fscx60\\fscy60\\t(0,90,\\fscx135\\fscy135)\\t(90,200,\\fsc
 /** Pop chunks: 2-4 CJK chars (or 1-2 latin words) shown one at a time. */
 const POP_MAX_UNITS = 8;
 
+/** Hormozi punch-in:快速顶入定格(比 pop 的弹跳更硬更利落)。 */
+const HORMOZI_INTRO = "{\\fscx82\\fscy82\\t(0,70,\\fscx100\\fscy100)}";
+
+/** Hormozi 短块宽度:约 5 个汉字/2-3 个英文词一屏。 */
+const HORMOZI_MAX_UNITS = 10;
+
 /**
  * Build a complete ASS document for one clip in the given style. Word
  * timestamps are absolute (source time); `clipStartSec` shifts them.
@@ -471,18 +487,24 @@ export function buildCaptionAss(
   }
 
   const forcedBreaks = options.forcedBreaks ?? [];
-  if (style === "pop") {
-    const units = groupWordsIntoLines(words, POP_MAX_UNITS, forcedBreaks);
+  if (style === "pop" || style === "hormozi") {
+    const units = groupWordsIntoLines(words, style === "pop" ? POP_MAX_UNITS : HORMOZI_MAX_UNITS, forcedBreaks);
     for (let i = 0; i < units.length; i++) {
       const unit = units[i];
       const start = unit[0].startSec - clipStartSec;
       const lastEnd = unit[unit.length - 1].endSec;
       const next = units[i + 1]?.[0].startSec;
       const end = (next !== undefined ? Math.min(next, lastEnd + CAPTION_HOLD_MAX_SEC) : lastEnd + 0.2) - clipStartSec;
-      const text = unit
-        .map((w, j) => escapeAssText(w.text) + (needsSpaceAfter(w.text, unit[j + 1]?.text) ? " " : ""))
-        .join("");
-      events.push(dialogue(start, end, POP_INTRO + text));
+      if (style === "hormozi") {
+        // 大字爆点:短块顶入 + 块内逐词卡拉OK点亮;拉丁词全大写(CJK 不受影响)
+        const caps = unit.map((w) => ({ ...w, text: w.text.toUpperCase() }));
+        events.push(dialogue(start, end, HORMOZI_INTRO + karaokeText(caps)));
+      } else {
+        const text = unit
+          .map((w, j) => escapeAssText(w.text) + (needsSpaceAfter(w.text, unit[j + 1]?.text) ? " " : ""))
+          .join("");
+        events.push(dialogue(start, end, POP_INTRO + text));
+      }
     }
   } else {
     // keyword style: fuse keyword runs first so line breaks can't split them

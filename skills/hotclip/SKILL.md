@@ -37,8 +37,9 @@ Input: MP4 / MKV / MOV / FLV / TS, or audio-only (podcasts get an auto-generated
 ## Recommended workflow
 
 1. **Review-first (default for interactive sessions)**: run `highlights --json`, show the user the candidates (title / score / hook / recommended), let them pick, then run `clip` — the pipeline re-detects from cache so this is cheap. For "just do it" requests, run `clip` directly.
-2. **Read the output receipt**: the export folder contains one mp4 + cover JPG + `.post.txt` (publish copy) per clip, plus `clips.json` — per-clip evidence chain (`render`: what the pipeline did) and **`qa`: render-QA report** (`status: pass|warn` with issues like black frames, long silences, loudness deviation, duration mismatch, mid-word cuts).
-3. **Surface QA warnings**: if any clip has `qa.status === "warn"`, tell the user which clip and why; suggest re-cutting or reviewing before publishing. Never silently ship a warned clip.
+2. **Read the output receipt**: the export folder contains one mp4 + cover JPG + `.post.txt` (publish copy) per clip, plus `clips.json` — per-clip evidence chain (`render`: what the pipeline did) and **`qa`: render-QA report** (`status: pass|warn` with issues like black frames, long silences, loudness deviation, duration mismatch, mid-word cuts, and **platform-risk words** in title/copy/captions via a local rule lint — `qa.contentHits` lists each term and where it appeared).
+3. **Self-repair is automatic**: fixable warnings (leading/trailing silence or black frames → edge-trim; loudness deviation → second normalize pass) are repaired and re-checked in one pass; `qa.repair` records what was done (`actions`, `applied`). A repair is only kept when the re-check strictly improves.
+4. **Surface QA warnings**: if any clip still has `qa.status === "warn"`, tell the user which clip and why; content-lint hits mean the copy/captions may be throttled or rejected by 抖音/小红书/视频号 — suggest rewording before publishing. Never silently ship a warned clip.
 
 ## Hard rules
 

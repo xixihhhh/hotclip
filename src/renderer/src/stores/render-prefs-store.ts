@@ -65,7 +65,7 @@ function load(): RenderPrefs {
         }
       }
       if (!["short", "standard", "long"].includes(out.clipLength)) out.clipLength = "standard";
-      if (!["karaoke", "keyword", "pop", "bubble", "none"].includes(out.captionStyle)) out.captionStyle = "karaoke";
+      if (!["karaoke", "keyword", "pop", "hormozi", "bubble", "none"].includes(out.captionStyle)) out.captionStyle = "karaoke";
       return out;
     }
   } catch {

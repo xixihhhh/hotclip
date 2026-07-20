@@ -200,6 +200,7 @@ export const en = {
     captionKaraoke: "Captions: karaoke",
     captionKeyword: "Captions: keyword highlight",
     captionPop: "Captions: word pop",
+    captionHormozi: "Captions: impact (Hormozi)",
     captionBubble: "Captions: bubble FX",
   },
   brand: {

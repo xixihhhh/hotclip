@@ -26,7 +26,8 @@ const USAGE = `HotClip CLI —— 本地 AI 切片,素材不出电脑
 
   pnpm cli clip <视频路径> [--max-clips N] [--no-vertical] [--no-captions] [--out 目录] [--json]
       全托管一条龙:转写 → 找爆点 → 出片(竖屏/字幕/跳剪/响度默认全开)
-      + 出片质检(黑屏/长静音/响度/时长/切点复核),报告进 clips.json
+      + 出片质检(黑屏/长静音/响度/时长/切点/平台违禁词复核),报告进 clips.json
+      + 可自愈告警自动修复(首尾静音黑屏裁边/响度重归一,修复记录进 qa.repair)
 
 环境变量(highlights / clip 需要):
   HOTCLIP_LLM_BASE_URL   OpenAI 兼容端点(本地 Ollama: http://localhost:11434/v1)
@@ -173,12 +174,15 @@ async function main(): Promise<void> {
       if (r.qa && r.qa.status === "warn") {
         process.stdout.write(`  ⚠ 质检:${r.qa.issues.join(";")}\n`);
       }
+      if (r.qa?.repair?.applied) {
+        process.stdout.write(`  🔧 已自动修复:${r.qa.repair.actions.join("、")}\n`);
+      }
     }
     const warned = outcome.exported.filter((r) => r.qa?.status === "warn").length;
     process.stdout.write(
       warned > 0
         ? `出片质检:${warned} 条有告警(详见 clips.json 的 qa 字段)\n`
-        : "出片质检:全部通过(黑屏/长静音/响度/时长/切点复核)\n"
+        : "出片质检:全部通过(黑屏/长静音/响度/时长/切点/违禁词复核)\n"
     );
     process.stdout.write("附带 clips.json(标题/评分/时间码/回执/质检)与每条封面 JPG。\n");
     return;
