@@ -10,6 +10,8 @@ import { applyGlossaryToTranscript } from "../shared/glossary";
 import { SenseVoiceEngine } from "./transcribe/sensevoice";
 import { readTranscriptCache, writeTranscriptCache } from "./transcribe/cache";
 import { detectHighlights } from "./highlight/detect";
+import { detectShotBoundaries } from "./shots";
+import { buildReferenceProfile, type ReferenceProfile } from "./reference";
 import { collectSignals } from "./signals";
 import { collectEmotionSignal } from "./emotion";
 import { collectDanmakuSignal } from "./danmaku";
@@ -29,6 +31,8 @@ export interface AutoClipConfig {
   maxClips?: number;
   vertical?: boolean;
   captions?: boolean;
+  /** 参考爆款画像(analyzeReferenceVideo 的产物);选段向它的节奏靠拢。 */
+  reference?: ReferenceProfile;
   onStage?: (stage: "transcribing" | "detecting" | "exporting") => void;
   signal?: AbortSignal;
 }
@@ -63,11 +67,30 @@ export async function transcribeCached(
   return applied(t);
 }
 
+/**
+ * 分析参考爆款 → 风格画像:端侧转写(带缓存)+ 全片镜头检测。
+ * 转写失败上抛(用户显式给的输入,静默丢弃是坑);镜头检测失败退 null 维度。
+ */
+export async function analyzeReferenceVideo(
+  refPath: string,
+  cfg: Pick<AutoClipConfig, "modelsRoot" | "cacheDir" | "glossary" | "signal">
+): Promise<ReferenceProfile> {
+  const transcript = await transcribeCached(refPath, cfg.modelsRoot, cfg.cacheDir, cfg.glossary);
+  const durationSec =
+    transcript.durationSec > 0
+      ? transcript.durationSec
+      : transcript.segments[transcript.segments.length - 1]?.endSec ?? 0;
+  const boundaries = await detectShotBoundaries(refPath, 0, durationSec, cfg.modelsRoot).catch(
+    () => null
+  );
+  return buildReferenceProfile(transcript, boundaries);
+}
+
 /** 找爆点(与桌面端同款证据链:响度/镜头 + 表情峰值,全部 fail-open)。 */
 export async function detectForPipeline(
   videoPath: string,
   transcript: Transcript,
-  cfg: Pick<AutoClipConfig, "modelsRoot" | "llm" | "maxClips" | "signal">
+  cfg: Pick<AutoClipConfig, "modelsRoot" | "llm" | "maxClips" | "reference" | "signal">
 ): Promise<HighlightCandidate[]> {
   if (transcript.segments.length === 0) throw new Error("转写结果为空(可能是无人声素材)");
   const signals = await collectSignals(videoPath).catch(() => undefined);
@@ -89,7 +112,10 @@ export async function detectForPipeline(
           ...(danmaku ? { danmakuPeaks: danmaku.danmakuPeaks } : {}),
         }
       : signals;
-  const outcome = await detectHighlights(transcript, cfg.llm, cfg.signal, merged);
+  const outcome = await detectHighlights(
+    transcript, cfg.llm, cfg.signal, merged,
+    undefined, undefined, undefined, cfg.reference
+  );
   const max = Math.max(1, Math.min(12, Math.round(cfg.maxClips ?? 6)));
   return outcome.candidates.slice(0, max);
 }

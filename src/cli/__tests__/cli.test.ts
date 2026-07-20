@@ -33,6 +33,13 @@ describe("parseCliArgs (CLI 参数解析)", () => {
     expect(a.maxClips).toBe(5);
   });
 
+  it("--reference 带值解析;缺值抛错", () => {
+    const a = parseCliArgs(["highlights", "/v/a.mp4", "--reference", "/v/对标爆款.mp4"]);
+    expect(a.referencePath).toBe("/v/对标爆款.mp4");
+    expect(parseCliArgs(["clip", "/v/a.mp4"]).referencePath).toBeUndefined();
+    expect(() => parseCliArgs(["clip", "/v/a.mp4", "--reference"])).toThrow(/对标视频路径/);
+  });
+
   it("缺命令/缺路径/未知选项/非法数值 → 抛出含用法的错误", () => {
     expect(() => parseCliArgs([])).toThrow(/用法/);
     expect(() => parseCliArgs(["clip"])).toThrow(/缺少视频路径/);

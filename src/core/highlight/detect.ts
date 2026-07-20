@@ -4,6 +4,7 @@
  */
 import type { Transcript } from "../transcribe/types";
 import type { MediaSignals } from "../signals";
+import type { ReferenceProfile } from "../reference";
 import type { HighlightCandidate, LlmConfig, PrefilterConfig, FunnelStats, ClipLength } from "../../shared/api-types";
 import {
   highlightSystemPrompt,
@@ -255,7 +256,8 @@ export async function detectHighlights(
   signals?: MediaSignals,
   prefilter?: PrefilterConfig | null,
   length?: ClipLength,
-  products?: string[]
+  products?: string[],
+  reference?: ReferenceProfile
 ): Promise<DetectOutcome> {
   if (transcript.segments.length === 0) return { candidates: [] };
 
@@ -278,7 +280,7 @@ export async function detectHighlights(
 
   const content = await chatComplete(
     llm,
-    highlightSystemPrompt(promptTranscript, length, products ?? []),
+    highlightSystemPrompt(promptTranscript, length, products ?? [], reference),
     buildHighlightPrompt(promptTranscript, 6, signals),
     signal
   );

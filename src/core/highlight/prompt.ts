@@ -10,6 +10,7 @@
 import type { Transcript } from "../transcribe/types";
 import type { ClipLength } from "../../shared/api-types";
 import type { MediaSignals } from "../signals";
+import { referencePromptSection, type ReferenceProfile } from "../reference";
 
 export const HIGHLIGHT_SYSTEM_PROMPT_ZH = `你是一位顶级短视频切片操盘手。给你一份长视频的逐句稿,你要从中挑出最可能在抖音/快手/B站/TikTok 上爆的片段。
 
@@ -66,7 +67,8 @@ export const CLIP_LENGTH_RANGES: Record<ClipLength, { minSec: number; maxSec: nu
 export function highlightSystemPrompt(
   transcript: Transcript,
   length: ClipLength = "standard",
-  products: string[] = []
+  products: string[] = [],
+  reference?: ReferenceProfile
 ): string {
   const zh = isChineseTranscript(transcript);
   let base = zh ? HIGHLIGHT_SYSTEM_PROMPT_ZH : HIGHLIGHT_SYSTEM_PROMPT_EN;
@@ -78,6 +80,8 @@ export function highlightSystemPrompt(
       .replace("Length 8–40 seconds", `Length ${minSec}–${maxSec} seconds (hard requirement)`);
   }
   if (products.length > 0) base += productSection(products, zh);
+  // 参考爆款画像:节奏偏好段(用户丢了对标切片时才有)
+  if (reference) base += referencePromptSection(reference, zh);
   return base;
 }
 

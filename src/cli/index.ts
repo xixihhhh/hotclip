@@ -11,7 +11,8 @@
  * 模型与转写缓存和桌面 App 共享——下载一次三边都能用。
  */
 import { join, basename } from "path";
-import { transcribeCached, detectForPipeline, autoClip } from "../core/pipeline";
+import { transcribeCached, detectForPipeline, autoClip, analyzeReferenceVideo } from "../core/pipeline";
+import type { ReferenceProfile } from "../core/reference";
 import { loadGlossary } from "../core/glossary-store";
 import { userDataDir, modelsRoot, cacheDir, llmFromEnv } from "../core/appenv";
 
@@ -21,10 +22,12 @@ const USAGE = `HotClip CLI —— 本地 AI 切片,素材不出电脑
   pnpm cli transcribe <视频路径>
       端侧逐字转写(SenseVoice,带缓存;首次自动下载模型)
 
-  pnpm cli highlights <视频路径> [--max-clips N] [--json]
+  pnpm cli highlights <视频路径> [--max-clips N] [--reference 对标视频] [--json]
       AI 通读全文找爆点,输出候选清单(评分/钩子/切点,先审后剪)
+      --reference: 丢一条想对标的爆款切片,实测其节奏(时长/语速/镜头/钩子)
+      生成画像,选段向对标节奏靠拢(偏好不是硬约束)
 
-  pnpm cli clip <视频路径> [--max-clips N] [--no-vertical] [--no-captions] [--out 目录] [--json]
+  pnpm cli clip <视频路径> [--max-clips N] [--reference 对标视频] [--no-vertical] [--no-captions] [--out 目录] [--json]
       全托管一条龙:转写 → 找爆点 → 出片(竖屏/字幕/跳剪/响度默认全开)
       + 出片质检(黑屏/长静音/响度/时长/切点/平台违禁词复核),报告进 clips.json
       + 可自愈告警自动修复(首尾静音黑屏裁边/响度重归一,修复记录进 qa.repair)
@@ -42,6 +45,8 @@ export interface CliArgs {
   vertical: boolean;
   captions: boolean;
   outDir?: string;
+  /** 对标爆款视频路径(参考画像驱动选段)。 */
+  referencePath?: string;
   json: boolean;
 }
 
@@ -64,6 +69,10 @@ export function parseCliArgs(argv: string[]): CliArgs {
       const v = rest[++i];
       if (!v) throw new Error("--out 需要一个目录路径");
       args.outDir = v;
+    } else if (a === "--reference") {
+      const v = rest[++i];
+      if (!v) throw new Error("--reference 需要一个对标视频路径");
+      args.referencePath = v;
     } else if (a.startsWith("--")) {
       throw new Error(`未知选项: ${a}\n\n${USAGE}`);
     } else if (!args.videoPath) {
@@ -83,6 +92,28 @@ async function main(): Promise<void> {
   const args = parseCliArgs(process.argv.slice(2));
   const glossary = await loadGlossary(userDataDir());
 
+  // 参考画像:用户显式给的输入,分析失败要说清并按无参考继续(不静默丢)
+  const loadReference = async (): Promise<ReferenceProfile | undefined> => {
+    if (!args.referencePath) return undefined;
+    process.stderr.write("分析对标视频节奏…\n");
+    try {
+      const p = await analyzeReferenceVideo(args.referencePath, {
+        modelsRoot: modelsRoot(),
+        cacheDir: cacheDir(),
+        glossary,
+      });
+      const cuts = p.cutsPerMin !== null ? `·镜头 ${p.cutsPerMin} 切/分` : "";
+      const unit = p.zh ? "字" : "词";
+      process.stderr.write(
+        `参考画像:时长 ${Math.round(p.durationSec)}s·语速 ${p.speechRate}${unit}/秒·句长 ${p.avgSentenceLen}${unit}${cuts}·钩子「${p.hookLine.slice(0, 20)}」\n`
+      );
+      return p;
+    } catch (e) {
+      process.stderr.write(`⚠ 对标视频分析失败,按无参考继续:${e instanceof Error ? e.message : String(e)}\n`);
+      return undefined;
+    }
+  };
+
   if (args.command === "transcribe") {
     const t = await transcribeCached(args.videoPath, modelsRoot(), cacheDir(), glossary);
     for (const s of t.segments) process.stdout.write(`[${fmtClock(s.startSec)}] ${s.text}\n`);
@@ -92,6 +123,7 @@ async function main(): Promise<void> {
 
   if (args.command === "highlights") {
     const llm = llmFromEnv();
+    const reference = await loadReference();
     process.stderr.write("转写中(带缓存)…\n");
     const transcript = await transcribeCached(args.videoPath, modelsRoot(), cacheDir(), glossary);
     process.stderr.write("AI 找爆点中…\n");
@@ -99,6 +131,7 @@ async function main(): Promise<void> {
       modelsRoot: modelsRoot(),
       llm,
       maxClips: args.maxClips,
+      reference,
     });
     if (candidates.length === 0) {
       process.stderr.write("没有找到值得切的爆点候选。\n");
@@ -130,6 +163,7 @@ async function main(): Promise<void> {
 
   if (args.command === "clip") {
     const llm = llmFromEnv();
+    const reference = await loadReference();
     const outcome = await autoClip(args.videoPath, {
       modelsRoot: modelsRoot(),
       cacheDir: cacheDir(),
@@ -138,6 +172,7 @@ async function main(): Promise<void> {
       vertical: args.vertical,
       captions: args.captions,
       outDir: args.outDir,
+      reference,
       fontsDir: join(__dirname, "..", "..", "resources", "fonts"),
       glossary,
       onStage: (stage) => {

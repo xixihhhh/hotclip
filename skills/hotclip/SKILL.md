@@ -27,10 +27,12 @@ HotClip（AGPL-3.0 开源）把几小时的直播回放/播客/课程切成可�
 
 ```bash
 pnpm cli transcribe <video>                    # on-device word-level ASR (cached; instant on re-run)
-pnpm cli highlights <video> [--max-clips N] [--json]   # AI highlight candidates — review before cutting
-pnpm cli clip <video> [--max-clips N] [--no-vertical] [--no-captions] [--out DIR] [--json]
+pnpm cli highlights <video> [--max-clips N] [--reference REF] [--json]   # AI highlight candidates — review before cutting
+pnpm cli clip <video> [--max-clips N] [--reference REF] [--no-vertical] [--no-captions] [--out DIR] [--json]
                                                # fully managed: transcribe → detect → export + render-QA
 ```
+
+`--reference <video>`: hand in a viral clip to model after — its pacing (duration / speech rate / shot-cut frequency / hook shape) is measured locally and steers candidate selection as a preference (never a hard rule). Use when the user says "切得像这条" / "learn from this clip".
 
 Input: MP4 / MKV / MOV / FLV / TS, or audio-only (podcasts get an auto-generated waveform video). Paths with spaces need quoting.
 
