@@ -23,6 +23,7 @@ import { runDiarization, labelTranscript } from "@core/diarize";
 import { ASR_CATALOG } from "../shared/asr-catalog";
 import { detectHighlights, chatComplete } from "@core/highlight/detect";
 import { collectVisionSignal } from "@core/highlight/vision";
+import { composeContactSheetJpeg } from "@core/contact-sheet";
 import { collectEmotionSignal } from "@core/emotion";
 import { collectClipSegments, translateSegments, clipTranslationLines } from "@core/translate";
 import { generatePublishCopies } from "@core/publish";
@@ -176,6 +177,25 @@ ipcMain.handle("hotclip:audio-peaks", async (_event, filePath: unknown, startSec
   // 窗口封顶 10 分钟,防误传超大区间把内存打爆
   const track = await extractPeaks(filePath, from, Math.min(to, from + 600));
   return { values: Array.from(track.values), startSec: track.startSec, hopSec: track.hopSec };
+});
+
+// ---- IPC: 候选片段接触表(审阅台画面速览,复用 VLM 同款拼图) ----
+
+ipcMain.handle("hotclip:contact-sheet", async (_event, filePath: unknown, startSec: unknown, endSec: unknown) => {
+  if (typeof filePath !== "string" || !filePath.trim()) throw new Error("contact-sheet requires a file path");
+  const from = typeof startSec === "number" && Number.isFinite(startSec) ? Math.max(0, startSec) : 0;
+  const to = typeof endSec === "number" && Number.isFinite(endSec) ? endSec : 0;
+  if (to <= from) throw new Error("contact-sheet requires a valid range");
+  // 片内均匀取 9 帧,首尾各让出一点(边界帧常是转场半帧)
+  const span = to - from;
+  const pad = Math.min(0.3, span / 10);
+  const usable = span - pad * 2;
+  const times = Array.from({ length: 9 }, (_, i) => from + pad + (usable * (i + 0.5)) / 9);
+  const fontFile = app.isPackaged
+    ? join(process.resourcesPath, "fonts", "SourceHanSansSC-Bold.otf")
+    : join(app.getAppPath(), "resources", "fonts", "SourceHanSansSC-Bold.otf");
+  const b64 = await composeContactSheetJpeg(filePath, times, { fontFile }).catch(() => null);
+  return b64 ? `data:image/jpeg;base64,${b64}` : "";
 });
 
 // ---- IPC: transcription (wizard step 2) ----

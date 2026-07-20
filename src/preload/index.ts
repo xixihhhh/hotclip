@@ -30,6 +30,8 @@ const api: HotClipApi = {
   selectImage: () => ipcRenderer.invoke("hotclip:select-image"),
   getAudioPeaks: (filePath, startSec, endSec) =>
     ipcRenderer.invoke("hotclip:audio-peaks", filePath, startSec, endSec),
+  contactSheet: (filePath, startSec, endSec) =>
+    ipcRenderer.invoke("hotclip:contact-sheet", filePath, startSec, endSec),
   selectDir: () => ipcRenderer.invoke("hotclip:select-dir"),
   watchStart: (dir, llm) => ipcRenderer.invoke("hotclip:watch-start", dir, llm),
   watchStop: () => ipcRenderer.invoke("hotclip:watch-stop"),

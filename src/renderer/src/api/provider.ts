@@ -180,6 +180,10 @@ const browserMock: HotClipApi = {
     await sleep(300);
     return "/demo/brand-logo.png"; // 浏览器预览:返回假路径让 UI 流程可走通
   },
+  // 浏览器预览拿不到本地帧——画面速览退化为不展示
+  async contactSheet() {
+    return "";
+  },
   async getAudioPeaks(_filePath, startSec, endSec) {
     await sleep(250);
     const hopSec = 1 / 30;

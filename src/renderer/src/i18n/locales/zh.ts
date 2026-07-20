@@ -124,6 +124,7 @@ export const zh = {
     reviewBrowserStub: "浏览器预览模式没有本地视频;在桌面应用里可直接看画面",
     reviewNoVideo: "这个格式无法在应用内预览(不影响导出),可用时间轴和下方文字校对切点",
     reviewDragHint: "拖两端手柄微调,自动吸附字词边界;点轨道跳播",
+    reviewSheet: "画面速览(片内 3×3 抽帧)",
     reviewSafeZone: "安全区",
     reviewSafeZoneHint: "叠加所选平台的 UI 遮挡区(右侧点赞栏/底部文案区/顶部状态区)——字幕或主体压进红区,发出去就会被挡;虚线框是竖屏 9:16 成片范围(人脸跟随时裁窗会横移,这里画的是中心兜底位)",
     reviewTextEmpty: "当前范围没有台词",

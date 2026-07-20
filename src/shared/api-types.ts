@@ -331,6 +331,8 @@ export interface HotClipApi {
   selectImage: () => Promise<string | null>;
   /** 取 [startSec, endSec] 的音频峰值轨——审阅台时间轴的波形。 */
   getAudioPeaks: (filePath: string, startSec: number, endSec: number) => Promise<AudioPeaks>;
+  /** 候选片段的 3×3 接触表(画面速览):返回 data URL;失败/不支持返回空串。 */
+  contactSheet: (filePath: string, startSec: number, endSec: number) => Promise<string>;
   /** 选择一个文件夹(录播监听用);取消返回 null。 */
   selectDir: () => Promise<string | null>;
   /** 开始监听文件夹:新录播写完落稳后自动全托管切片。 */

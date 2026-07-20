@@ -87,6 +87,8 @@ export function ClipReviewModal({
   const [startSec, setStartSec] = useState(clip.startSec);
   const [endSec, setEndSec] = useState(clip.endSec);
   const [peaks, setPeaks] = useState<AudioPeaks | null>(null);
+  // 画面速览:3×3 接触表(打开时按 AI 原始切点取一次;空串 = 不支持/失败,不展示)
+  const [sheet, setSheet] = useState("");
   const [playing, setPlaying] = useState(false);
   const [playheadSec, setPlayheadSec] = useState(clip.startSec);
   const [videoFailed, setVideoFailed] = useState(false);
@@ -153,6 +155,24 @@ export function ClipReviewModal({
       alive = false;
     };
   }, [filePath, win]);
+
+  // ---- 画面速览(接触表) ----
+  // 只按打开时的切点取一次(拖动手柄不重拼——ffmpeg 不该被拖动打爆);失败静默不展示
+  useEffect(() => {
+    if (!filePath) return;
+    let alive = true;
+    getApi()
+      .contactSheet(filePath, clip.startSec, clip.endSec)
+      .then((url) => {
+        if (alive) setSheet(url);
+      })
+      .catch(() => {
+        /* 速览失败不致命 */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [filePath, clip.startSec, clip.endSec]);
 
   const secToFrac = useCallback(
     (s: number) => Math.max(0, Math.min(1, (s - win.winStartSec) / (win.winEndSec - win.winStartSec))),
@@ -500,6 +520,14 @@ export function ClipReviewModal({
             </button>
           ))}
         </div>
+
+        {/* 画面速览:3×3 接触表,不点播放也能一眼扫完片段画面 */}
+        {sheet && (
+          <div className="mt-3">
+            <div className="mb-1 text-[10.5px] text-mut/80">{t("reviewSheet")}</div>
+            <img src={sheet} alt={t("reviewSheet")} className="w-full rounded-xl border border-line" />
+          </div>
+        )}
 
         {/* 当前范围文字(校对听不清的地方) */}
         <div className="mt-3 max-h-24 overflow-y-auto rounded-xl bg-panel-2 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-fg/85">
