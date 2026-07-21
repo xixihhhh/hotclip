@@ -156,7 +156,7 @@ export const zh = {
     optTranslateZh: "双语字幕·译中",
     optTranslateHint: "用你配置的 LLM 把每句话整句翻译,烧成主字幕下方的小号译文轨——出海双语片一步到位;翻译失败自动跳过,不影响出片",
     optPublish: "发布文案",
-    optPublishHint: "为每条切片生成发布标题+话题标签+简介,落在 mp4 旁的 .post.txt 里直接复制粘贴——发布框里写什么不用再想;生成失败自动跳过,不影响出片",
+    optPublishHint: "为每条切片生成发布标题+话题标签+简介+收尾 CTA:标题从 8 种钩子角度按内容选型、CTA 从 5 类里匹配,整批不撞套路,落在 mp4 旁的 .post.txt 里直接复制粘贴;生成失败自动跳过,不影响出片",
     optSrt: "SRT 字幕",
     optSrtHint: "每条切片旁落同名 .srt 字幕文件——平台原生字幕上传(B站/YouTube)、剪辑器二次精修都用得上;跳剪/剪口头禅后的时间轴已对齐,开了双语还带译文行,纯本地零成本",
     optTimeline: "时间线 EDL",

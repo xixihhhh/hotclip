@@ -51,7 +51,7 @@ describe("lintClipContent (整条切片的物料扫描)", () => {
     const hits = lintClipContent({
       title: "全网最低价的秘密",
       hook: "看完你就知道怎么躺赚",
-      publish: { title: "买它", hashtags: ["#好物"], description: "假一赔十,无效退款" },
+      publish: { title: "买它", hashtags: ["#好物"], description: "假一赔十,无效退款", cta: "加微信领福利" },
       // 中文 ASR 按字出词:「根」「治」相邻拼接后才可命中
       captionText: "这个方子能根治老胃病",
     });
@@ -61,6 +61,7 @@ describe("lintClipContent (整条切片的物料扫描)", () => {
         expect.objectContaining({ term: "躺赚", source: "hook" }),
         expect.objectContaining({ term: "假一赔十", source: "publish" }),
         expect.objectContaining({ term: "无效退款", source: "publish" }),
+        expect.objectContaining({ term: "加微信", source: "publish" }),
         expect.objectContaining({ term: "根治", source: "caption" }),
       ])
     );

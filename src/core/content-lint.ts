@@ -99,7 +99,7 @@ export interface ClipLintInput {
   title?: string;
   /** 钩子 + 悬念句(开场大字/文案素材,拼一起扫)。 */
   hook?: string;
-  publish?: { title: string; hashtags: string[]; description: string } | null;
+  publish?: { title: string; hashtags: string[]; description: string; cta?: string } | null;
   /** 字幕文本(逐词 text 直接拼接;中文按字出词,必须无缝拼才扫得到跨词命中)。 */
   captionText?: string;
 }
@@ -115,7 +115,7 @@ export function lintClipContent(input: ClipLintInput): LintHit[] {
     [
       "publish",
       input.publish
-        ? [input.publish.title, input.publish.hashtags.join(" "), input.publish.description].join("\n")
+        ? [input.publish.title, input.publish.hashtags.join(" "), input.publish.description, input.publish.cta ?? ""].join("\n")
         : undefined,
     ],
     ["caption", input.captionText],

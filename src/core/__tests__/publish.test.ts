@@ -52,6 +52,21 @@ describe("parsePublishCopies", () => {
     expect(map.get(1)?.title).toBe("钩子标题");
     expect(map.get(1)?.hashtags).toEqual([]);
   });
+
+  it("角度与 CTA:菜单内保留,菜单外丢弃成没标,ctaType 只在有 cta 时保留", () => {
+    const content = JSON.stringify({
+      posts: [
+        { id: 1, title: "A", angle: "pain", cta: "评论区聊聊你的做法", ctaType: "comment" },
+        { id: 2, title: "B", angle: "clickbait", cta: "  ", ctaType: "comment" },
+        { id: 3, title: "C", ctaType: "share" },
+      ],
+    });
+    const map = parsePublishCopies(content, new Set([1, 2, 3]));
+    expect(map.get(1)).toMatchObject({ angle: "pain", cta: "评论区聊聊你的做法", ctaType: "comment" });
+    expect(map.get(2)?.angle).toBeUndefined();
+    expect(map.get(2)?.cta).toBeUndefined();
+    expect(map.get(3)?.ctaType).toBeUndefined(); // 没有 cta 正文,类型标签没意义
+  });
 });
 
 describe("generatePublishCopies", () => {
@@ -89,5 +104,12 @@ describe("postTextFile", () => {
   it("标题+话题+简介三段,空段省略", () => {
     expect(postTextFile({ title: "T", hashtags: ["#a", "#b"], description: "D" })).toBe("T\n\n#a #b\n\nD\n");
     expect(postTextFile({ title: "T", hashtags: [], description: "" })).toBe("T\n");
+  });
+
+  it("CTA 缀在简介后一行;没简介时 CTA 独立成段", () => {
+    expect(postTextFile({ title: "T", hashtags: [], description: "D", cta: "关注我下期拆解", ctaType: "follow" })).toBe(
+      "T\n\nD\n关注我下期拆解\n"
+    );
+    expect(postTextFile({ title: "T", hashtags: [], description: "", cta: "收藏慢慢看" })).toBe("T\n\n收藏慢慢看\n");
   });
 });

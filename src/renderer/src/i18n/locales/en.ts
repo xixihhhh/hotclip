@@ -176,7 +176,7 @@ export const en = {
     optTranslateZh: "Bilingual · ZH",
     optTranslateHint: "Your configured LLM translates each sentence and burns it in as a smaller second caption track below the main one — bilingual clips for going global in one step; translation failures are silently skipped",
     optPublish: "Post copy",
-    optPublishHint: "Generate a post title + hashtags + description for every clip, saved as a .post.txt next to each mp4 for copy-paste — never stare at an empty caption box again; failures are silently skipped",
+    optPublishHint: "Generate a post title + hashtags + description + closing CTA for every clip — titles typed from 8 hook angles, CTAs from 5 kinds, so a batch never repeats one formula; saved as .post.txt next to each mp4, failures silently skipped",
     optSrt: "SRT file",
     optSrtHint: "Drop a same-name .srt next to each clip — for native platform captions (YouTube/bilibili) and editor fine-tuning; timestamps already reflect jump-cut/filler removal, and bilingual mode includes the translated line. Local, zero cost",
     optTimeline: "EDL timeline",
