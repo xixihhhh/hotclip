@@ -32,7 +32,8 @@ import { collectDanmakuSignal } from "@core/danmaku";
 import { checkForUpdate } from "@core/update-check";
 import { loadGlossary, saveGlossary } from "@core/glossary-store";
 import { applyGlossaryToTranscript } from "../shared/glossary";
-import { autoClip } from "@core/pipeline";
+import { autoClip, analyzeReferenceVideo } from "@core/pipeline";
+import type { ReferenceProfile } from "@core/reference";
 import { collectSignals } from "@core/signals";
 import { exportClips, sanitizeFilename } from "@core/export";
 import { sliceWords } from "@core/subtitle";
@@ -298,11 +299,26 @@ ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: 
 
 ipcMain.handle(
   "hotclip:detect-highlights",
-  async (_event, transcript: unknown, llm: unknown, filePath: unknown, diarize: unknown, prefilter: unknown, vision: unknown, length: unknown, products: unknown) => {
+  async (_event, transcript: unknown, llm: unknown, filePath: unknown, diarize: unknown, prefilter: unknown, vision: unknown, length: unknown, products: unknown, referencePath: unknown) => {
     let t = transcript as Transcript;
     const config = llm as LlmConfig;
     if (!t || !Array.isArray(t.segments)) throw new Error("detect-highlights requires a transcript");
     if (!config?.baseUrl || !config?.model) throw new Error("请先在设置里配置 LLM(baseUrl/model)");
+    // 参考爆款画像(可选):用户显式给的输入,分析失败按无参考继续,
+    // 但失败原因必须随结果带回给 UI——不静默丢
+    let reference: ReferenceProfile | undefined;
+    let referenceError: string | undefined;
+    if (typeof referencePath === "string" && referencePath.trim()) {
+      try {
+        reference = await analyzeReferenceVideo(referencePath, {
+          modelsRoot: modelsRoot(),
+          cacheDir: transcriptCacheDir(),
+          glossary: await loadGlossary(app.getPath("userData")),
+        });
+      } catch (e) {
+        referenceError = e instanceof Error ? e.message : String(e);
+      }
+    }
     // Tier-0 audiovisual evidence (loudness peaks + cut density), capped so a
     // pathological source can never stall detection; failures degrade to none.
     let signals;
@@ -386,8 +402,8 @@ ipcMain.handle(
     const productWords = Array.isArray(products)
       ? products.filter((p): p is string => typeof p === "string" && p.trim().length > 0).map((p) => p.trim().slice(0, 30)).slice(0, 20)
       : [];
-    const outcome = await detectHighlights(t, config, undefined, signals, localFilter, clipLength, productWords);
-    return { candidates: outcome.candidates, transcript: labeled, funnel: outcome.funnel, vision: visionStats, emotion: emotionStats, danmaku: danmakuStats };
+    const outcome = await detectHighlights(t, config, undefined, signals, localFilter, clipLength, productWords, reference);
+    return { candidates: outcome.candidates, transcript: labeled, funnel: outcome.funnel, vision: visionStats, emotion: emotionStats, danmaku: danmakuStats, reference: reference ?? null, referenceError };
   }
 );
 

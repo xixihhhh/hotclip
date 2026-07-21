@@ -240,8 +240,12 @@ const browserMock: HotClipApi = {
   openUrl(url) {
     window.open(url, "_blank", "noreferrer");
   },
-  async detectHighlights(transcript, _llm, _filePath, diarize, prefilter, vision, _length, products): Promise<DetectHighlightsResult> {
+  async detectHighlights(transcript, _llm, _filePath, diarize, prefilter, vision, _length, products, referencePath): Promise<DetectHighlightsResult> {
     await sleep(1500);
+    // 浏览器预览:给了参考视频就演示一份画像
+    const reference = referencePath
+      ? { durationSec: 42, speechRate: 5.2, avgSentenceLen: 14, cutsPerMin: 18, hookLine: "你敢信这是同一个人剪的?", zh: true }
+      : undefined;
     // 浏览器预览:开了本地初筛就演示一份漏斗统计
     const funnel = prefilter
       ? { totalSegments: 220, keptSegments: 41, totalChars: 12800, keptChars: 2400 }
@@ -302,9 +306,9 @@ const browserMock: HotClipApi = {
           words: (s.words ?? []).map((w) => ({ ...w, speaker: i % 2 })),
         })),
       };
-      return { candidates, transcript: labeled, funnel, vision: visionStats, emotion: emotionStats, danmaku: danmakuStats };
+      return { candidates, transcript: labeled, funnel, vision: visionStats, emotion: emotionStats, danmaku: danmakuStats, reference };
     }
-    return { candidates, funnel, vision: visionStats, emotion: emotionStats, danmaku: danmakuStats };
+    return { candidates, funnel, vision: visionStats, emotion: emotionStats, danmaku: danmakuStats, reference };
   },
 };
 

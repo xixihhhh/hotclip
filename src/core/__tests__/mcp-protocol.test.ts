@@ -86,4 +86,15 @@ describe("validateToolArgs", () => {
   it("合法参数通过", () => {
     expect(validateToolArgs(tool, { videoPath: "/v.mp4", maxClips: 8, vertical: false })).toBeNull();
   });
+
+  it("referencePath 两个切片工具都声明为可选 string", () => {
+    for (const name of ["clip_video", "detect_highlights"]) {
+      const t = MCP_TOOLS.find((x) => x.name === name)!;
+      const schema = t.inputSchema as { properties: Record<string, { type: string }>; required: string[] };
+      expect(schema.properties.referencePath.type).toBe("string");
+      expect(schema.required).not.toContain("referencePath");
+      expect(validateToolArgs(t, { videoPath: "/v.mp4", referencePath: 3 })).toContain("referencePath");
+      expect(validateToolArgs(t, { videoPath: "/v.mp4", referencePath: "/ref.mp4" })).toBeNull();
+    }
+  });
 });

@@ -248,6 +248,22 @@ export interface DetectHighlightsResult {
   emotion?: EmotionStats;
   /** 弹幕热度信号生效时的统计;视频旁没有同名弹幕 .xml 时缺省。 */
   danmaku?: DanmakuStats;
+  /** 参考爆款画像(传了 referencePath 且分析成功才有)。 */
+  reference?: ReferenceInfo | null;
+  /** 参考视频分析失败原因(fail-open 按无参考继续,但失败必须让用户看见)。 */
+  referenceError?: string;
+}
+
+/** 参考爆款画像(桌面端「参考爆款」入口;与 core/reference 的 ReferenceProfile 同构)。 */
+export interface ReferenceInfo {
+  durationSec: number;
+  /** 语速:中文按字/秒,英文按词/秒。 */
+  speechRate: number;
+  avgSentenceLen: number;
+  /** 镜头切换频率(次/分钟);检测失败或纯音频为 null。 */
+  cutsPerMin: number | null;
+  hookLine: string;
+  zh: boolean;
 }
 
 /** One exported clip file on disk. */
@@ -315,7 +331,9 @@ export interface HotClipApi {
     vision?: PrefilterConfig | null,
     length?: ClipLength,
     /** 商品讲解模式:商品词列表(带货直播按商品选段,命中词并入候选 keywords)。 */
-    products?: string[]
+    products?: string[],
+    /** 对标爆款视频路径:实测其节奏画像,选段向对标节奏靠拢(偏好不是硬约束)。 */
+    referencePath?: string | null
   ) => Promise<DetectHighlightsResult>;
   /** Cut the selected highlights into mp4 files; resolves with the file list. */
   exportClips: (filePath: string, clips: HighlightCandidate[], options?: ExportOptions) => Promise<ExportedClip[]>;

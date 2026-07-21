@@ -37,6 +37,7 @@ import {
   LuPencil,
   LuFilm,
   LuBadgeCheck,
+  LuTarget,
 } from "react-icons/lu";
 import { useT } from "../i18n/store";
 import { getApi, isElectron } from "../api/provider";
@@ -46,7 +47,7 @@ import { useRenderPrefs } from "../stores/render-prefs-store";
 import { adjustClipBoundary } from "../../../shared/boundary";
 import { ClipReviewModal } from "./ClipReviewModal";
 import { BrandStyleModal } from "./BrandStyleModal";
-import type { Transcript, HighlightCandidate, RenderToggles, CaptionStyleChoice, FunnelStats, VisionStats, EmotionStats, DanmakuStats, ClipLength } from "../../../shared/api-types";
+import type { Transcript, HighlightCandidate, RenderToggles, CaptionStyleChoice, FunnelStats, VisionStats, EmotionStats, DanmakuStats, ClipLength, ReferenceInfo } from "../../../shared/api-types";
 
 /** Click-to-cycle order for the caption style chip. */
 const CAPTION_CYCLE: CaptionStyleChoice[] = ["karaoke", "keyword", "pop", "hormozi", "bubble", "none"];
@@ -108,6 +109,10 @@ export function HighlightsView({
   const [emotionStats, setEmotionStats] = useState<EmotionStats | null>(null);
   /** 弹幕热度信号统计(视频旁同名 .xml 自动发现)。 */
   const [danmakuStats, setDanmakuStats] = useState<DanmakuStats | null>(null);
+  /** 参考爆款:对标视频路径与实测画像(会话内有效——本地路径易失效,不持久化)。 */
+  const [referencePath, setReferencePath] = useState<string | null>(null);
+  const [referenceInfo, setReferenceInfo] = useState<ReferenceInfo | null>(null);
+  const [referenceError, setReferenceError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   // 出片偏好持久化:上次的开关组合下次直接生效(解构保持下方 JSX 引用不变)
   const { prefs, setPref } = useRenderPrefs();
@@ -135,7 +140,7 @@ export function HighlightsView({
   const brandState = useBrandStore();
   const startedRef = useRef(false);
 
-  const run = useCallback(async (useDiarize: boolean, lengthArg?: ClipLength, productsArg?: string[]): Promise<void> => {
+  const run = useCallback(async (useDiarize: boolean, lengthArg?: ClipLength, productsArg?: string[], referenceArg?: string | null): Promise<void> => {
     setDetecting(true);
     setError(null);
     try {
@@ -147,13 +152,17 @@ export function HighlightsView({
         prefilter.enabled ? { baseUrl: prefilter.baseUrl, model: prefilter.model } : null,
         vision.enabled ? { baseUrl: vision.baseUrl, model: vision.model } : null,
         lengthArg ?? clipLength,
-        productsArg ?? products
+        productsArg ?? products,
+        // undefined = 沿用当前参考;null = 显式清掉
+        referenceArg === undefined ? referencePath : referenceArg
       );
       setCandidates(result.candidates);
       setFunnel(result.funnel ?? null);
       setVisionStats(result.vision ?? null);
       setEmotionStats(result.emotion ?? null);
       setDanmakuStats(result.danmaku ?? null);
+      setReferenceInfo(result.reference ?? null);
+      setReferenceError(result.referenceError ?? null);
       // reviewer-approved clips are pre-selected; flagged ones start unchecked
       setSelected(new Set(result.candidates.filter((c) => c.recommended).map((c) => c.id)));
       // Lift the speaker-labeled transcript so export can color captions by speaker.
@@ -163,7 +172,22 @@ export function HighlightsView({
     } finally {
       setDetecting(false);
     }
-  }, [transcript, config, filePath, onTranscriptLabeled, prefilter, vision, clipLength, products]);
+  }, [transcript, config, filePath, onTranscriptLabeled, prefilter, vision, clipLength, products, referencePath]);
+
+  // 参考爆款:选一条对标视频带着它重新检测;已设置时再点即清除参考重检
+  const toggleReference = useCallback(async (): Promise<void> => {
+    if (referencePath) {
+      setReferencePath(null);
+      setReferenceInfo(null);
+      setReferenceError(null);
+      void run(diarize, undefined, undefined, null);
+      return;
+    }
+    const p = await getApi().selectMedia();
+    if (!p) return;
+    setReferencePath(p);
+    void run(diarize, undefined, undefined, p);
+  }, [referencePath, diarize, run]);
 
   // 商品词提交:解析(逗号/顿号分隔)→ 持久化 → 变了就按新词重新检测
   const commitProducts = useCallback(
@@ -475,8 +499,33 @@ export function HighlightsView({
                   })}
                 </p>
               )}
+              {referenceInfo && (
+                <p className="mt-1 text-[11.5px] text-violet-400/90">
+                  {t("refProfile", {
+                    dur: Math.round(referenceInfo.durationSec),
+                    rate: referenceInfo.speechRate,
+                    unit: referenceInfo.zh ? t("refUnitZh") : t("refUnitEn"),
+                    cuts: referenceInfo.cutsPerMin !== null ? t("refCuts", { n: referenceInfo.cutsPerMin }) : "",
+                    hook: referenceInfo.hookLine.slice(0, 16),
+                  })}
+                </p>
+              )}
+              {referenceError && (
+                <p className="mt-1 text-[11.5px] text-amber-400/90">{t("refFailed", { msg: referenceError })}</p>
+              )}
             </div>
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                title={referencePath ? t("refHintOn", { name: referencePath.split(/[\\/]/).pop() ?? "" }) : t("refHint")}
+                onClick={() => void toggleReference()}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                  referencePath ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut hover:text-fg"
+                }`}
+              >
+                <LuTarget className={`h-3.5 w-3.5 ${referencePath ? "text-ember" : ""}`} />
+                {t("refButton")}
+              </button>
               <button
                 type="button"
                 title={t("lengthHint")}

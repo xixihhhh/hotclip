@@ -11,7 +11,8 @@
  */
 import { createInterface } from "readline";
 import { join, basename } from "path";
-import { transcribeCached, detectForPipeline, autoClip } from "../core/pipeline";
+import { transcribeCached, detectForPipeline, autoClip, analyzeReferenceVideo } from "../core/pipeline";
+import type { ReferenceProfile } from "../core/reference";
 import { loadGlossary } from "../core/glossary-store";
 import { userDataDir, modelsRoot, cacheDir, llmFromEnv } from "../core/appenv";
 import { handleMcpMessage, type JsonRpcMessage } from "./protocol";
@@ -24,6 +25,29 @@ function fmtClock(sec: number): string {
 function clampClips(n: unknown): number | undefined {
   const v = Number(n);
   return Number.isFinite(v) ? Math.max(1, Math.min(12, Math.round(v))) : undefined;
+}
+
+/**
+ * 参考画像(与 CLI --reference 同一语义):用户显式给的输入,分析失败要在
+ * 回执里说清并按无参考继续,不静默丢。note 直接拼进工具回执开头。
+ */
+async function loadReference(refPath: unknown): Promise<{ profile?: ReferenceProfile; note: string }> {
+  if (typeof refPath !== "string" || !refPath.trim()) return { note: "" };
+  try {
+    const p = await analyzeReferenceVideo(refPath, {
+      modelsRoot: modelsRoot(),
+      cacheDir: cacheDir(),
+      glossary: await loadGlossary(userDataDir()),
+    });
+    const cuts = p.cutsPerMin !== null ? `·镜头 ${p.cutsPerMin} 切/分` : "";
+    const unit = p.zh ? "字" : "词";
+    return {
+      profile: p,
+      note: `参考画像:时长 ${Math.round(p.durationSec)}s·语速 ${p.speechRate}${unit}/秒·句长 ${p.avgSentenceLen}${unit}${cuts}·钩子「${p.hookLine.slice(0, 20)}」\n`,
+    };
+  } catch (e) {
+    return { note: `⚠ 对标视频分析失败,按无参考继续:${e instanceof Error ? e.message : String(e)}\n` };
+  }
 }
 
 /** 工具实现:返回给 Agent 的文本。 */
@@ -39,14 +63,16 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
 
   if (name === "detect_highlights") {
     const llm = llmFromEnv();
+    const ref = await loadReference(args.referencePath);
     const transcript = await transcribeCached(videoPath, modelsRoot(), cacheDir(), await loadGlossary(userDataDir()));
     const candidates = await detectForPipeline(videoPath, transcript, {
       modelsRoot: modelsRoot(),
       llm,
       maxClips: clampClips(args.maxClips),
+      reference: ref.profile,
     });
-    if (candidates.length === 0) return "没有找到值得切的爆点候选。";
-    return JSON.stringify(
+    if (candidates.length === 0) return `${ref.note}没有找到值得切的爆点候选。`;
+    return ref.note + JSON.stringify(
       candidates.map((c) => ({
         id: c.id,
         start: fmtClock(c.startSec),
@@ -67,6 +93,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
 
   if (name === "clip_video") {
     const llm = llmFromEnv();
+    const ref = await loadReference(args.referencePath);
     const outcome = await autoClip(videoPath, {
       modelsRoot: modelsRoot(),
       cacheDir: cacheDir(),
@@ -77,9 +104,10 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
       outDir: typeof args.outDir === "string" && args.outDir.trim() ? args.outDir : undefined,
       fontsDir: join(process.cwd(), "resources", "fonts"),
       glossary: await loadGlossary(userDataDir()),
+      reference: ref.profile,
     });
     if (outcome.exported.length === 0) {
-      return "AI 复评后没有建议发布的切片(候选都被判定为弱钩子)。可用 detect_highlights 查看全部候选与复评意见。";
+      return `${ref.note}AI 复评后没有建议发布的切片(候选都被判定为弱钩子)。可用 detect_highlights 查看全部候选与复评意见。`;
     }
     const list = outcome.exported
       .map((r) => {
@@ -96,7 +124,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
       warned > 0
         ? `出片质检:${warned} 条有告警(详见条目与 clips.json 的 qa 字段)`
         : "出片质检:全部通过(黑屏/长静音/响度/时长/切点/违禁词复核)";
-    return `已导出 ${outcome.exported.length} 条切片到 ${outcome.outDir}\n${list}\n${qaLine}\n附带 clips.json(标题/评分/时间码/回执/质检)与每条封面 JPG。`;
+    return `${ref.note}已导出 ${outcome.exported.length} 条切片到 ${outcome.outDir}\n${list}\n${qaLine}\n附带 clips.json(标题/评分/时间码/回执/质检)与每条封面 JPG。`;
   }
 
   throw new Error(`未实现的工具: ${name}`);
