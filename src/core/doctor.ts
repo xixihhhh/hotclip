@@ -82,11 +82,21 @@ export async function dirSize(dir: string): Promise<number> {
   return total;
 }
 
+/** 真实的版本探测:跑 `bin -version` 取首行。 */
+async function probeVersionReal(bin: string): Promise<string> {
+  const { stdout } = await execFileAsync(bin, ["-version"], { maxBuffer: 1024 * 1024 });
+  return stdout;
+}
+
 /** ffmpeg/ffprobe 可用性:能解析到路径且 -version 跑得动。 */
-async function checkBinary(name: string, resolve: () => string): Promise<DoctorCheck> {
+async function checkBinary(
+  name: string,
+  resolve: () => string,
+  probe: (bin: string) => Promise<string>
+): Promise<DoctorCheck> {
   try {
     const bin = resolve();
-    const { stdout } = await execFileAsync(bin, ["-version"], { maxBuffer: 1024 * 1024 });
+    const stdout = await probe(bin);
     const firstLine = stdout.split("\n")[0]?.trim() ?? "";
     return { name, status: "ok", detail: firstLine || "可用" };
   } catch (e) {
@@ -192,13 +202,19 @@ export async function runDoctor(opts: {
   llm: LlmConfig | null;
   /** 测试注入口:替换 ffmpeg/ffprobe 路径解析——单测不依赖 runner 的二进制环境。 */
   resolveBinaries?: { ffmpeg: () => string; ffprobe: () => string };
+  /**
+   * 测试注入口:替换 `bin -version` 探测——Windows runner 没有 /bin/echo
+   * 这类可当假二进制的路径,注入后单测彻底不碰真进程。
+   */
+  probeBinaryVersion?: (bin: string) => Promise<string>;
 }): Promise<DoctorReport> {
   const checks: DoctorCheck[] = [];
   const missingCoreModels: ModelAsset[] = [];
 
   const bins = opts.resolveBinaries ?? { ffmpeg: resolveFfmpegPath, ffprobe: resolveFfprobePath };
-  checks.push(await checkBinary("ffmpeg", bins.ffmpeg));
-  checks.push(await checkBinary("ffprobe", bins.ffprobe));
+  const probe = opts.probeBinaryVersion ?? probeVersionReal;
+  checks.push(await checkBinary("ffmpeg", bins.ffmpeg, probe));
+  checks.push(await checkBinary("ffprobe", bins.ffprobe, probe));
 
   for (const row of MODEL_ROWS) {
     const { check, missing } = await checkModel(opts.modelsRoot, row);
