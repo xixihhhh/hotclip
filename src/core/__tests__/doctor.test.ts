@@ -18,6 +18,10 @@ async function freshRoot(): Promise<{ modelsRoot: string; cacheDir: string }> {
   return { modelsRoot, cacheDir };
 }
 
+// 单测不赌 runner 的 ffmpeg/ffprobe 环境(CI 的 Linux 上 ffprobe 曾跑不起来):
+// 用 /bin/echo 当"可用二进制"(接受任意参数,ubuntu/macOS 都有),检查逻辑照测。
+const fakeBins = { ffmpeg: () => "/bin/echo", ffprobe: () => "/bin/echo" };
+
 describe("dirSize", () => {
   it("递归求和,不存在按 0", async () => {
     const { modelsRoot } = await freshRoot();
@@ -32,7 +36,7 @@ describe("dirSize", () => {
 describe("runDoctor", () => {
   it("空环境:核心模型报未安装并进 missingCoreModels,LLM 未配置是 warn 不是 fail", async () => {
     const { modelsRoot, cacheDir } = await freshRoot();
-    const report = await runDoctor({ modelsRoot, cacheDir, llm: null });
+    const report = await runDoctor({ modelsRoot, cacheDir, llm: null, resolveBinaries: fakeBins });
 
     // 默认管线四个核心模型都缺
     expect(report.missingCoreModels.map((a) => a.id)).toEqual([
@@ -54,9 +58,27 @@ describe("runDoctor", () => {
     expect(llm?.status).toBe("warn");
     expect(llm?.fix).toContain("HOTCLIP_LLM_BASE_URL");
 
-    // ffmpeg/ffprobe 来自内置依赖,本仓库环境应当可用
+    // 二进制可用(注入的假二进制)时报 ok
     expect(report.checks.find((c) => c.name === "ffmpeg")?.status).toBe("ok");
     expect(report.checks.find((c) => c.name === "ffprobe")?.status).toBe("ok");
+  });
+
+  it("二进制解析失败报 fail 并给修复建议", async () => {
+    const { modelsRoot, cacheDir } = await freshRoot();
+    const report = await runDoctor({
+      modelsRoot,
+      cacheDir,
+      llm: null,
+      resolveBinaries: {
+        ffmpeg: () => "/bin/echo",
+        ffprobe: () => {
+          throw new Error("no binary for this platform");
+        },
+      },
+    });
+    const ffprobe = report.checks.find((c) => c.name === "ffprobe");
+    expect(ffprobe?.status).toBe("fail");
+    expect(ffprobe?.fix).toContain("pnpm install");
   });
 
   it("已装模型报体积;断点文件报续传量", async () => {
@@ -67,7 +89,7 @@ describe("runDoctor", () => {
     // SenseVoice 留一个断点文件
     await writeFile(join(modelsRoot, "sensevoice-2024-07-17.download.tar.bz2"), Buffer.alloc(2 * 1024 * 1024));
 
-    const report = await runDoctor({ modelsRoot, cacheDir, llm: null });
+    const report = await runDoctor({ modelsRoot, cacheDir, llm: null, resolveBinaries: fakeBins });
     const yunet = report.checks.find((c) => c.name.includes("YuNet"));
     expect(yunet?.status).toBe("ok");
     expect(yunet?.detail).toContain("已安装");
@@ -81,11 +103,11 @@ describe("runDoctor", () => {
     const llm = { baseUrl: "http://127.0.0.1:1/v1", apiKey: "k", model: "m" };
 
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 404 })));
-    let report = await runDoctor({ modelsRoot, cacheDir, llm });
+    let report = await runDoctor({ modelsRoot, cacheDir, llm, resolveBinaries: fakeBins });
     expect(report.checks.find((c) => c.name === "LLM 端点")?.status).toBe("ok");
 
     vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new Error("ECONNREFUSED"))));
-    report = await runDoctor({ modelsRoot, cacheDir, llm });
+    report = await runDoctor({ modelsRoot, cacheDir, llm, resolveBinaries: fakeBins });
     const check = report.checks.find((c) => c.name === "LLM 端点");
     expect(check?.status).toBe("warn");
     expect(check?.detail).toContain("连不上");

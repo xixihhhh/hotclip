@@ -190,12 +190,15 @@ export async function runDoctor(opts: {
   modelsRoot: string;
   cacheDir: string;
   llm: LlmConfig | null;
+  /** 测试注入口:替换 ffmpeg/ffprobe 路径解析——单测不依赖 runner 的二进制环境。 */
+  resolveBinaries?: { ffmpeg: () => string; ffprobe: () => string };
 }): Promise<DoctorReport> {
   const checks: DoctorCheck[] = [];
   const missingCoreModels: ModelAsset[] = [];
 
-  checks.push(await checkBinary("ffmpeg", resolveFfmpegPath));
-  checks.push(await checkBinary("ffprobe", resolveFfprobePath));
+  const bins = opts.resolveBinaries ?? { ffmpeg: resolveFfmpegPath, ffprobe: resolveFfprobePath };
+  checks.push(await checkBinary("ffmpeg", bins.ffmpeg));
+  checks.push(await checkBinary("ffprobe", bins.ffprobe));
 
   for (const row of MODEL_ROWS) {
     const { check, missing } = await checkModel(opts.modelsRoot, row);
