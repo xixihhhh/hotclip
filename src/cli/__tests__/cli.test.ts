@@ -40,6 +40,11 @@ describe("parseCliArgs (CLI 参数解析)", () => {
     expect(() => parseCliArgs(["clip", "/v/a.mp4", "--reference"])).toThrow(/对标视频路径/);
   });
 
+  it("doctor 不需要视频路径,--download 可选", () => {
+    expect(parseCliArgs(["doctor"])).toMatchObject({ command: "doctor", download: false });
+    expect(parseCliArgs(["doctor", "--download"]).download).toBe(true);
+  });
+
   it("缺命令/缺路径/未知选项/非法数值 → 抛出含用法的错误", () => {
     expect(() => parseCliArgs([])).toThrow(/用法/);
     expect(() => parseCliArgs(["clip"])).toThrow(/缺少视频路径/);

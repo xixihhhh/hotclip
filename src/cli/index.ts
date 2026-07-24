@@ -15,6 +15,8 @@ import { transcribeCached, detectForPipeline, autoClip, analyzeReferenceVideo } 
 import type { ReferenceProfile } from "../core/reference";
 import { loadGlossary } from "../core/glossary-store";
 import { userDataDir, modelsRoot, cacheDir, llmFromEnv } from "../core/appenv";
+import { runDoctor } from "../core/doctor";
+import { ensureModel } from "../core/models";
 
 const USAGE = `HotClip CLI —— 本地 AI 切片,素材不出电脑
 
@@ -32,6 +34,10 @@ const USAGE = `HotClip CLI —— 本地 AI 切片,素材不出电脑
       + 出片质检(黑屏/长静音/响度/时长/切点/平台违禁词复核),报告进 clips.json
       + 可自愈告警自动修复(首尾静音黑屏裁边/响度重归一,修复记录进 qa.repair)
 
+  pnpm cli doctor [--download]
+      环境自检:ffmpeg/模型安装状态/LLM 端点/磁盘/缓存,给出修复建议
+      --download: 把默认管线要用的模型现在预下载好(断点续传,断网重跑接着下)
+
 环境变量(highlights / clip 需要):
   HOTCLIP_LLM_BASE_URL   OpenAI 兼容端点(本地 Ollama: http://localhost:11434/v1)
   HOTCLIP_LLM_MODEL      模型名(如 qwen3:8b)
@@ -48,6 +54,8 @@ export interface CliArgs {
   /** 对标爆款视频路径(参考画像驱动选段)。 */
   referencePath?: string;
   json: boolean;
+  /** doctor 专用:把缺失的默认管线模型现在预下载好。 */
+  download: boolean;
 }
 
 export function parseCliArgs(argv: string[]): CliArgs {
@@ -55,12 +63,13 @@ export function parseCliArgs(argv: string[]): CliArgs {
   if (!command || command === "-h" || command === "--help") {
     throw new Error(USAGE);
   }
-  const args: CliArgs = { command, videoPath: "", vertical: true, captions: true, json: false };
+  const args: CliArgs = { command, videoPath: "", vertical: true, captions: true, json: false, download: false };
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
     if (a === "--no-vertical") args.vertical = false;
     else if (a === "--no-captions") args.captions = false;
     else if (a === "--json") args.json = true;
+    else if (a === "--download") args.download = true;
     else if (a === "--max-clips") {
       const v = Number(rest[++i]);
       if (!Number.isFinite(v)) throw new Error("--max-clips 需要一个数字");
@@ -79,7 +88,8 @@ export function parseCliArgs(argv: string[]): CliArgs {
       args.videoPath = a;
     }
   }
-  if (!args.videoPath) throw new Error(`缺少视频路径\n\n${USAGE}`);
+  // doctor 不吃视频路径,其余命令必须有
+  if (!args.videoPath && args.command !== "doctor") throw new Error(`缺少视频路径\n\n${USAGE}`);
   return args;
 }
 
@@ -90,6 +100,38 @@ function fmtClock(sec: number): string {
 
 async function main(): Promise<void> {
   const args = parseCliArgs(process.argv.slice(2));
+
+  if (args.command === "doctor") {
+    // LLM 未配置不是错误(transcribe 用不到),按"未配置"呈现
+    let llm = null;
+    try {
+      llm = llmFromEnv();
+    } catch {
+      // 保持 null
+    }
+    const report = await runDoctor({ modelsRoot: modelsRoot(), cacheDir: cacheDir(), llm });
+    const icon = { ok: "✅", warn: "⚠️", fail: "❌" } as const;
+    for (const c of report.checks) {
+      process.stdout.write(`${icon[c.status]} ${c.name}:${c.detail}\n`);
+      if (c.fix) process.stdout.write(`   ↳ ${c.fix}\n`);
+    }
+    if (args.download && report.missingCoreModels.length > 0) {
+      const mb = (n: number): number => Math.round(n / (1024 * 1024));
+      for (const asset of report.missingCoreModels) {
+        await ensureModel(modelsRoot(), asset, (p) => {
+          const pct = Math.min(100, Math.round((p.downloadedBytes / p.totalBytes) * 100));
+          process.stderr.write(`\r下载 ${asset.id}:${pct}%(${mb(p.downloadedBytes)}/${mb(p.totalBytes)}MB)   `);
+        });
+        process.stderr.write(`\r✅ ${asset.id} 已就绪${" ".repeat(24)}\n`);
+      }
+      process.stdout.write("默认管线模型全部就绪。\n");
+    } else if (report.missingCoreModels.length > 0) {
+      process.stdout.write(`有 ${report.missingCoreModels.length} 个默认管线模型未安装,可加 --download 现在下好。\n`);
+    }
+    if (report.checks.some((c) => c.status === "fail")) process.exitCode = 1;
+    return;
+  }
+
   const glossary = await loadGlossary(userDataDir());
 
   // 参考画像:用户显式给的输入,分析失败要说清并按无参考继续(不静默丢)

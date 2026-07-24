@@ -6,13 +6,10 @@
  * Models live OUTSIDE the app bundle (user data dir) so app updates never
  * re-download them and the installer stays small.
  */
-import { createWriteStream } from "fs";
-import { mkdir, rename, rm, stat } from "fs/promises";
+import { mkdir, open, rename, rm, stat } from "fs/promises";
 import { join, dirname } from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { Readable } from "stream";
-import { pipeline } from "stream/promises";
 
 const execFileAsync = promisify(execFile);
 
@@ -52,7 +49,8 @@ export const SENSEVOICE_MODEL: ModelAsset = {
     "https://gh-proxy.com/",
   ],
   extractedDir: "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17",
-  approxBytes: 170 * 1024 * 1024,
+  // 实测归档体积(2026-07 本机下载验证):999MB,远大于模型本体——进度条按这个才准。
+  approxBytes: 1_047_870_769,
 };
 
 /**
@@ -190,10 +188,97 @@ export async function isModelInstalled(modelsRoot: string, asset: ModelAsset): P
   }
 }
 
+/** 每个 URL 的续传重试次数——大文件断流靠 Range 接着下,而不是从零重来。 */
+const RESUME_ATTEMPTS_PER_URL = 3;
+/** 重试间隔:给瞬断的网络一口喘息,又不至于让用户干等。 */
+const RETRY_DELAY_MS = 1500;
+
+/** 解析 Content-Range "bytes 起-止/总长",失败返回 null。 */
+export function parseContentRange(header: string | null): { start: number; total: number } | null {
+  const m = /bytes\s+(\d+)-\d+\/(\d+)/.exec(header ?? "");
+  if (!m) return null;
+  return { start: Number(m[1]), total: Number(m[2]) };
+}
+
+/**
+ * 单 URL 断点续传下载:失败保留已下字节,下一轮带 Range 接着下。fetch 对
+ * GitHub 大文件(SenseVoice 归档 1GB)中途断流是常态,没有续传就是全 mirror
+ * 轮番失败(2026-07 本机实测)。206 响应校验起点,镜像谎报即归零重来,
+ * 保证部分文件永远不被污染;归档最终还有 tar 解压/体积守卫兜底。
+ */
+async function downloadResumable(
+  url: string,
+  archivePath: string,
+  asset: ModelAsset,
+  onProgress?: (p: DownloadProgress) => void,
+  signal?: AbortSignal
+): Promise<void> {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < RESUME_ATTEMPTS_PER_URL; attempt++) {
+    if (signal?.aborted) throw lastError ?? new Error("aborted");
+    if (attempt > 0) await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+    try {
+      let existing = 0;
+      try {
+        existing = (await stat(archivePath)).size;
+      } catch {
+        // 没有部分文件:从零开始
+      }
+      const headers: Record<string, string> = existing > 0 ? { Range: `bytes=${existing}-` } : {};
+      const res = await fetch(url, { signal, redirect: "follow", headers });
+      // 416:已有字节 ≥ 服务端文件长度,视为下载完成,交给上层校验定生死
+      if (res.status === 416) return;
+      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+
+      let offset = existing;
+      let exactTotal: number | null = null;
+      if (res.status === 206) {
+        const range = parseContentRange(res.headers.get("content-range"));
+        if (!range || range.start !== existing) {
+          // 镜像谎报续传起点:部分文件不可信,归零重来
+          await rm(archivePath, { force: true });
+          throw new Error("bad content-range on resume");
+        }
+        exactTotal = range.total;
+      } else {
+        // 服务端不支持 Range(返回 200 全量):覆盖写,从头计数
+        offset = 0;
+      }
+      const remaining = Number(res.headers.get("content-length") ?? NaN);
+      const totalBytes = exactTotal ?? (Number.isFinite(remaining) ? offset + remaining : asset.approxBytes);
+
+      // 逐块显式写盘(而非 pipeline+WriteStream):断流时已收到的字节一个不丢,
+      // 续传起点才与磁盘现状严格一致。
+      let downloadedBytes = offset;
+      const fh = await open(archivePath, offset > 0 ? "a" : "w");
+      try {
+        const reader = res.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          await fh.write(value);
+          downloadedBytes += value.byteLength;
+          onProgress?.({ downloadedBytes, totalBytes });
+        }
+      } finally {
+        await fh.close();
+      }
+      return;
+    } catch (e) {
+      lastError = e;
+      if (signal?.aborted) throw e;
+      // 部分文件保留:下一轮(或下一个镜像,同一份 release 资产)续传
+    }
+  }
+  throw lastError;
+}
+
 /**
  * Download + extract a model archive. Tries each candidate URL until one
  * succeeds; writes to a temp file, extracts with system tar (bsdtar ships
  * with Windows 10+, macOS and virtually every Linux), renames atomically.
+ * 断流的部分文件跨镜像保留续传(所有候选 URL 指向同一份资产);用户中途
+ * 取消也保留,下次启动接着下。
  */
 export async function ensureModel(
   modelsRoot: string,
@@ -210,26 +295,14 @@ export async function ensureModel(
 
   for (const url of candidateUrls(asset)) {
     try {
-      const res = await fetch(url, { signal, redirect: "follow" });
-      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
-      const totalBytes = Number(res.headers.get("content-length") ?? asset.approxBytes);
-      let downloadedBytes = 0;
+      await downloadResumable(url, archivePath, asset, onProgress, signal);
+    } catch (e) {
+      lastError = e;
+      if (signal?.aborted) throw e;
+      continue; // 网络失败:部分文件留给下一个镜像续传
+    }
 
-      const counter = new TransformStream<Uint8Array, Uint8Array>({
-        transform(chunk, controller) {
-          downloadedBytes += chunk.byteLength;
-          onProgress?.({ downloadedBytes, totalBytes });
-          controller.enqueue(chunk);
-        },
-      });
-
-      await rm(archivePath, { force: true });
-      await pipeline(
-        Readable.fromWeb(res.body.pipeThrough(counter) as import("stream/web").ReadableStream),
-        createWriteStream(archivePath),
-        { signal }
-      );
-
+    try {
       if (asset.singleFile) {
         // guard against Git-LFS pointer files masquerading as the model
         const dl = await stat(archivePath);
@@ -250,9 +323,9 @@ export async function ensureModel(
       return target;
     } catch (e) {
       lastError = e;
+      // 下载完但校验/解压失败:文件已损坏,归零后换下一个镜像重来
       await rm(archivePath, { force: true });
       if (signal?.aborted) throw e;
-      // fall through to the next mirror
     }
   }
 
