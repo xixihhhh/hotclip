@@ -47,7 +47,7 @@ import { useRenderPrefs } from "../stores/render-prefs-store";
 import { adjustClipBoundary } from "../../../shared/boundary";
 import { ClipReviewModal } from "./ClipReviewModal";
 import { BrandStyleModal } from "./BrandStyleModal";
-import type { Transcript, HighlightCandidate, RenderToggles, CaptionStyleChoice, FunnelStats, VisionStats, EmotionStats, DanmakuStats, ClipLength, ReferenceInfo } from "../../../shared/api-types";
+import type { Transcript, HighlightCandidate, RenderToggles, CaptionStyleChoice, FunnelStats, VisionStats, EmotionStats, DanmakuStats, ClipLength, ReferenceInfo, ReviewedCandidate } from "../../../shared/api-types";
 
 /** Click-to-cycle order for the caption style chip. */
 const CAPTION_CYCLE: CaptionStyleChoice[] = ["karaoke", "keyword", "pop", "hormozi", "bubble", "none"];
@@ -955,9 +955,15 @@ export function HighlightsView({
               <button
                 type="button"
                 disabled={selected.size === 0}
-                onClick={() =>
-                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, cleanFillers, trimUi, titleCard, openingHook, coldOpen, alsoLandscape, normalizeLoudness, denoise, compilation, brand: activeBrandStyle(brandState), translate: translate ? { targetLang, llm: config } : undefined, publishCopy: publishCopy ? { llm: config } : undefined, subtitleFile, timeline, aigcLabel })
-                }
+                onClick={() => {
+                  // 审阅反馈回流:本场的采用/否决落本地偏好档(尽力而为,失败不挡导出)
+                  const summarize = (list: HighlightCandidate[]): ReviewedCandidate[] =>
+                    list.map((c) => ({ title: c.title, hook: c.hook, score: c.score, durationSec: Math.round(c.endSec - c.startSec), keywords: c.keywords.slice(0, 5) }));
+                  void getApi()
+                    .recordReview(filePath ?? "", summarize(candidates.filter((c) => selected.has(c.id))), summarize(candidates.filter((c) => !selected.has(c.id))))
+                    .catch(() => {});
+                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, cleanFillers, trimUi, titleCard, openingHook, coldOpen, alsoLandscape, normalizeLoudness, denoise, compilation, brand: activeBrandStyle(brandState), translate: translate ? { targetLang, llm: config } : undefined, publishCopy: publishCopy ? { llm: config } : undefined, subtitleFile, timeline, aigcLabel });
+                }}
                 className="btn-flame inline-flex items-center gap-1.5 rounded-lg px-6 py-2.5 text-[14px] font-bold text-white disabled:opacity-40"
               >
                 <LuScissors className="h-4 w-4" />

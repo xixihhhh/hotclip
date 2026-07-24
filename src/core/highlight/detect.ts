@@ -5,6 +5,7 @@
 import type { Transcript } from "../transcribe/types";
 import type { MediaSignals } from "../signals";
 import type { ReferenceProfile } from "../reference";
+import type { ReviewRecord } from "../review-memory";
 import type { HighlightCandidate, LlmConfig, PrefilterConfig, FunnelStats, ClipLength } from "../../shared/api-types";
 import {
   highlightSystemPrompt,
@@ -257,7 +258,8 @@ export async function detectHighlights(
   prefilter?: PrefilterConfig | null,
   length?: ClipLength,
   products?: string[],
-  reference?: ReferenceProfile
+  reference?: ReferenceProfile,
+  reviewMemory?: ReviewRecord[]
 ): Promise<DetectOutcome> {
   if (transcript.segments.length === 0) return { candidates: [] };
 
@@ -280,7 +282,7 @@ export async function detectHighlights(
 
   const content = await chatComplete(
     llm,
-    highlightSystemPrompt(promptTranscript, length, products ?? [], reference),
+    highlightSystemPrompt(promptTranscript, length, products ?? [], reference, reviewMemory),
     buildHighlightPrompt(promptTranscript, 6, signals),
     signal
   );

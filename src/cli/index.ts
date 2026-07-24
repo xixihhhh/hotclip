@@ -17,6 +17,7 @@ import { loadGlossary } from "../core/glossary-store";
 import { userDataDir, modelsRoot, cacheDir, llmFromEnv } from "../core/appenv";
 import { runDoctor } from "../core/doctor";
 import { ensureModel } from "../core/models";
+import { loadReviewMemory } from "../core/review-memory";
 
 const USAGE = `HotClip CLI —— 本地 AI 切片,素材不出电脑
 
@@ -174,6 +175,8 @@ async function main(): Promise<void> {
       llm,
       maxClips: args.maxClips,
       reference,
+      // 桌面审阅台积累的本机偏好,CLI 检测同享(只读)
+      reviewMemory: await loadReviewMemory(userDataDir()),
     });
     if (candidates.length === 0) {
       process.stderr.write("没有找到值得切的爆点候选。\n");
@@ -215,6 +218,7 @@ async function main(): Promise<void> {
       captions: args.captions,
       outDir: args.outDir,
       reference,
+      reviewMemory: await loadReviewMemory(userDataDir()),
       fontsDir: join(__dirname, "..", "..", "resources", "fonts"),
       glossary,
       onStage: (stage) => {

@@ -184,6 +184,8 @@ const browserMock: HotClipApi = {
   async contactSheet() {
     return "";
   },
+  // 浏览器预览没有本地偏好档——记录静默丢弃
+  async recordReview() {},
   async getAudioPeaks(_filePath, startSec, endSec) {
     await sleep(250);
     const hopSec = 1 / 30;

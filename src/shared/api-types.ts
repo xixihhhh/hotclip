@@ -159,6 +159,16 @@ export interface HighlightCandidate {
   manualBounds?: boolean;
 }
 
+/** 审阅反馈回流:一条被审阅候选的最小特征(本地偏好档;够 LLM 认出"同类"即可)。 */
+export interface ReviewedCandidate {
+  title: string;
+  hook: string;
+  score: number;
+  /** 片长(秒,取整)——时长偏好也是偏好。 */
+  durationSec: number;
+  keywords?: string[];
+}
+
 /** Burned-in caption style choices (none = no captions; bubble = web-rendered). */
 export type CaptionStyleChoice = "none" | "karaoke" | "keyword" | "pop" | "hormozi" | "bubble";
 
@@ -351,6 +361,8 @@ export interface HotClipApi {
   getAudioPeaks: (filePath: string, startSec: number, endSec: number) => Promise<AudioPeaks>;
   /** 候选片段的 3×3 接触表(画面速览):返回 data URL;失败/不支持返回空串。 */
   contactSheet: (filePath: string, startSec: number, endSec: number) => Promise<string>;
+  /** 审阅反馈回流:导出时记录本场采用/否决的候选(本地偏好档,下次检测注入)。 */
+  recordReview: (video: string, kept: ReviewedCandidate[], rejected: ReviewedCandidate[]) => Promise<void>;
   /** 选择一个文件夹(录播监听用);取消返回 null。 */
   selectDir: () => Promise<string | null>;
   /** 开始监听文件夹:新录播写完落稳后自动全托管切片。 */

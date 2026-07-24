@@ -15,6 +15,7 @@ import { transcribeCached, detectForPipeline, autoClip, analyzeReferenceVideo } 
 import type { ReferenceProfile } from "../core/reference";
 import { loadGlossary } from "../core/glossary-store";
 import { userDataDir, modelsRoot, cacheDir, llmFromEnv } from "../core/appenv";
+import { loadReviewMemory } from "../core/review-memory";
 import { handleMcpMessage, type JsonRpcMessage } from "./protocol";
 
 function fmtClock(sec: number): string {
@@ -70,6 +71,8 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
       llm,
       maxClips: clampClips(args.maxClips),
       reference: ref.profile,
+      // 桌面审阅台积累的本机偏好,MCP 检测同享(只读)
+      reviewMemory: await loadReviewMemory(userDataDir()),
     });
     if (candidates.length === 0) return `${ref.note}没有找到值得切的爆点候选。`;
     return ref.note + JSON.stringify(
@@ -105,6 +108,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
       fontsDir: join(process.cwd(), "resources", "fonts"),
       glossary: await loadGlossary(userDataDir()),
       reference: ref.profile,
+      reviewMemory: await loadReviewMemory(userDataDir()),
     });
     if (outcome.exported.length === 0) {
       return `${ref.note}AI 复评后没有建议发布的切片(候选都被判定为弱钩子)。可用 detect_highlights 查看全部候选与复评意见。`;

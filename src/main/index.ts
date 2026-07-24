@@ -31,6 +31,7 @@ import { FolderWatcher, isVideoFile, isSeen, type SeenMap, type WatchedFile } fr
 import { collectDanmakuSignal } from "@core/danmaku";
 import { checkForUpdate } from "@core/update-check";
 import { loadGlossary, saveGlossary } from "@core/glossary-store";
+import { loadReviewMemory, recordReview, type ReviewedCandidate } from "@core/review-memory";
 import { applyGlossaryToTranscript } from "../shared/glossary";
 import { autoClip, analyzeReferenceVideo } from "@core/pipeline";
 import type { ReferenceProfile } from "@core/reference";
@@ -197,6 +198,37 @@ ipcMain.handle("hotclip:contact-sheet", async (_event, filePath: unknown, startS
     : join(app.getAppPath(), "resources", "fonts", "SourceHanSansSC-Bold.otf");
   const b64 = await composeContactSheetJpeg(filePath, times, { fontFile }).catch(() => null);
   return b64 ? `data:image/jpeg;base64,${b64}` : "";
+});
+
+// ---- IPC: 审阅反馈回流(导出时记录采用/否决,下次检测注入偏好) ----
+
+ipcMain.handle("hotclip:review-record", async (_event, video: unknown, kept: unknown, rejected: unknown) => {
+  // 白名单清洗:渲染进程数据只取偏好档需要的字段并限长
+  const clean = (list: unknown): ReviewedCandidate[] =>
+    Array.isArray(list)
+      ? list
+          .filter((c): c is Record<string, unknown> => !!c && typeof c === "object")
+          .slice(0, 24)
+          .map((c) => ({
+            title: String(c.title ?? "").slice(0, 80),
+            hook: String(c.hook ?? "").slice(0, 120),
+            score: Number.isFinite(Number(c.score)) ? Number(c.score) : 0,
+            durationSec: Math.max(0, Math.round(Number(c.durationSec) || 0)),
+            keywords: Array.isArray(c.keywords)
+              ? c.keywords.filter((k): k is string => typeof k === "string" && k.trim().length > 0).slice(0, 5)
+              : undefined,
+          }))
+          .filter((c) => c.title)
+      : [];
+  const k = clean(kept);
+  const r = clean(rejected);
+  if (k.length === 0 && r.length === 0) return;
+  await recordReview(app.getPath("userData"), {
+    at: new Date().toISOString(),
+    video: typeof video === "string" ? basename(video) : "",
+    kept: k,
+    rejected: r,
+  });
 });
 
 // ---- IPC: transcription (wizard step 2) ----
@@ -402,7 +434,9 @@ ipcMain.handle(
     const productWords = Array.isArray(products)
       ? products.filter((p): p is string => typeof p === "string" && p.trim().length > 0).map((p) => p.trim().slice(0, 30)).slice(0, 20)
       : [];
-    const outcome = await detectHighlights(t, config, undefined, signals, localFilter, clipLength, productWords, reference);
+    // 审阅偏好回流:本机历史采用/否决样例进提示词(空记忆无感)
+    const reviewMemory = await loadReviewMemory(app.getPath("userData"));
+    const outcome = await detectHighlights(t, config, undefined, signals, localFilter, clipLength, productWords, reference, reviewMemory);
     return { candidates: outcome.candidates, transcript: labeled, funnel: outcome.funnel, vision: visionStats, emotion: emotionStats, danmaku: danmakuStats, reference: reference ?? null, referenceError };
   }
 );
@@ -584,6 +618,7 @@ ipcMain.handle("hotclip:watch-start", async (event, dir: unknown, llm: unknown) 
           llm: config,
           fontsDir,
           glossary: await loadGlossary(app.getPath("userData")),
+          reviewMemory: await loadReviewMemory(app.getPath("userData")),
           onStage: (stage) => emit({ type: stage, file, path: f.path }),
         });
         await markSeen();
