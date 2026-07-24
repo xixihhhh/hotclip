@@ -90,8 +90,13 @@ export class SherpaOfflineEngine implements TranscribeEngine {
     const spec = this.spec;
 
     onProgress?.({ fraction: 0, stage: "downloading-model" });
-    const download = (p: { downloadedBytes: number; totalBytes: number }): void =>
-      onProgress?.({ fraction: 0, stage: "downloading-model", ...p });
+    const download = (p: { downloadedBytes: number; totalBytes: number; phase?: "download" | "extract" }): void =>
+      onProgress?.({
+        fraction: 0,
+        stage: p.phase === "extract" ? "extracting-model" : "downloading-model",
+        downloadedBytes: p.downloadedBytes,
+        totalBytes: p.totalBytes,
+      });
     await ensureModel(this.modelsRoot, spec.asset, download, signal);
     if (spec.punctuate) await ensureModel(this.modelsRoot, PUNCT_MODEL, download, signal);
 

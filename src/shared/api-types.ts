@@ -59,7 +59,13 @@ export interface Transcript {
   durationSec: number;
 }
 
-export type TranscribeStage = "preparing" | "downloading-model" | "decoding" | "transcribing" | "finalizing";
+export type TranscribeStage =
+  | "preparing"
+  | "downloading-model"
+  | "extracting-model"
+  | "decoding"
+  | "transcribing"
+  | "finalizing";
 
 /** Catalog facts + runtime state for one transcription engine choice. */
 export interface AsrEngineInfo {

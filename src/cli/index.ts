@@ -121,7 +121,8 @@ async function main(): Promise<void> {
       for (const asset of report.missingCoreModels) {
         await ensureModel(modelsRoot(), asset, (p) => {
           const pct = Math.min(100, Math.round((p.downloadedBytes / p.totalBytes) * 100));
-          process.stderr.write(`\r下载 ${asset.id}:${pct}%(${mb(p.downloadedBytes)}/${mb(p.totalBytes)}MB)   `);
+          const verb = p.phase === "extract" ? "解压" : "下载";
+          process.stderr.write(`\r${verb} ${asset.id}:${pct}%(${mb(p.downloadedBytes)}/${mb(p.totalBytes)}MB)   `);
         });
         process.stderr.write(`\r✅ ${asset.id} 已就绪${" ".repeat(24)}\n`);
       }

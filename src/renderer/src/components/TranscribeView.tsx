@@ -40,6 +40,7 @@ function formatClock(totalSeconds: number): string {
 const STAGE_KEY: Record<TranscribeProgressEvent["stage"], string> = {
   preparing: "stagePreparing",
   "downloading-model": "stageDownloadingModel",
+  "extracting-model": "stageExtractingModel",
   decoding: "stageDecoding",
   transcribing: "stageTranscribing",
   finalizing: "stageFinalizing",
@@ -167,9 +168,12 @@ export function TranscribeView({
 
   const pct = Math.round(progress.fraction * 100);
   const isDownload = progress.stage === "downloading-model";
-  const downloadPct =
-    isDownload && progress.totalBytes ? Math.round(((progress.downloadedBytes ?? 0) / progress.totalBytes) * 100) : 0;
-  const barPct = isDownload ? downloadPct : pct;
+  // download + extract both report real bytes — the bar tracks them directly
+  const isByteStage = isDownload || progress.stage === "extracting-model";
+  const bytePct =
+    isByteStage && progress.totalBytes ? Math.round(((progress.downloadedBytes ?? 0) / progress.totalBytes) * 100) : 0;
+  const barPct = isByteStage ? bytePct : pct;
+  const totalMB = progress.totalBytes ? Math.round(progress.totalBytes / (1024 * 1024)) : 0;
 
   const usedEngine = transcript ? ENGINE_TEXT[catalogIdOf(transcript.engine)] : null;
 
@@ -273,7 +277,7 @@ export function TranscribeView({
 
           <div className="card mt-9 w-full rounded-2xl p-6">
             <div className="flex items-center gap-2 text-[14px] font-semibold">
-              {isDownload ? (
+              {isByteStage ? (
                 <LuDownload className="h-4 w-4 text-ember" />
               ) : (
                 <LuAudioLines className="h-4 w-4 text-ember" />
@@ -287,7 +291,12 @@ export function TranscribeView({
                 style={{ width: `${Math.max(2, barPct)}%` }}
               />
             </div>
-            {isDownload && <p className="mt-3 text-xs text-mut">{t("downloadHint")}</p>}
+            {isDownload && (
+              <p className="mt-3 text-xs text-mut">
+                {totalMB > 0 ? t("downloadHint", { mb: totalMB }) : t("downloadHintGeneric")}
+              </p>
+            )}
+            {progress.stage === "extracting-model" && <p className="mt-3 text-xs text-mut">{t("extractHint")}</p>}
           </div>
         </>
       )}

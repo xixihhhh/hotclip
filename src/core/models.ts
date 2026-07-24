@@ -7,9 +7,13 @@
  * re-download them and the installer stays small.
  */
 import { mkdir, open, rename, rm, stat } from "fs/promises";
+import { createReadStream } from "fs";
+import { pipeline } from "stream/promises";
 import { join, dirname } from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { x as tarExtract } from "tar";
+import unbzip2 from "unbzip2-stream";
 
 const execFileAsync = promisify(execFile);
 
@@ -162,6 +166,12 @@ export const TRANSNETV2_MODEL: ModelAsset = {
 export interface DownloadProgress {
   downloadedBytes: number;
   totalBytes: number;
+  /**
+   * "download" while bytes stream from the network; "extract" while the
+   * archive unpacks locally. The in-process bz2 fallback can take minutes on
+   * a 1GB archive, so the UI must show it as its own stage, not a stuck 100%.
+   */
+  phase?: "download" | "extract";
 }
 
 /** Candidate URLs in retry order: mirrors first (domestic-first), then origin. */
@@ -258,7 +268,7 @@ async function downloadResumable(
           if (done) break;
           await fh.write(value);
           downloadedBytes += value.byteLength;
-          onProgress?.({ downloadedBytes, totalBytes });
+          onProgress?.({ downloadedBytes, totalBytes, phase: "download" });
         }
       } finally {
         await fh.close();
@@ -274,9 +284,50 @@ async function downloadResumable(
 }
 
 /**
+ * Extract a .tar.bz2 archive into destDir. System tar first (fast native
+ * path on macOS/Linux); pure-JS fallback when it fails — Windows 10/11 ships
+ * bsdtar compiled with gzip ONLY, so `tar -xjf` needs an external bzip2
+ * program that doesn't exist → deterministic failure on every Windows box
+ * (issue #17: 1GB download reached 100%, "corrupt" archive deleted, next
+ * mirror re-downloaded from zero, forever). Only when BOTH extractors fail
+ * is the archive actually corrupt.
+ *
+ * `systemTar` is injectable for tests (force the fallback path); pass null
+ * to skip system tar entirely.
+ */
+export async function extractTarBz2(
+  archivePath: string,
+  destDir: string,
+  onProgress?: (p: DownloadProgress) => void,
+  systemTar: string | null = "tar"
+): Promise<void> {
+  const totalBytes = (await stat(archivePath)).size;
+  onProgress?.({ downloadedBytes: 0, totalBytes, phase: "extract" });
+  if (systemTar) {
+    try {
+      await execFileAsync(systemTar, ["-xjf", archivePath, "-C", destDir], { maxBuffer: 8 * 1024 * 1024 });
+      onProgress?.({ downloadedBytes: totalBytes, totalBytes, phase: "extract" });
+      return;
+    } catch {
+      // fall through to the in-process extractor
+    }
+  }
+  // In-process bz2 → tar. Progress = compressed bytes consumed, so the bar
+  // moves honestly through a minutes-long 1GB decompress.
+  let read = 0;
+  const source = createReadStream(archivePath);
+  source.on("data", (chunk) => {
+    read += chunk.length;
+    onProgress?.({ downloadedBytes: read, totalBytes, phase: "extract" });
+  });
+  await pipeline(source, unbzip2(), tarExtract({ cwd: destDir }));
+}
+
+/**
  * Download + extract a model archive. Tries each candidate URL until one
- * succeeds; writes to a temp file, extracts with system tar (bsdtar ships
- * with Windows 10+, macOS and virtually every Linux), renames atomically.
+ * succeeds; writes to a temp file, extracts with system tar (in-process
+ * bz2+tar fallback where system tar can't do bzip2 — notably Windows),
+ * renames atomically.
  * 断流的部分文件跨镜像保留续传(所有候选 URL 指向同一份资产);用户中途
  * 取消也保留,下次启动接着下。
  */
@@ -313,8 +364,22 @@ export async function ensureModel(
         await mkdir(target, { recursive: true });
         await rename(archivePath, join(target, asset.singleFile));
       } else {
-        // extract next to the archive, then verify the expected folder appeared
-        await execFileAsync("tar", ["-xjf", archivePath, "-C", modelsRoot], { maxBuffer: 8 * 1024 * 1024 });
+        // 解压进 staging 目录再原子 rename:进程被杀/解压失败都不会留下
+        // 会被 isModelInstalled 误判为「已安装」的残缺模型目录。
+        const staging = join(modelsRoot, `${asset.id}.extracting`);
+        await rm(staging, { recursive: true, force: true });
+        await mkdir(staging, { recursive: true });
+        try {
+          await extractTarBz2(archivePath, staging, onProgress);
+          const produced = join(staging, asset.extractedDir);
+          if (!(await stat(produced).catch(() => null))?.isDirectory()) {
+            throw new Error(`archive did not contain expected dir ${asset.extractedDir}`);
+          }
+          await rm(target, { recursive: true, force: true });
+          await rename(produced, target);
+        } finally {
+          await rm(staging, { recursive: true, force: true });
+        }
         await rm(archivePath, { force: true });
       }
       if (!(await isModelInstalled(modelsRoot, asset))) {
@@ -323,7 +388,7 @@ export async function ensureModel(
       return target;
     } catch (e) {
       lastError = e;
-      // 下载完但校验/解压失败:文件已损坏,归零后换下一个镜像重来
+      // 下载完但两路解压都失败:文件真损坏,归零后换下一个镜像重来
       await rm(archivePath, { force: true });
       if (signal?.aborted) throw e;
     }
