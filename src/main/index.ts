@@ -30,6 +30,7 @@ import { generatePublishCopies } from "@core/publish";
 import { FolderWatcher, isVideoFile, isSeen, type SeenMap, type WatchedFile } from "@core/watch";
 import { collectDanmakuSignal } from "@core/danmaku";
 import { checkForUpdate } from "@core/update-check";
+import { clipOutDir } from "@core/appenv";
 import { loadGlossary, saveGlossary } from "@core/glossary-store";
 import { loadReviewMemory, recordReview, type ReviewedCandidate } from "@core/review-memory";
 import { applyGlossaryToTranscript } from "../shared/glossary";
@@ -143,6 +144,9 @@ ipcMain.handle("hotclip:select-media", async () => {
   if (result.canceled || result.filePaths.length === 0) return null;
   return result.filePaths[0];
 });
+
+// 出厂导出根目录:~/影片/HotClip——新手在文件管理器里找得到(issue #3)
+ipcMain.handle("hotclip:default-out-dir", async () => join(app.getPath("videos"), "HotClip"));
 
 // 录播监听的目录选择
 ipcMain.handle("hotclip:select-dir", async () => {
@@ -461,7 +465,7 @@ async function diarizeTranscript(t: Transcript, filePath: string): Promise<Trans
 }
 
 // ---- IPC: export selected clips (wizard step 3) ----
-// Output goes to ~/Movies/HotClip/<source-name>/ — a place beginners can find.
+// Output goes to <导出根目录>/<source-name>/ — 出厂是 ~/Movies/HotClip,界面可改。
 
 // 导出取消:单并发导出,一个活动控制器;cancel 会 kill 正在跑的 ffmpeg
 let exportAbort: AbortController | null = null;
@@ -478,7 +482,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
   const cleanFillers = Boolean(opts.cleanFillers && opts.transcript);
   const needWords = Boolean(style) || jumpCut || cleanFillers;
   const sourceName = sanitizeFilename(basename(filePath, extname(filePath)), "video");
-  const outDir = join(app.getPath("videos"), "HotClip", sourceName);
+  const outDir = clipOutDir(opts.outDir, app.getPath("videos"), sourceName);
   // bundled caption font: packaged → resources/fonts, dev → repo resources/fonts
   const fontsDir = app.isPackaged
     ? join(process.resourcesPath, "fonts")
@@ -586,7 +590,7 @@ async function loadWatchSeen(): Promise<SeenMap> {
   }
 }
 
-ipcMain.handle("hotclip:watch-start", async (event, dir: unknown, llm: unknown) => {
+ipcMain.handle("hotclip:watch-start", async (event, dir: unknown, llm: unknown, outDir: unknown) => {
   if (typeof dir !== "string" || !dir.trim()) throw new Error("watch requires a directory");
   const config = llm as LlmConfig;
   if (!config?.baseUrl || !config?.model) throw new Error("请先在设置里配置 LLM(baseUrl/model)");
@@ -623,6 +627,11 @@ ipcMain.handle("hotclip:watch-start", async (event, dir: unknown, llm: unknown) 
       };
       try {
         const outcome = await autoClip(f.path, {
+          // 用户自选过导出位置就照办;没选过保持老行为(成片落录播文件旁边)
+          outDir:
+            typeof outDir === "string" && outDir.trim()
+              ? join(outDir.trim(), sanitizeFilename(basename(f.path, extname(f.path)), "video"))
+              : undefined,
           modelsRoot: modelsRoot(),
           cacheDir: transcriptCacheDir(),
           llm: config,

@@ -34,7 +34,8 @@ const api: HotClipApi = {
     ipcRenderer.invoke("hotclip:contact-sheet", filePath, startSec, endSec),
   recordReview: (video, kept, rejected) => ipcRenderer.invoke("hotclip:review-record", video, kept, rejected),
   selectDir: () => ipcRenderer.invoke("hotclip:select-dir"),
-  watchStart: (dir, llm) => ipcRenderer.invoke("hotclip:watch-start", dir, llm),
+  defaultOutDir: () => ipcRenderer.invoke("hotclip:default-out-dir"),
+  watchStart: (dir, llm, outDir) => ipcRenderer.invoke("hotclip:watch-start", dir, llm, outDir),
   watchStop: () => ipcRenderer.invoke("hotclip:watch-stop"),
   watchStatus: () => ipcRenderer.invoke("hotclip:watch-status"),
   onWatchEvent: (cb) => {

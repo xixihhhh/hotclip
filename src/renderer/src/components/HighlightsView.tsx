@@ -38,6 +38,7 @@ import {
   LuFilm,
   LuBadgeCheck,
   LuTarget,
+  LuFolderOpen,
 } from "react-icons/lu";
 import { useT } from "../i18n/store";
 import { getApi, isElectron } from "../api/provider";
@@ -74,6 +75,42 @@ const BOUNDARY_KEY: Record<HighlightCandidate["boundary"], string> = {
   anchored: "boundaryAnchored",
   segment: "boundarySegment",
 };
+
+/**
+ * 出片选项 chip:十几个开关同构,样式只在这里出一份。
+ * shrink-0 + whitespace-nowrap 不是装饰——少了它们,一行摆不下时 flex 会把
+ * chip 压得比文字还窄,中文逐字竖排、整条工具条撑破卡片(issue #3)。
+ */
+function OptChip({
+  on,
+  disabled,
+  title,
+  label,
+  Icon,
+  onClick,
+}: {
+  on: boolean;
+  disabled?: boolean;
+  title: string;
+  label: string;
+  Icon: typeof LuZap;
+  onClick: () => void;
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      title={title}
+      disabled={disabled}
+      onClick={onClick}
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold whitespace-nowrap transition-colors disabled:opacity-40 ${
+        on ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
+      }`}
+    >
+      <Icon className={`h-3.5 w-3.5 ${on ? "text-ember" : ""}`} />
+      {label}
+    </button>
+  );
+}
 
 export function HighlightsView({
   transcript,
@@ -116,7 +153,16 @@ export function HighlightsView({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   // 出片偏好持久化:上次的开关组合下次直接生效(解构保持下方 JSX 引用不变)
   const { prefs, setPref } = useRenderPrefs();
-  const { vertical, captionStyle, jumpCut, cleanFillers, trimUi, titleCard, openingHook, coldOpen, alsoLandscape, normalizeLoudness, denoise, compilation, translate, publishCopy, subtitleFile, timeline, aigcLabel } = prefs;
+  const { vertical, captionStyle, jumpCut, cleanFillers, trimUi, titleCard, openingHook, coldOpen, alsoLandscape, normalizeLoudness, denoise, compilation, translate, publishCopy, subtitleFile, timeline, aigcLabel, outDir } = prefs;
+  /** 出厂导出根目录(主进程才知道 ~/影片 在哪);用户没自选时显示它。 */
+  const [defaultOutDir, setDefaultOutDir] = useState("");
+  useEffect(() => {
+    void getApi().defaultOutDir().then(setDefaultOutDir).catch(() => {});
+  }, []);
+  const pickOutDir = useCallback(async (): Promise<void> => {
+    const dir = await getApi().selectDir();
+    if (dir) setPref({ outDir: dir });
+  }, [setPref]);
   const [diarize, setDiarize] = useState(false);
   // 中文源译英,其余译中——短视频出海/引进的两个主方向
   const targetLang = (transcript.language || "").startsWith("zh") ? "en" : "zh";
@@ -459,8 +505,9 @@ export function HighlightsView({
       {/* ---- results ---- */}
       {candidates && !detecting && (
         <section className="w-full">
-          <div className="flex items-end justify-between">
-            <div>
+          {/* 标题区与工具条同理:窄窗口下换行,不许互相挤压(issue #3) */}
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="min-w-0">
               <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-tight">
                 <LuFlame className="h-6 w-6 text-ember" />
                 {t("title")}
@@ -514,12 +561,12 @@ export function HighlightsView({
                 <p className="mt-1 text-[11.5px] text-amber-400/90">{t("refFailed", { msg: referenceError })}</p>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 title={referencePath ? t("refHintOn", { name: referencePath.split(/[\\/]/).pop() ?? "" }) : t("refHint")}
                 onClick={() => void toggleReference()}
-                className={`inline-flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-colors ${
                   referencePath ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut hover:text-fg"
                 }`}
               >
@@ -530,7 +577,7 @@ export function HighlightsView({
                 type="button"
                 title={t("lengthHint")}
                 onClick={cycleLength}
-                className={`inline-flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-colors ${
                   clipLength !== "standard" ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut hover:text-fg"
                 }`}
               >
@@ -545,7 +592,7 @@ export function HighlightsView({
                   if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                 }}
                 onBlur={(e) => commitProducts(e.target.value)}
-                className={`w-44 rounded-lg border px-3 py-2 text-xs outline-none transition-colors focus:border-ember/60 ${
+                className={`w-44 shrink-0 rounded-lg border px-3 py-2 text-xs outline-none transition-colors focus:border-ember/60 ${
                   products.length > 0 ? "border-ember/60 bg-ember/10 text-fg" : "border-line bg-panel-2 text-mut"
                 }`}
               />
@@ -553,7 +600,7 @@ export function HighlightsView({
                 type="button"
                 title={t("optDiarizeHint")}
                 onClick={toggleDiarize}
-                className={`inline-flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-colors ${
                   diarize ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut hover:text-fg"
                 }`}
               >
@@ -563,7 +610,7 @@ export function HighlightsView({
               <button
                 type="button"
                 onClick={onBack}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3.5 py-2 text-xs text-mut transition-colors hover:border-mut hover:text-fg"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-3.5 py-2 text-xs whitespace-nowrap text-mut transition-colors hover:border-mut hover:text-fg"
               >
                 <LuArrowLeft className="h-3.5 w-3.5" />
                 {t("retry")}
@@ -747,211 +794,79 @@ export function HighlightsView({
           </div>
 
           {onExport && candidates.length > 0 && (
-            <div className="card sticky bottom-4 mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl px-5 py-3.5 shadow-2xl backdrop-blur-xl">
-              <span className="text-[13px] font-semibold text-mut">{t("selectedCount", { n: selected.size })}</span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  title={t("optBrandHint")}
-                  onClick={() => setShowBrand(true)}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-                    activeBrandStyle(brandState) ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
-                  }`}
-                >
-                  <LuPalette className={`h-3.5 w-3.5 ${activeBrandStyle(brandState) ? "text-ember" : ""}`} />
-                  {t("optBrand")}
-                </button>
-                <button
-                  type="button"
-                  title={t("optVerticalHint")}
-                  onClick={() => setPref({ vertical: !vertical })}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-                    vertical ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
-                  }`}
-                >
-                  <LuSmartphone className={`h-3.5 w-3.5 ${vertical ? "text-ember" : ""}`} />
-                  {t("optVertical")}
-                </button>
-                <button
-                  type="button"
-                  disabled={!vertical}
-                  title={t("optAlsoLandscapeHint")}
-                  onClick={() => setPref({ alsoLandscape: !alsoLandscape })}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors disabled:opacity-40 ${
-                    alsoLandscape && vertical ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
-                  }`}
-                >
-                  <LuMonitor className={`h-3.5 w-3.5 ${alsoLandscape && vertical ? "text-ember" : ""}`} />
-                  {t("optAlsoLandscape")}
-                </button>
-                <button
-                  type="button"
-                  title={t("optTrimUiHint")}
-                  onClick={() => setPref({ trimUi: !trimUi })}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-                    trimUi ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
-                  }`}
-                >
-                  <LuEraser className={`h-3.5 w-3.5 ${trimUi ? "text-ember" : ""}`} />
-                  {t("optTrimUi")}
-                </button>
-                <button
-                  type="button"
-                  title={t("optTitleCardHint")}
-                  onClick={() => setPref({ titleCard: !titleCard })}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-                    titleCard ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
-                  }`}
-                >
-                  <LuType className={`h-3.5 w-3.5 ${titleCard ? "text-ember" : ""}`} />
-                  {t("optTitleCard")}
-                </button>
-                <button
-                  type="button"
-                  title={t("optOpeningHookHint")}
-                  onClick={() => setPref({ openingHook: !openingHook })}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-                    openingHook ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
-                  }`}
-                >
-                  <LuZap className={`h-3.5 w-3.5 ${openingHook ? "text-ember" : ""}`} />
-                  {t("optOpeningHook")}
-                </button>
-                <button
-                  type="button"
-                  title={t("optColdOpenHint")}
-                  onClick={() => setPref({ coldOpen: !coldOpen })}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-                    coldOpen ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
-                  }`}
-                >
-                  <LuFastForward className={`h-3.5 w-3.5 ${coldOpen ? "text-ember" : ""}`} />
-                  {t("optColdOpen")}
-                </button>
-                <button
-                  type="button"
-                  title={t("optJumpCutHint")}
-                  onClick={() => setPref({ jumpCut: !jumpCut })}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-                    jumpCut ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
-                  }`}
-                >
-                  <LuFastForward className={`h-3.5 w-3.5 ${jumpCut ? "text-ember" : ""}`} />
-                  {t("optJumpCut")}
-                </button>
-                <button
-                  type="button"
-                  title={t("optCleanFillersHint")}
-                  onClick={() => setPref({ cleanFillers: !cleanFillers })}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-                    cleanFillers ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
-                  }`}
-                >
-                  <LuEraser className={`h-3.5 w-3.5 ${cleanFillers ? "text-ember" : ""}`} />
-                  {t("optCleanFillers")}
-                </button>
-                <button
-                  type="button"
-                  title={t("optLoudnessHint")}
-                  onClick={() => setPref({ normalizeLoudness: !normalizeLoudness })}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-                    normalizeLoudness ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
-                  }`}
-                >
-                  <LuVolume2 className={`h-3.5 w-3.5 ${normalizeLoudness ? "text-ember" : ""}`} />
-                  {t("optLoudness")}
-                </button>
-                <button
-                  type="button"
-                  title={t("optDenoiseHint")}
-                  onClick={() => setPref({ denoise: !denoise })}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-                    denoise ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
-                  }`}
-                >
-                  <LuAudioWaveform className={`h-3.5 w-3.5 ${denoise ? "text-ember" : ""}`} />
-                  {t("optDenoise")}
-                </button>
-                <button
-                  type="button"
-                  title={t("optTranslateHint")}
-                  onClick={() => setPref({ translate: !translate })}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-                    translate ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
-                  }`}
-                >
-                  <LuLanguages className={`h-3.5 w-3.5 ${translate ? "text-ember" : ""}`} />
-                  {t(targetLang === "en" ? "optTranslateEn" : "optTranslateZh")}
-                </button>
-                <button
-                  type="button"
-                  title={t("optPublishHint")}
-                  onClick={() => setPref({ publishCopy: !publishCopy })}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-                    publishCopy ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
-                  }`}
-                >
-                  <LuMegaphone className={`h-3.5 w-3.5 ${publishCopy ? "text-ember" : ""}`} />
-                  {t("optPublish")}
-                </button>
-                <button
-                  type="button"
-                  title={t("optSrtHint")}
-                  onClick={() => setPref({ subtitleFile: !subtitleFile })}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-                    subtitleFile ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
-                  }`}
-                >
-                  <LuFileText className={`h-3.5 w-3.5 ${subtitleFile ? "text-ember" : ""}`} />
-                  {t("optSrt")}
-                </button>
-                <button
-                  type="button"
-                  title={t("optTimelineHint")}
-                  onClick={() => setPref({ timeline: !timeline })}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-                    timeline ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
-                  }`}
-                >
-                  <LuFilm className={`h-3.5 w-3.5 ${timeline ? "text-ember" : ""}`} />
-                  {t("optTimeline")}
-                </button>
-                <button
-                  type="button"
-                  title={t("optCompilationHint")}
-                  onClick={() => setPref({ compilation: !compilation })}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-                    compilation ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
-                  }`}
-                >
-                  <LuListVideo className={`h-3.5 w-3.5 ${compilation ? "text-ember" : ""}`} />
-                  {t("optCompilation")}
-                </button>
-                <button
-                  type="button"
-                  title={t("optAigcHint")}
-                  onClick={() => setPref({ aigcLabel: !aigcLabel })}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-                    aigcLabel ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
-                  }`}
-                >
-                  <LuBadgeCheck className={`h-3.5 w-3.5 ${aigcLabel ? "text-ember" : ""}`} />
-                  {t("optAigc")}
-                </button>
-                <button
-                  type="button"
-                  title={t("captionStyleHint")}
-                  onClick={() =>
-                    setPref({ captionStyle: CAPTION_CYCLE[(CAPTION_CYCLE.indexOf(captionStyle) + 1) % CAPTION_CYCLE.length] })
-                  }
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-                    captionStyle !== "none" ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
-                  }`}
-                >
-                  <LuCaptions className={`h-3.5 w-3.5 ${captionStyle !== "none" ? "text-ember" : ""}`} />
-                  {t(CAPTION_KEY[captionStyle])}
-                </button>
+            <div className="card action-bar sticky bottom-4 mt-6 flex flex-col gap-3 rounded-2xl px-5 py-3.5 shadow-2xl backdrop-blur-xl">
+              {/* 选项一排排铺开:必须能换行,窗口再窄也不许把 chip 挤扁(issue #3);
+                  行数多到吃掉半屏时内部滚动,底下的「出片」按钮永远露在外面 */}
+              <div className="flex max-h-[34vh] flex-wrap items-center gap-2 overflow-y-auto">
+                {(
+                  [
+                    { key: "optBrand", on: Boolean(activeBrandStyle(brandState)), Icon: LuPalette, label: t("optBrand"), act: () => setShowBrand(true) },
+                    { key: "optVertical", on: vertical, Icon: LuSmartphone, label: t("optVertical"), act: () => setPref({ vertical: !vertical }) },
+                    { key: "optAlsoLandscape", on: alsoLandscape && vertical, disabled: !vertical, Icon: LuMonitor, label: t("optAlsoLandscape"), act: () => setPref({ alsoLandscape: !alsoLandscape }) },
+                    { key: "optTrimUi", on: trimUi, Icon: LuEraser, label: t("optTrimUi"), act: () => setPref({ trimUi: !trimUi }) },
+                    { key: "optTitleCard", on: titleCard, Icon: LuType, label: t("optTitleCard"), act: () => setPref({ titleCard: !titleCard }) },
+                    { key: "optOpeningHook", on: openingHook, Icon: LuZap, label: t("optOpeningHook"), act: () => setPref({ openingHook: !openingHook }) },
+                    { key: "optColdOpen", on: coldOpen, Icon: LuFastForward, label: t("optColdOpen"), act: () => setPref({ coldOpen: !coldOpen }) },
+                    { key: "optJumpCut", on: jumpCut, Icon: LuFastForward, label: t("optJumpCut"), act: () => setPref({ jumpCut: !jumpCut }) },
+                    { key: "optCleanFillers", on: cleanFillers, Icon: LuEraser, label: t("optCleanFillers"), act: () => setPref({ cleanFillers: !cleanFillers }) },
+                    { key: "optLoudness", on: normalizeLoudness, Icon: LuVolume2, label: t("optLoudness"), act: () => setPref({ normalizeLoudness: !normalizeLoudness }) },
+                    { key: "optDenoise", on: denoise, Icon: LuAudioWaveform, label: t("optDenoise"), act: () => setPref({ denoise: !denoise }) },
+                    { key: "optTranslate", on: translate, Icon: LuLanguages, label: t(targetLang === "en" ? "optTranslateEn" : "optTranslateZh"), act: () => setPref({ translate: !translate }) },
+                    { key: "optPublish", on: publishCopy, Icon: LuMegaphone, label: t("optPublish"), act: () => setPref({ publishCopy: !publishCopy }) },
+                    { key: "optSrt", on: subtitleFile, Icon: LuFileText, label: t("optSrt"), act: () => setPref({ subtitleFile: !subtitleFile }) },
+                    { key: "optTimeline", on: timeline, Icon: LuFilm, label: t("optTimeline"), act: () => setPref({ timeline: !timeline }) },
+                    { key: "optCompilation", on: compilation, Icon: LuListVideo, label: t("optCompilation"), act: () => setPref({ compilation: !compilation }) },
+                    { key: "optAigc", on: aigcLabel, Icon: LuBadgeCheck, label: t("optAigc"), act: () => setPref({ aigcLabel: !aigcLabel }) },
+                    {
+                      key: "captionStyle",
+                      on: captionStyle !== "none",
+                      Icon: LuCaptions,
+                      label: t(CAPTION_KEY[captionStyle]),
+                      act: () => setPref({ captionStyle: CAPTION_CYCLE[(CAPTION_CYCLE.indexOf(captionStyle) + 1) % CAPTION_CYCLE.length] }),
+                    },
+                  ] as const
+                ).map((o) => (
+                  <OptChip
+                    key={o.key}
+                    on={o.on}
+                    disabled={"disabled" in o ? o.disabled : false}
+                    title={t(`${o.key}Hint`)}
+                    label={o.label}
+                    Icon={o.Icon}
+                    onClick={o.act}
+                  />
+                ))}
               </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-dashed border-line pt-3">
+                <div className="min-w-0">
+                  <span className="text-[13px] font-semibold text-mut">{t("selectedCount", { n: selected.size })}</span>
+                  {/* 成片落在哪儿:默认 ~/影片/HotClip,可改可复位(issue #3)——
+                      「文件到底导到哪去了」是新手第一困惑,写在按钮边上最省事 */}
+                  <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-mut/80">
+                    <LuFolderOpen className="h-3 w-3 shrink-0" />
+                    <span className="truncate" title={outDir || defaultOutDir}>
+                      {t("outDirLabel", { dir: outDir || defaultOutDir || "…" })}
+                    </span>
+                    {isElectron() && (
+                      <button
+                        type="button"
+                        onClick={() => void pickOutDir()}
+                        className="shrink-0 font-semibold text-ember/90 underline-offset-2 hover:underline"
+                      >
+                        {t("outDirChange")}
+                      </button>
+                    )}
+                    {isElectron() && outDir && (
+                      <button
+                        type="button"
+                        onClick={() => setPref({ outDir: "" })}
+                        className="shrink-0 text-mut underline-offset-2 hover:text-fg hover:underline"
+                      >
+                        {t("outDirReset")}
+                      </button>
+                    )}
+                  </p>
+                </div>
               <button
                 type="button"
                 disabled={selected.size === 0}
@@ -962,13 +877,14 @@ export function HighlightsView({
                   void getApi()
                     .recordReview(filePath ?? "", summarize(candidates.filter((c) => selected.has(c.id))), summarize(candidates.filter((c) => !selected.has(c.id))))
                     .catch(() => {});
-                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, cleanFillers, trimUi, titleCard, openingHook, coldOpen, alsoLandscape, normalizeLoudness, denoise, compilation, brand: activeBrandStyle(brandState), translate: translate ? { targetLang, llm: config } : undefined, publishCopy: publishCopy ? { llm: config } : undefined, subtitleFile, timeline, aigcLabel });
+                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, cleanFillers, trimUi, titleCard, openingHook, coldOpen, alsoLandscape, normalizeLoudness, denoise, compilation, brand: activeBrandStyle(brandState), translate: translate ? { targetLang, llm: config } : undefined, publishCopy: publishCopy ? { llm: config } : undefined, subtitleFile, timeline, aigcLabel, outDir });
                 }}
-                className="btn-flame inline-flex items-center gap-1.5 rounded-lg px-6 py-2.5 text-[14px] font-bold text-white disabled:opacity-40"
+                className="btn-flame inline-flex shrink-0 items-center gap-1.5 rounded-lg px-6 py-2.5 text-[14px] font-bold whitespace-nowrap text-white disabled:opacity-40"
               >
                 <LuScissors className="h-4 w-4" />
                 {t("exportSelected")}
               </button>
+              </div>
             </div>
           )}
 

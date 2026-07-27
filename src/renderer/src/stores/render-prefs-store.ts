@@ -27,6 +27,8 @@ export interface RenderPrefs {
   timeline: boolean;
   aigcLabel: boolean;
   clipLength: ClipLength;
+  /** 成片导出根目录;空串 = 跟随系统默认(~/影片/HotClip)。 */
+  outDir: string;
 }
 
 /** 与出厂默认一致:开箱即出竖屏卡拉OK跳剪片;花钱/额外文件的默认关。 */
@@ -49,6 +51,7 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   timeline: false,
   aigcLabel: false,
   clipLength: "standard",
+  outDir: "", // 出厂跟随系统默认目录,用户选过才存绝对路径
 };
 
 function load(): RenderPrefs {

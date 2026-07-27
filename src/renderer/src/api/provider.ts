@@ -203,6 +203,9 @@ const browserMock: HotClipApi = {
     await sleep(300);
     return "/demo/录播文件夹";
   },
+  async defaultOutDir() {
+    return "/Movies/HotClip";
+  },
   async watchStart(dir) {
     watchRunning = true;
     watchDirDemo = dir;

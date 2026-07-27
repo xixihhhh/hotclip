@@ -149,6 +149,15 @@ body {
     box-shadow 0.25s ease;
 }
 
+/**
+ * 常驻底部的出片操作栏:.card 的 3% 白在小高度上够用,但选项换行后这条能占
+ * 三分之一屏,半透明会让下面的候选卡片直接透上来叠字(issue #3 的第二现场)。
+ * 操作栏一律走实心面板色,毛玻璃只作锦上添花。
+ */
+.card.action-bar {
+  background: var(--color-panel);
+}
+
 .card-hover:hover {
   transform: translateY(-2px);
   border-color: rgba(255, 122, 61, 0.35);

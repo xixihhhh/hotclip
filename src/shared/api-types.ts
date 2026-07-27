@@ -240,6 +240,8 @@ export interface ExportOptions {
   timeline?: boolean;
   /** AIGC 标识:画面显式标识 + 元数据隐式标识(发布平台要求 AIGC 声明时开启)。 */
   aigcLabel?: boolean;
+  /** 成片导出根目录(成片仍落其下的 <片名>/ 子目录);空/缺省 = 系统默认 ~/影片/HotClip。 */
+  outDir?: string;
   /** Needed for captions/jump-cut: source of word-level timestamps. */
   transcript?: Transcript;
 }
@@ -371,8 +373,10 @@ export interface HotClipApi {
   recordReview: (video: string, kept: ReviewedCandidate[], rejected: ReviewedCandidate[]) => Promise<void>;
   /** 选择一个文件夹(录播监听用);取消返回 null。 */
   selectDir: () => Promise<string | null>;
+  /** 出厂导出根目录(~/影片/HotClip),用户没自选时界面显示的就是它。 */
+  defaultOutDir: () => Promise<string>;
   /** 开始监听文件夹:新录播写完落稳后自动全托管切片。 */
-  watchStart: (dir: string, llm: LlmConfig) => Promise<void>;
+  watchStart: (dir: string, llm: LlmConfig, outDir?: string) => Promise<void>;
   watchStop: () => Promise<void>;
   watchStatus: () => Promise<{ running: boolean; dir: string | null }>;
   /** 订阅监听过程事件;返回退订函数。 */

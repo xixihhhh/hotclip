@@ -7,6 +7,7 @@ import { LuFolderSearch, LuX, LuPlay, LuSquare, LuCircleCheck, LuCircleAlert, Lu
 import { useT } from "../i18n/store";
 import { getApi, isElectron } from "../api/provider";
 import { useLlmStore, isLlmReady } from "../stores/llm-store";
+import { useRenderPrefs } from "../stores/render-prefs-store";
 import type { WatchEvent } from "../../../shared/api-types";
 
 function fmtTime(at: number): string {
@@ -52,7 +53,8 @@ export function WatchFolderModal({ onClose }: { onClose: () => void }): React.JS
       return;
     }
     if (!dir) return;
-    await api.watchStart(dir, config);
+    // 用户自选过导出位置的话,无人值守的成片也落那儿(与向导出片一处设置)
+    await api.watchStart(dir, config, useRenderPrefs.getState().prefs.outDir || undefined);
     setRunning(true);
   };
 
