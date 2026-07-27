@@ -33,6 +33,7 @@ import { checkForUpdate } from "@core/update-check";
 import { loadGlossary, saveGlossary } from "@core/glossary-store";
 import { loadReviewMemory, recordReview, type ReviewedCandidate } from "@core/review-memory";
 import { applyGlossaryToTranscript } from "../shared/glossary";
+import { tagTranscribeError } from "../shared/transcribe-errors";
 import { autoClip, analyzeReferenceVideo } from "@core/pipeline";
 import type { ReferenceProfile } from "@core/reference";
 import { collectSignals } from "@core/signals";
@@ -310,12 +311,21 @@ ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: 
       resolvedEngineId === "elevenlabs"
         ? new ElevenLabsEngine(typeof apiKey === "string" ? apiKey : "")
         : ASR_ENGINES[resolvedEngineId as keyof typeof ASR_ENGINES].make();
-    const result = await engine.transcribe(filePath, {
-      onProgress: (p) => {
-        // renderer may already be gone on quit — guard the send
-        if (!event.sender.isDestroyed()) event.sender.send("hotclip:transcribe-progress", p);
-      },
-    });
+    let result: Transcript;
+    try {
+      result = await engine.transcribe(filePath, {
+        onProgress: (p) => {
+          // renderer may already be gone on quit — guard the send
+          if (!event.sender.isDestroyed()) event.sender.send("hotclip:transcribe-progress", p);
+        },
+      });
+    } catch (e) {
+      // 失败后补一次探测,把「素材真没音轨」从模型下载/解压/解码失败里
+      // 区分出来打标记——否则 UI 只能笼统提示,误导用户反复转码(issue #2)
+      const raw = e instanceof Error ? e.message : String(e);
+      const media = await probeMedia(filePath).catch(() => null);
+      throw new Error(tagTranscribeError(raw, media));
+    }
     if (fileStat && result?.segments?.length) {
       void writeTranscriptCache(transcriptCacheDir(), filePath, fileStat, resolvedEngineId, result);
     }

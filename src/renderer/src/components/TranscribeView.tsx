@@ -23,6 +23,7 @@ import { useT } from "../i18n/store";
 import { getApi } from "../api/provider";
 import { useAsrStore } from "../stores/asr-store";
 import { editSegmentText } from "../../../shared/edit-transcript";
+import { parseTranscribeError } from "../../../shared/transcribe-errors";
 import { diffReplacement, applyGlossaryToTranscript, countGlossaryHits, upsertGlossaryEntry } from "../../../shared/glossary";
 import { GlossaryModal } from "./GlossaryModal";
 import type { Transcript, TranscribeProgressEvent, AsrEngineInfo, GlossaryEntry } from "../../../shared/api-types";
@@ -86,6 +87,8 @@ export function TranscribeView({
   const [progress, setProgress] = useState<TranscribeProgressEvent>({ fraction: 0, stage: "preparing" });
   const [transcript, setTranscript] = useState<Transcript | null>(cached ?? null);
   const [error, setError] = useState<string | null>(null);
+  /** 原始错误细节:归因不明时展示,用户反馈 issue 才有诊断线索。 */
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
   /** 逐句稿纠错:当前编辑中的句 id。 */
   const [editingSeg, setEditingSeg] = useState<number | null>(null);
   /** 热词词表管理弹窗。 */
@@ -149,6 +152,7 @@ export function TranscribeView({
   const start = (): void => {
     setRunning(true);
     setError(null);
+    setErrorDetail(null);
     setProgress({ fraction: 0, stage: "preparing" });
     const api = getApi();
     unsubRef.current = api.onTranscribeProgress(setProgress);
@@ -158,7 +162,13 @@ export function TranscribeView({
         setTranscript(result);
         onDone?.(result);
       })
-      .catch(() => setError(t("failed")))
+      .catch((e: unknown) => {
+        // 真实失败原因透传:没音轨/模型下载失败给对症提示,其余附上
+        // 原始错误细节——曾经一律提示「确认音轨」,误导用户反复转码(issue #2)
+        const { kind, detail } = parseTranscribeError(e instanceof Error ? e.message : String(e));
+        setError(t(kind === "no-audio" ? "failedNoAudio" : kind === "model-download" ? "failedModelDownload" : "failed"));
+        setErrorDetail(kind !== "no-audio" && detail ? detail : null);
+      })
       .finally(() => {
         unsubRef.current?.();
         unsubRef.current = null;
@@ -305,6 +315,9 @@ export function TranscribeView({
       {error && (
         <div className="card mt-6 w-full rounded-2xl p-6 text-center">
           <p className="text-sm text-red-400">{error}</p>
+          {errorDetail && (
+            <p className="mx-auto mt-2 max-w-lg font-mono text-[11px] leading-relaxed break-all text-mut">{errorDetail}</p>
+          )}
           <div className="mt-4 flex items-center justify-center gap-3">
             <button
               type="button"
@@ -316,7 +329,10 @@ export function TranscribeView({
             </button>
             <button
               type="button"
-              onClick={() => setError(null)}
+              onClick={() => {
+                setError(null);
+                setErrorDetail(null);
+              }}
               className="btn-flame rounded-lg px-5 py-2 text-sm font-bold text-white"
             >
               {t("engineStart")}
