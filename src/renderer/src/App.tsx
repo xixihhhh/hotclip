@@ -20,6 +20,7 @@ import {
   LuCircleCheck,
   LuAudioLines,
   LuWandSparkles,
+  LuSettings,
 } from "react-icons/lu";
 import { useT, useLocaleStore } from "./i18n/store";
 import { LOCALE_LIST, REGISTRY } from "./i18n/messages";
@@ -30,6 +31,7 @@ import { TranscribeView } from "./components/TranscribeView";
 import { HighlightsView } from "./components/HighlightsView";
 import { ExportView } from "./components/ExportView";
 import { WatchFolderModal } from "./components/WatchFolderModal";
+import { SettingsModal } from "./components/SettingsModal";
 import type { Transcript, HighlightCandidate, RenderToggles, UpdateInfo } from "../../shared/api-types";
 import "./app.css";
 
@@ -72,6 +74,8 @@ export default function App(): React.JSX.Element {
   const [auto, setAuto] = useState(false);
   /** 录播监听控制面板。 */
   const [showWatch, setShowWatch] = useState(false);
+  /** 设置(模型位置/导出位置/画质/默认字幕样式)。 */
+  const [showSettings, setShowSettings] = useState(false);
   /** 新版本提示(启动静默查一次,失败不打扰)。 */
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   useEffect(() => {
@@ -143,15 +147,17 @@ export default function App(): React.JSX.Element {
     <div className="flex h-full flex-col">
       {/* ---- top bar ---- */}
       <header
-        className="z-10 flex h-14 shrink-0 items-center justify-between border-b border-line/70 bg-panel/55 px-5 backdrop-blur-xl"
+        className="z-10 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line/70 bg-panel/55 px-5 backdrop-blur-xl"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       >
-        <div className="flex items-center gap-2.5">
+        <div className="flex shrink-0 items-center gap-2.5">
           <LogoMark size={30} />
           <LogoWordmark zh={locale === "zh"} />
         </div>
 
-        <nav className="flex items-center">
+        {/* 步骤条是三段里唯一可牺牲的:窗口窄到摆不下时让它被裁掉,
+            也不许顶栏撑破页面(issue #3 同类隐患) */}
+        <nav className="flex min-w-0 items-center overflow-hidden">
           {steps.map((label, i) => (
             <div key={label} className="flex items-center">
               <div
@@ -173,7 +179,7 @@ export default function App(): React.JSX.Element {
           ))}
         </nav>
 
-        <div className="flex items-center gap-2" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+        <div className="flex shrink-0 items-center gap-2" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
         {update && (
           <button
             type="button"
@@ -185,6 +191,16 @@ export default function App(): React.JSX.Element {
             {tc("updateChip", { v: update.latest })}
           </button>
         )}
+        <button
+          type="button"
+          onClick={() => setShowSettings(true)}
+          title={tc("settings")}
+          className="flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs text-mut transition-colors hover:border-mut hover:text-fg"
+          style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+        >
+          <LuSettings className="h-3.5 w-3.5" />
+          {tc("settings")}
+        </button>
         <button
           type="button"
           onClick={() => setLocale(nextLocale)}
@@ -409,6 +425,9 @@ export default function App(): React.JSX.Element {
 
       {/* ---- 录播监听控制面板 ---- */}
       {showWatch && <WatchFolderModal onClose={() => setShowWatch(false)} />}
+
+      {/* ---- 设置 ---- */}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
     </div>
   );
 }

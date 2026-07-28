@@ -31,6 +31,8 @@ import { FolderWatcher, isVideoFile, isSeen, type SeenMap, type WatchedFile } fr
 import { collectDanmakuSignal } from "@core/danmaku";
 import { checkForUpdate } from "@core/update-check";
 import { clipOutDir } from "@core/appenv";
+import { defaultModelsRoot, readAppSettings, resolveModelsRoot, writeAppSettings } from "@core/app-settings";
+import { inspectModels, moveModelsDir } from "@core/models-inventory";
 import { loadGlossary, saveGlossary } from "@core/glossary-store";
 import { loadReviewMemory, recordReview, type ReviewedCandidate } from "@core/review-memory";
 import { applyGlossaryToTranscript } from "../shared/glossary";
@@ -42,6 +44,7 @@ import { exportClips, sanitizeFilename } from "@core/export";
 import { sliceWords } from "@core/subtitle";
 import { snapContextAround } from "@core/shots";
 import { renderCaptionOverlay } from "./overlay-renderer";
+import { QUALITY_CRF } from "../shared/api-types";
 import type { Transcript, LlmConfig, HighlightCandidate, ExportOptions, VisionStats, EmotionStats, DanmakuStats, WatchEvent, UpdateInfo } from "../shared/api-types";
 
 const VIDEO_EXTENSIONS = ["mp4", "mkv", "mov", "flv", "ts", "webm", "avi", "m4v"];
@@ -148,6 +151,28 @@ ipcMain.handle("hotclip:select-media", async () => {
 // 出厂导出根目录:~/影片/HotClip——新手在文件管理器里找得到(issue #3)
 ipcMain.handle("hotclip:default-out-dir", async () => join(app.getPath("videos"), "HotClip"));
 
+// ---- IPC: 模型存放位置(设置页)——1GB 的东西放哪儿,用户有权知道和决定 ----
+
+ipcMain.handle("hotclip:models-info", async () =>
+  inspectModels(modelsRoot(), defaultModelsRoot(app.getPath("userData")))
+);
+
+ipcMain.handle("hotclip:models-move", async (_event, dir: unknown) => {
+  if (typeof dir !== "string" || !dir.trim()) throw new Error("move requires a directory");
+  const userData = app.getPath("userData");
+  const target = dir.trim();
+  const landed = await moveModelsDir(modelsRoot(), target);
+  // 搬成了才落配置:写早了会指向一个还没搬过去的空目录,模型全被判为「未安装」
+  const isDefault = landed === defaultModelsRoot(userData);
+  writeAppSettings(userData, { ...readAppSettings(userData), modelsDir: isDefault ? undefined : landed });
+  return landed;
+});
+
+// 在文件管理器里打开目录(设置页的「打开文件夹」);不存在时静默,别弹系统错误框
+ipcMain.on("hotclip:open-folder", (_event, dir: unknown) => {
+  if (typeof dir === "string" && dir.trim()) void shell.openPath(dir);
+});
+
 // 录播监听的目录选择
 ipcMain.handle("hotclip:select-dir", async () => {
   const result = await dialog.showOpenDialog({ properties: ["openDirectory", "createDirectory"] });
@@ -239,7 +264,8 @@ ipcMain.handle("hotclip:review-record", async (_event, video: unknown, kept: unk
 // ---- IPC: transcription (wizard step 2) ----
 // Engine instances are cheap; models are downloaded once into userData.
 
-const modelsRoot = (): string => join(app.getPath("userData"), "models");
+// 模型位置用户可改(设置页),每次现读配置——搬完家后续下载立刻落新位置
+const modelsRoot = (): string => resolveModelsRoot(app.getPath("userData"));
 const transcriptCacheDir = (): string => join(app.getPath("userData"), "transcript-cache");
 
 /** catalog id → engine factory + its model asset (for install checks). */
@@ -555,6 +581,8 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       faceTrack: true,
       snapToShots: true,
       brand: sanitizeBrand(opts.brand),
+      // 画质档只影响 CRF;不认的值回落 high,保持历史默认画质
+      crf: QUALITY_CRF[opts.quality && opts.quality in QUALITY_CRF ? opts.quality : "high"],
       translateLang: translations ? opts.translate!.targetLang : undefined,
       subtitleFile: Boolean(opts.subtitleFile),
       timeline: Boolean(opts.timeline),

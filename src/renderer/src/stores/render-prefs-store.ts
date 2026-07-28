@@ -4,7 +4,7 @@
  * 这次还怎么出。多人对谈(diarize)故意不记:它对单视频生效,换素材要重判。
  */
 import { create } from "zustand";
-import type { CaptionStyleChoice, ClipLength } from "../../../shared/api-types";
+import type { CaptionStyleChoice, ClipLength, ExportQuality } from "../../../shared/api-types";
 
 const STORAGE_KEY = "hotclip-render-prefs";
 
@@ -29,6 +29,8 @@ export interface RenderPrefs {
   clipLength: ClipLength;
   /** 成片导出根目录;空串 = 跟随系统默认(~/影片/HotClip)。 */
   outDir: string;
+  /** 导出画质档(CRF 18/23/28);出厂 high = 历史默认画质。 */
+  quality: ExportQuality;
 }
 
 /** 与出厂默认一致:开箱即出竖屏卡拉OK跳剪片;花钱/额外文件的默认关。 */
@@ -52,6 +54,7 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   aigcLabel: false,
   clipLength: "standard",
   outDir: "", // 出厂跟随系统默认目录,用户选过才存绝对路径
+  quality: "high", // 与升级前的成片一致,换档是用户的主动选择
 };
 
 function load(): RenderPrefs {
@@ -68,6 +71,7 @@ function load(): RenderPrefs {
         }
       }
       if (!["short", "standard", "long"].includes(out.clipLength)) out.clipLength = "standard";
+      if (!["high", "standard", "compact"].includes(out.quality)) out.quality = "high";
       if (!["karaoke", "keyword", "pop", "hormozi", "bubble", "none"].includes(out.captionStyle)) out.captionStyle = "karaoke";
       return out;
     }

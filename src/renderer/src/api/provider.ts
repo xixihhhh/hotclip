@@ -206,6 +206,31 @@ const browserMock: HotClipApi = {
   async defaultOutDir() {
     return "/Movies/HotClip";
   },
+  // 浏览器预览没有真模型目录:给一份形态真实的清点结果,设置页照样能看
+  async modelsInfo() {
+    await sleep(200);
+    const root = "/Library/Application Support/hotclip/models";
+    const demo = [
+      ["sensevoice-2024-07-17", "useAsrFast", true, 940_000_000, 1_047_870_769],
+      ["paraformer-zh-2023-09-14", "useAsrAccurate", false, 0, 251_658_240],
+      ["fireredasr-aed-l", "useAsrDialect", false, 0, 545_259_520],
+      ["punct-zh-en", "usePunct", true, 41_900_000, 44_040_192],
+      ["segmentation-pyannote", "useDiarize", false, 0, 6_291_456],
+      ["speaker-embedding-3dspeaker", "useDiarize", false, 0, 41_943_040],
+      ["yunet-face", "useFace", true, 227_000, 236_544],
+      ["emotion-ferplus", "useEmotion", false, 0, 35_651_584],
+      ["transnetv2-onnx", "useShots", true, 31_250_929, 31_250_929],
+    ] as const;
+    const entries = demo.map(([id, useKey, installed, bytes, approxBytes]) => ({ id, useKey, installed, bytes, approxBytes }));
+    return { root, defaultRoot: root, totalBytes: entries.reduce((a, e) => a + e.bytes, 0), entries };
+  },
+  async moveModelsDir(dir) {
+    await sleep(500);
+    return dir;
+  },
+  openFolder() {
+    /* browser mock: no file manager to open */
+  },
   async watchStart(dir) {
     watchRunning = true;
     watchDirDemo = dir;

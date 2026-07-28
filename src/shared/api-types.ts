@@ -202,6 +202,18 @@ export interface BrandStyle {
   watermark?: BrandWatermark;
 }
 
+/**
+ * 导出画质档 → x264 CRF。数值越小越清晰、文件越大;
+ * high 保持历史默认(18),换档只影响体积与清晰度,不改变任何剪辑决策。
+ */
+export type ExportQuality = "high" | "standard" | "compact";
+
+export const QUALITY_CRF: Record<ExportQuality, number> = {
+  high: 18,
+  standard: 23,
+  compact: 28,
+};
+
 /** Render options for the export step (UI toggles on the highlight list). */
 export interface ExportOptions {
   /** Center-crop reframe to 9:16 vertical (1080×1920) — short-video ready. */
@@ -242,6 +254,8 @@ export interface ExportOptions {
   aigcLabel?: boolean;
   /** 成片导出根目录(成片仍落其下的 <片名>/ 子目录);空/缺省 = 系统默认 ~/影片/HotClip。 */
   outDir?: string;
+  /** 导出画质档;缺省 high——与历史默认(CRF 18)一致,升级不改变成片。 */
+  quality?: ExportQuality;
   /** Needed for captions/jump-cut: source of word-level timestamps. */
   transcript?: Transcript;
 }
@@ -375,6 +389,12 @@ export interface HotClipApi {
   selectDir: () => Promise<string | null>;
   /** 出厂导出根目录(~/影片/HotClip),用户没自选时界面显示的就是它。 */
   defaultOutDir: () => Promise<string>;
+  /** 模型清点:存放位置、各模型装没装、各占多大(设置页展示)。 */
+  modelsInfo: () => Promise<ModelsInfo>;
+  /** 把模型目录整体搬到新位置;返回生效后的路径。失败时原目录不受影响。 */
+  moveModelsDir: (dir: string) => Promise<string>;
+  /** 在系统文件管理器里打开一个目录。 */
+  openFolder: (path: string) => void;
   /** 开始监听文件夹:新录播写完落稳后自动全托管切片。 */
   watchStart: (dir: string, llm: LlmConfig, outDir?: string) => Promise<void>;
   watchStop: () => Promise<void>;
@@ -389,6 +409,24 @@ export interface HotClipApi {
   glossaryGet: () => Promise<GlossaryEntry[]>;
   /** 整表写回热词词表(增删改统一走这里)。 */
   glossarySet: (entries: GlossaryEntry[]) => Promise<void>;
+}
+
+/** 模型清点结果(设置页「模型存放位置」)。 */
+export interface ModelsInfo {
+  /** 当前生效的模型根目录。 */
+  root: string;
+  /** 出厂位置——用户改过后据此提供「恢复默认」。 */
+  defaultRoot: string;
+  /** 已装模型合计占用字节。 */
+  totalBytes: number;
+  entries: Array<{
+    id: string;
+    /** 用途文案的 i18n key。 */
+    useKey: string;
+    installed: boolean;
+    bytes: number;
+    approxBytes: number;
+  }>;
 }
 
 /** 新版本检查结果。 */

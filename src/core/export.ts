@@ -149,6 +149,8 @@ export interface ExportRenderOptions {
   snapToShots?: boolean;
   /** 品牌样式预设(高亮色/字号/位置/水印);缺省走内置默认,输出不变。 */
   brand?: BrandStyle;
+  /** x264 CRF(越小越清晰、文件越大);缺省 18——保持历史默认画质不变。 */
+  crf?: number;
   /** 双语字幕的目标语言(回执用;译文本身随 ExportClipSpec.translation 传入)。 */
   translateLang?: string;
   /** 每条切片旁落同名 .srt 字幕文件(平台字幕上传/二次精修用)。 */
@@ -438,7 +440,7 @@ export async function exportClips(
         ? { comment: `AIGC=true; Label=AI-assisted-editing; Tool=HotClip; ContentId=${basename(outPath)}` }
         : undefined;
       const cutOptions = trackPlan
-        ? { trackPlan, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, watermark, metadata: aigcMeta }
+        ? { trackPlan, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, watermark, metadata: aigcMeta, crf: options.crf }
         : {
             uiCrop,
             vertical: options.vertical,
@@ -448,6 +450,7 @@ export async function exportClips(
             denoise: options.denoise,
             watermark,
             metadata: aigcMeta,
+            crf: options.crf,
           };
       if (audioOnly) {
         // audiogram:深色底+品牌色波形合成画面,单段/跳剪统一(波形随剪好的音频生成)
@@ -464,6 +467,7 @@ export async function exportClips(
             denoise: options.denoise,
             watermark,
             metadata: aigcMeta,
+            crf: options.crf,
           },
           signal,
           onTimeSec
@@ -551,8 +555,8 @@ export async function exportClips(
               }
             }
             const miniCutOptions = miniTrack
-              ? { trackPlan: miniTrack, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, watermark }
-              : { uiCrop, vertical: options.vertical, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, watermark };
+              ? { trackPlan: miniTrack, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, watermark, crf: options.crf }
+              : { uiCrop, vertical: options.vertical, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, watermark, crf: options.crf };
             await rename(outPath, bodyPath);
             await cutClip(inputPath, miniPath, coPlan.startSec, coPlan.endSec, miniCutOptions, signal);
             // 硬切拼接(通行做法);AIGC 隐式标识补到最终容器上

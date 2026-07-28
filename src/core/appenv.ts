@@ -5,6 +5,7 @@
  */
 import { homedir } from "os";
 import { join } from "path";
+import { resolveModelsRoot } from "./app-settings";
 import type { LlmConfig } from "../shared/api-types";
 
 /** 与 Electron 的 app.getPath("userData") 同路径——模型/缓存两边共享。 */
@@ -14,8 +15,8 @@ export function userDataDir(platform: NodeJS.Platform = process.platform): strin
   return join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "hotclip");
 }
 
-/** AI 模型根目录(转写/取景/镜头检测模型,首次自动下载)。 */
-export const modelsRoot = (): string => join(userDataDir(), "models");
+/** AI 模型根目录(转写/取景/镜头检测模型,首次自动下载);用户在设置里改过则听他的。 */
+export const modelsRoot = (): string => resolveModelsRoot(userDataDir());
 
 /** 转写结果本地缓存目录(同文件重开秒进)。 */
 export const cacheDir = (): string => join(userDataDir(), "transcript-cache");
