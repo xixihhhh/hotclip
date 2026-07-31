@@ -10,8 +10,10 @@
 export const ERR_TAG_NO_AUDIO = "[hotclip:no-audio]";
 /** 模型下载/解压失败——检查网络或磁盘,与素材无关。 */
 export const ERR_TAG_MODEL_DOWNLOAD = "[hotclip:model-download]";
+/** 模型已在却加载失败——最常见是 Windows 中文路径原生层打不开(issue #4),其次是模型文件损坏。 */
+export const ERR_TAG_MODEL_LOAD = "[hotclip:model-load]";
 
-export type TranscribeErrorKind = "no-audio" | "model-download" | "generic";
+export type TranscribeErrorKind = "no-audio" | "model-download" | "model-load" | "generic";
 
 /**
  * 主进程侧:根据失败后的补充探测结果给原始错误打标记。
@@ -20,6 +22,8 @@ export type TranscribeErrorKind = "no-audio" | "model-download" | "generic";
 export function tagTranscribeError(rawMessage: string, media: { hasAudio: boolean } | null): string {
   if (media && !media.hasAudio) return `${ERR_TAG_NO_AUDIO} ${rawMessage}`;
   if (/model download failed/i.test(rawMessage)) return `${ERR_TAG_MODEL_DOWNLOAD} ${rawMessage}`;
+  // sherpa 原生层创建 recognizer 失败的固定文案——模型文件打不开/损坏,与素材无关
+  if (/check your config/i.test(rawMessage)) return `${ERR_TAG_MODEL_LOAD} ${rawMessage}`;
   return rawMessage;
 }
 
@@ -37,6 +41,9 @@ export function parseTranscribeError(raw: string): { kind: TranscribeErrorKind; 
   } else if (detail.includes(ERR_TAG_MODEL_DOWNLOAD)) {
     kind = "model-download";
     detail = detail.replace(ERR_TAG_MODEL_DOWNLOAD, "").trim();
+  } else if (detail.includes(ERR_TAG_MODEL_LOAD)) {
+    kind = "model-load";
+    detail = detail.replace(ERR_TAG_MODEL_LOAD, "").trim();
   }
   return { kind, detail };
 }

@@ -7,7 +7,8 @@
  * 模型重下一次要一个多小时,搬家搬丢了比不能搬严重得多。
  */
 import { cp, mkdir, readdir, rename, rm, stat } from "fs/promises";
-import { join, relative, resolve, sep } from "path";
+import * as nodePath from "path";
+import { join, resolve } from "path";
 import {
   isModelInstalled,
   modelDir,
@@ -93,10 +94,18 @@ export async function inspectModels(root: string, defaultRoot: string): Promise<
   };
 }
 
-/** 目标目录是否落在源目录内部(搬进自己的子目录会无限递归)。 */
-export function isInside(parent: string, child: string): boolean {
-  const rel = relative(resolve(parent), resolve(child));
-  return rel === "" || (!rel.startsWith(`..${sep}`) && rel !== ".." && !rel.startsWith("/"));
+/** isInside 需要的最小 path 能力面;默认取当前平台实现,单测里可换 path.win32 复现 Windows 行为。 */
+type PathImpl = Pick<typeof nodePath, "relative" | "resolve" | "isAbsolute" | "sep">;
+
+/**
+ * 目标目录是否落在源目录内部(搬进自己的子目录会无限递归)。
+ * Windows 上跨盘时 relative() 不产生 ".."——直接返回目标的绝对路径(如 E:\x),
+ * 必须按 isAbsolute 判为「不在内部」,否则所有跨盘搬家都被误拦(issue #4)。
+ */
+export function isInside(parent: string, child: string, p: PathImpl = nodePath): boolean {
+  const rel = p.relative(p.resolve(parent), p.resolve(child));
+  if (rel === "") return true;
+  return !p.isAbsolute(rel) && rel !== ".." && !rel.startsWith(`..${p.sep}`);
 }
 
 /**

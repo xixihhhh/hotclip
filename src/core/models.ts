@@ -6,7 +6,7 @@
  * Models live OUTSIDE the app bundle (user data dir) so app updates never
  * re-download them and the installer stays small.
  */
-import { mkdir, open, rename, rm, stat } from "fs/promises";
+import { mkdir, open, readFile, rename, rm, stat } from "fs/promises";
 import { createReadStream } from "fs";
 import { pipeline } from "stream/promises";
 import { join, dirname } from "path";
@@ -398,18 +398,32 @@ export async function ensureModel(
   throw new Error(`model download failed after all mirrors (${asset.id}): ${msg}`);
 }
 
-/** Extract mono 16k PCM wav from any media file (what ASR engines consume). */
-export async function extractWav16k(
+/**
+ * 从任意媒体抽出 16k 单声道 raw f32le 样本文件(ASR 引擎直接消费)。
+ * 不出 wav 再让 sherpa readWave 去开文件:原生层在 Windows 上按 ANSI 开路径,
+ * 中文用户名下的临时目录一律打不开(issue #4)。raw 样本由 Node 侧读入内存
+ * (fs 对 Unicode 路径免疫),原生层只见到内存里的 Float32Array。
+ */
+export async function extractPcmF32le16k(
   ffmpegPath: string,
   inputPath: string,
   outputPath: string
 ): Promise<void> {
   await mkdir(dirname(outputPath), { recursive: true });
-  const tmp = `${outputPath}.tmp.wav`;
+  const tmp = `${outputPath}.tmp.f32le`;
   await execFileAsync(
     ffmpegPath,
-    ["-hide_banner", "-y", "-i", inputPath, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", tmp],
+    ["-hide_banner", "-y", "-i", inputPath, "-vn", "-ac", "1", "-ar", "16000", "-f", "f32le", "-c:a", "pcm_f32le", tmp],
     { maxBuffer: 32 * 1024 * 1024 }
   );
   await rename(tmp, outputPath);
+}
+
+/** 读 raw f32le 样本进内存。Buffer 的 byteOffset 不保证 4 字节对齐,拷进新 ArrayBuffer 再套 Float32Array。 */
+export async function readF32leSamples(path: string): Promise<Float32Array> {
+  const buf = await readFile(path);
+  const bytes = buf.byteLength - (buf.byteLength % 4);
+  const aligned = new ArrayBuffer(bytes);
+  new Uint8Array(aligned).set(buf.subarray(0, bytes));
+  return new Float32Array(aligned);
 }

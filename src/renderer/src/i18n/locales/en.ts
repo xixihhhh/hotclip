@@ -120,6 +120,8 @@ export const en = {
     failed: "Transcription failed — retry; if it keeps failing, report it on GitHub with the error below",
     failedNoAudio: "Transcription failed: no audio track detected in this file — pick one with sound",
     failedModelDownload: "Transcription failed: speech model download/install failed — check your network and disk space, then retry (one-time download)",
+    failedModelLoad:
+      "Transcription failed: the speech model could not be loaded. If your model folder path contains non-ASCII characters (e.g. C:\\Users\\中文名), move it to a plain-ASCII path via Settings → Model storage; otherwise the model files may be corrupt — delete that model folder and transcribe again to re-download",
     back: "Choose another file",
     findHighlights: "Find highlights",
     glossaryBtn: "Glossary",

@@ -10,6 +10,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { resolveFfmpegPath } from "./binaries";
 import { modelDir, SEGMENTATION_MODEL, SPEAKER_EMBEDDING_MODEL } from "./models";
+import { toAnsiSafeDir } from "./win-ansi-path";
 import type { Transcript, TranscriptSegment, TranscriptWord } from "../shared/api-types";
 
 const execFileAsync = promisify(execFile);
@@ -62,13 +63,14 @@ export async function runDiarization(
   options: DiarizeOptions = {}
 ): Promise<SpeakerTurn[]> {
   const { OfflineSpeakerDiarization } = loadSherpa();
+  // 模型路径交给原生层前先转 ANSI 安全形态(Windows 中文路径,issue #4)
   const sd = new OfflineSpeakerDiarization({
     segmentation: {
-      pyannote: { model: join(modelDir(modelsRoot, SEGMENTATION_MODEL), "model.onnx") },
+      pyannote: { model: join(await toAnsiSafeDir(modelDir(modelsRoot, SEGMENTATION_MODEL)), "model.onnx") },
       numThreads: 2,
     },
     embedding: {
-      model: join(modelDir(modelsRoot, SPEAKER_EMBEDDING_MODEL), "model.onnx"),
+      model: join(await toAnsiSafeDir(modelDir(modelsRoot, SPEAKER_EMBEDDING_MODEL)), "model.onnx"),
       numThreads: 2,
     },
     clustering: {

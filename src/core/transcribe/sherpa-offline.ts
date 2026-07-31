@@ -1,7 +1,7 @@
 /**
  * Generic sherpa-onnx offline engine runner. Every local model tier
  * (SenseVoice / Paraformer / FireRedASR…) shares the same pipeline:
- * ensure models → extract 16k wav → windowed decode with token timestamps →
+ * ensure models → extract 16k f32le samples → windowed decode with token timestamps →
  * optional punctuation restoration → sentence segmentation.
  * A tier is described by a spec; adding a model = adding a spec.
  */
@@ -9,7 +9,16 @@ import { join } from "path";
 import { rm } from "fs/promises";
 import { tmpdir } from "os";
 import { resolveFfmpegPath } from "../binaries";
-import { ensureModel, extractWav16k, isModelInstalled, modelDir, PUNCT_MODEL, type ModelAsset } from "../models";
+import {
+  ensureModel,
+  extractPcmF32le16k,
+  isModelInstalled,
+  modelDir,
+  readF32leSamples,
+  PUNCT_MODEL,
+  type ModelAsset,
+} from "../models";
+import { toAnsiSafeDir } from "../win-ansi-path";
 import { segmentWords, joinWords } from "./segment";
 import { applyPunctuation } from "./punctuate";
 import type { Transcript, TranscribeEngine, TranscribeOptions, TranscriptWord } from "./types";
@@ -101,12 +110,13 @@ export class SherpaOfflineEngine implements TranscribeEngine {
     if (spec.punctuate) await ensureModel(this.modelsRoot, PUNCT_MODEL, download, signal);
 
     onProgress?.({ fraction: 0, stage: "decoding" });
-    const wavPath = join(tmpdir(), `hotclip-${Date.now()}-16k.wav`);
+    const pcmPath = join(tmpdir(), `hotclip-${Date.now()}-16k.f32le`);
     try {
-      await extractWav16k(resolveFfmpegPath(), filePath, wavPath);
+      await extractPcmF32le16k(resolveFfmpegPath(), filePath, pcmPath);
 
       const sh = loadSherpa();
-      const dir = modelDir(this.modelsRoot, spec.asset);
+      // 模型文件由原生层自己打开(ANSI):Windows 中文路径先转 8.3 短路径(issue #4)
+      const dir = await toAnsiSafeDir(modelDir(this.modelsRoot, spec.asset));
       const recognizer = new sh.OfflineRecognizer({
         featConfig: { sampleRate: 16000, featureDim: 80 },
         modelConfig: {
@@ -120,7 +130,7 @@ export class SherpaOfflineEngine implements TranscribeEngine {
       const punct = spec.punctuate
         ? new sh.OfflinePunctuation({
             model: {
-              ctTransformer: join(modelDir(this.modelsRoot, PUNCT_MODEL), "model.int8.onnx"),
+              ctTransformer: join(await toAnsiSafeDir(modelDir(this.modelsRoot, PUNCT_MODEL)), "model.int8.onnx"),
               numThreads: 1,
               provider: "cpu",
               debug: 0,
@@ -128,19 +138,18 @@ export class SherpaOfflineEngine implements TranscribeEngine {
           })
         : null;
 
-      // 第二参必须为 false(拷贝而非 external buffer):Electron 的 V8 memory cage
-      // 禁止 wrap 外部内存,默认档在打包应用里必抛 "External buffers are not allowed"
-      const wave = sh.readWave(wavPath, false) as { samples: Float32Array; sampleRate: number };
-      const sampleRate: number = wave.sampleRate;
-      const durationSec = wave.samples.length / sampleRate;
+      // 样本走 Node 读入(Unicode 路径免疫),不让原生层 readWave 自己开临时文件
+      const samples = await readF32leSamples(pcmPath);
+      const sampleRate = 16000;
+      const durationSec = samples.length / sampleRate;
       const windowSamples = WINDOW_SEC * sampleRate;
 
       const allWords: TranscriptWord[] = [];
       let detectedLang = "";
 
-      for (let start = 0; start < wave.samples.length; start += windowSamples) {
+      for (let start = 0; start < samples.length; start += windowSamples) {
         if (signal?.aborted) throw new Error("transcription cancelled");
-        const chunk = wave.samples.subarray(start, Math.min(start + windowSamples, wave.samples.length));
+        const chunk = samples.subarray(start, Math.min(start + windowSamples, samples.length));
         const offsetSec = start / sampleRate;
         const stream = recognizer.createStream();
         stream.acceptWaveform({ sampleRate, samples: chunk });
@@ -156,7 +165,7 @@ export class SherpaOfflineEngine implements TranscribeEngine {
         }
         allWords.push(...words);
         onProgress?.({
-          fraction: Math.min(1, (start + chunk.length) / wave.samples.length),
+          fraction: Math.min(1, (start + chunk.length) / samples.length),
           stage: "transcribing",
         });
       }
@@ -169,7 +178,7 @@ export class SherpaOfflineEngine implements TranscribeEngine {
         durationSec,
       };
     } finally {
-      await rm(wavPath, { force: true });
+      await rm(pcmPath, { force: true });
     }
   }
 }

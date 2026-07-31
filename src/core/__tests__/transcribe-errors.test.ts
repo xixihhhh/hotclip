@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ERR_TAG_MODEL_DOWNLOAD,
+  ERR_TAG_MODEL_LOAD,
   ERR_TAG_NO_AUDIO,
   parseTranscribeError,
   tagTranscribeError,
@@ -31,6 +32,19 @@ describe("tagTranscribeError", () => {
 
   it("有音轨、非模型下载的失败保持原样", () => {
     expect(tagTranscribeError("boom", { hasAudio: true })).toBe("boom");
+  });
+
+  // issue #4:模型明明已装好,sherpa 创建 recognizer 失败(Windows 中文路径/
+  // 模型损坏)只会抛这句固定文案——必须归因成 model-load,不能落回笼统提示
+  it("sherpa 拒绝配置(模型打不开) → 打 model-load 标记", () => {
+    const tagged = tagTranscribeError("Please check your config!", { hasAudio: true });
+    expect(tagged.startsWith(ERR_TAG_MODEL_LOAD)).toBe(true);
+    expect(tagged).toContain("Please check your config!");
+  });
+
+  it("素材确认无音轨优先于 model-load 归因", () => {
+    const tagged = tagTranscribeError("Please check your config!", { hasAudio: false });
+    expect(tagged.startsWith(ERR_TAG_NO_AUDIO)).toBe(true);
   });
 });
 
@@ -60,5 +74,11 @@ describe("parseTranscribeError", () => {
     const tagged = tagTranscribeError("ffmpeg exited with code 1", { hasAudio: false });
     const parsed = parseTranscribeError(`Error invoking remote method 'hotclip:transcribe': Error: ${tagged}`);
     expect(parsed).toEqual({ kind: "no-audio", detail: "ffmpeg exited with code 1" });
+  });
+
+  it("model-load 标记往返:归因正确且原始细节保留(报 issue 用)", () => {
+    const tagged = tagTranscribeError("Please check your config!", { hasAudio: true });
+    const parsed = parseTranscribeError(`Error invoking remote method 'hotclip:transcribe': Error: ${tagged}`);
+    expect(parsed).toEqual({ kind: "model-load", detail: "Please check your config!" });
   });
 });

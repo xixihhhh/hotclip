@@ -123,6 +123,8 @@ export const zh = {
     failed: "转写失败,请重试;反复失败请带上下方错误信息到 GitHub 反馈",
     failedNoAudio: "转写失败:素材里没有检测到音轨,请换一个带声音的文件",
     failedModelDownload: "转写失败:语音模型下载/安装失败,请检查网络与磁盘空间后重试(模型仅首次需要下载)",
+    failedModelLoad:
+      "转写失败:语音模型加载失败。若模型存放位置路径里含中文或特殊字符(如 C:\\Users\\中文用户名),请到「设置 → 模型存放位置」把模型搬到纯英文路径(如 D:\\hotclip-models);路径正常则可能是模型文件损坏,删除该模型文件夹后重新转写会自动重新下载",
     back: "重新选文件",
     findHighlights: "AI 找爆点",
     glossaryBtn: "词表",

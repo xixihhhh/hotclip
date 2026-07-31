@@ -5,6 +5,7 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { mkdtemp, mkdir, writeFile, readFile, readdir, rm } from "fs/promises";
 import { tmpdir } from "os";
+import * as nodePath from "path";
 import { join } from "path";
 import { dirSize, isInside, moveModelsDir } from "../models-inventory";
 import { defaultModelsRoot, readAppSettings, resolveModelsRoot, writeAppSettings } from "../app-settings";
@@ -46,6 +47,27 @@ describe("isInside", () => {
   it("同级和上级不算内部", () => {
     expect(isInside("/a/b", "/a/c")).toBe(false);
     expect(isInside("/a/b", "/a")).toBe(false);
+  });
+
+  // Windows 语义借 path.win32 在任意平台复现——issue #4:用户(中文用户名)想把
+  // 模型从 C 盘搬去 E 盘,relative() 跨盘返回绝对路径,曾被误判成「目标在内部」
+  describe("Windows 路径", () => {
+    const w = nodePath.win32;
+
+    it("跨盘目标不算内部(issue #4:C 盘搬 E 盘曾被误拦)", () => {
+      expect(isInside("C:\\Users\\楚心\\AppData\\Roaming\\hotclip\\models", "E:\\AI-tool\\hotclip\\models", w)).toBe(false);
+      expect(isInside("C:\\models", "D:\\models", w)).toBe(false);
+    });
+
+    it("同盘子目录与自身仍然算内部", () => {
+      expect(isInside("C:\\models", "C:\\models\\sub", w)).toBe(true);
+      expect(isInside("C:\\models", "c:\\models", w)).toBe(true);
+    });
+
+    it("同盘同级/上级/同名前缀不算内部", () => {
+      expect(isInside("C:\\models", "C:\\models2", w)).toBe(false);
+      expect(isInside("C:\\a\\models", "C:\\a", w)).toBe(false);
+    });
   });
 });
 

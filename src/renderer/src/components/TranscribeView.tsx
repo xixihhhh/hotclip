@@ -166,7 +166,15 @@ export function TranscribeView({
         // 真实失败原因透传:没音轨/模型下载失败给对症提示,其余附上
         // 原始错误细节——曾经一律提示「确认音轨」,误导用户反复转码(issue #2)
         const { kind, detail } = parseTranscribeError(e instanceof Error ? e.message : String(e));
-        setError(t(kind === "no-audio" ? "failedNoAudio" : kind === "model-download" ? "failedModelDownload" : "failed"));
+        const msgKey =
+          kind === "no-audio"
+            ? "failedNoAudio"
+            : kind === "model-download"
+              ? "failedModelDownload"
+              : kind === "model-load"
+                ? "failedModelLoad"
+                : "failed";
+        setError(t(msgKey));
         setErrorDetail(kind !== "no-audio" && detail ? detail : null);
       })
       .finally(() => {
