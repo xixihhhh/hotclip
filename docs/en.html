@@ -3,19 +3,27 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HotClip — Free, Local, Open-Source AI Clip Generator: Long Video to Viral Shorts</title>
-<meta name="description" content="HotClip is a free, open-source AI clip generator that runs 100% locally (Windows/macOS). Turn podcasts, livestreams & long videos into viral 9:16 shorts: AI highlight detection, word-level captions, face-tracked auto-crop. No credits, no watermark, no uploads — an Opus Clip alternative.">
+<title>HotClip — Free Open-Source AI Video Clipper | Turn Long Videos into Viral Shorts, Locally, No Watermark</title>
+<meta name="description" content="HotClip is a free, open-source AI clipping tool that runs 100% locally (Windows/macOS). Turn podcasts, livestreams & long videos into viral 9:16 shorts: AI highlight detection, karaoke word-level captions, face-tracked auto-reframe. No credits, no watermark, no uploads — a free Opus Clip alternative.">
+<meta name="keywords" content="ai video clipper, ai clipping tool, free opus clip alternative, open source opus clip alternative, long video to shorts converter, podcast to shorts, auto captions no watermark, karaoke captions, remove filler words, ai highlights generator">
 <link rel="canonical" href="https://xixihhhh.github.io/hotclip/en.html">
 <link rel="alternate" hreflang="zh-CN" href="https://xixihhhh.github.io/hotclip/">
 <link rel="alternate" hreflang="en" href="https://xixihhhh.github.io/hotclip/en.html">
 <link rel="icon" href="icon.png">
+<link rel="preload" as="image" href="screenshots/04-highlights.png">
 <link rel="stylesheet" href="site.css">
+<script>document.documentElement.classList.add("js")</script>
 <meta property="og:type" content="website">
-<meta property="og:title" content="HotClip — Free, Local, Open-Source AI Clip Generator">
+<meta property="og:site_name" content="HotClip">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="HotClip — Free Open-Source AI Video Clipper, Runs Locally">
 <meta property="og:description" content="Long video → viral vertical shorts. AI highlight detection, 9:16 auto-reframe, karaoke captions. No credits, no watermark, no uploads.">
 <meta property="og:image" content="https://xixihhhh.github.io/hotclip/social-preview.png">
 <meta property="og:url" content="https://xixihhhh.github.io/hotclip/en.html">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="HotClip — Free Open-Source AI Video Clipper, Runs Locally">
+<meta name="twitter:description" content="Long video → viral vertical shorts. AI highlight detection, 9:16 auto-reframe, karaoke captions. No credits, no watermark, no uploads.">
+<meta name="twitter:image" content="https://xixihhhh.github.io/hotclip/social-preview.png">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -23,8 +31,11 @@
   "name": "HotClip",
   "operatingSystem": "Windows, macOS",
   "applicationCategory": "MultimediaApplication",
+  "softwareVersion": "0.9.4",
+  "inLanguage": ["en", "zh-CN"],
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-  "description": "Free, open-source AI clip generator that runs locally: turn long videos and livestream replays into viral 9:16 shorts with AI highlight detection, word-level captions and face-tracked auto-crop. No credits, no watermark, no uploads.",
+  "description": "Free, open-source AI video clipper that runs locally: turn long videos and livestream replays into viral 9:16 shorts with AI highlight detection, karaoke word-level captions and face-tracked auto-reframe. No credits, no watermark, no uploads.",
+  "featureList": "AI highlight detection with virality scores and reasoning, face-tracked 9:16 auto-reframe, karaoke word-level captions, filler-word and silence removal, speaker diarization, folder watch for stream recordings, SRT and bilingual caption export",
   "url": "https://xixihhhh.github.io/hotclip/en.html",
   "downloadUrl": "https://github.com/xixihhhh/hotclip/releases/latest",
   "screenshot": "https://xixihhhh.github.io/hotclip/screenshots/04-highlights.png",
@@ -35,115 +46,219 @@
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
+  "@type": "HowTo",
+  "name": "How to turn a long video into shorts for free",
+  "description": "Three steps to turn a podcast, livestream replay or any long video into viral vertical shorts with HotClip, a free open-source desktop app.",
+  "tool": [{ "@type": "HowToTool", "name": "HotClip (free & open source, Windows/macOS)" }],
+  "step": [
+    { "@type": "HowToStep", "position": 1, "name": "Import your long video", "text": "Drop a podcast, livestream replay, lecture or vlog into HotClip (MP4/MKV/MOV/FLV/TS, audio-only works too). Hours-long replays go straight in — everything is processed locally." },
+    { "@type": "HowToStep", "position": 2, "name": "Let AI pick the highlights", "text": "After local word-level transcription, the AI reads the whole transcript and nominates quotables, conflicts and peak moments — each with a virality score, an opening hook and its reasoning. Untick anything you don't like." },
+    { "@type": "HowToStep", "position": 3, "name": "Export vertical clips", "text": "One click produces 9:16 clips with face-tracked reframing, karaoke captions, title cards and loudness normalization — plus a cover image and metadata, ready for TikTok, Reels and Shorts." }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
   "@type": "FAQPage",
   "mainEntity": [
-    { "@type": "Question", "name": "Is HotClip free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. HotClip is open source (AGPL-3.0), runs locally, and has no watermark, no credit system, and no video-length caps. Optional cloud LLMs bill your own API key — or point it at a local Ollama model for a fully free, fully offline pipeline." } },
-    { "@type": "Question", "name": "How is HotClip different from OpusClip, Klap or Vizard?", "acceptedAnswer": { "@type": "Answer", "text": "Your footage never leaves your machine. Those SaaS tools require cloud uploads and meter credits per source minute (credits expire monthly; free tiers add watermarks and expire projects). HotClip is free, local, watermark-free and cap-free, and every AI cut ships with auditable reasoning you can veto." } },
-    { "@type": "Question", "name": "Does HotClip need an internet connection?", "acceptedAnswer": { "@type": "Answer", "text": "Transcription, captions, cutting and export run fully offline. Only the highlight-detection step calls a cloud LLM by default (with your own key); with a local Ollama model the entire pipeline is 100% offline." } },
+    { "@type": "Question", "name": "What is the best free Opus Clip alternative without watermark?", "acceptedAnswer": { "@type": "Answer", "text": "HotClip is a free, open-source (AGPL-3.0) desktop app for Windows and macOS that covers OpusClip's core job — long video in, viral vertical shorts out — with no credit system, no watermark and no video-length caps, because it runs entirely on your own machine." } },
+    { "@type": "Question", "name": "Is there an AI clipper that runs locally without uploading my video?", "acceptedAnswer": { "@type": "Answer", "text": "Yes — HotClip processes everything locally: transcription, highlight detection, cutting and export. Only the highlight-detection step calls a cloud LLM by default (with your own key, transcript text only); point it at a local Ollama model and the entire pipeline is 100% offline." } },
+    { "@type": "Question", "name": "How is HotClip different from OpusClip, Klap or Vizard?", "acceptedAnswer": { "@type": "Answer", "text": "Your footage never leaves your machine. Those SaaS tools require cloud uploads and meter credits per source minute (credits expire monthly; free tiers add watermarks). HotClip is free, local, watermark-free and cap-free, and every AI cut ships with auditable reasoning you can veto." } },
+    { "@type": "Question", "name": "How do I add karaoke style captions to a video?", "acceptedAnswer": { "@type": "Answer", "text": "HotClip transcribes locally with word-level timestamps and burns karaoke word-by-word highlighted captions into every clip automatically. You can also export SRT files for native platform upload, and enable bilingual captions with full-sentence translation." } },
+    { "@type": "Question", "name": "Can it remove filler words and silences for free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Silence jump-cuts remove pauses between sentences and the filler-word pass cuts ums/uhs and stutters — caption timing is remapped automatically, and every edit is logged to clips.json so you can audit what the AI did." } },
     { "@type": "Question", "name": "Do I need a GPU?", "acceptedAnswer": { "@type": "Answer", "text": "No. The local speech-recognition models are int8-quantized and run fine on a normal CPU." } },
-    { "@type": "Question", "name": "Does it work for Chinese video?", "acceptedAnswer": { "@type": "Answer", "text": "Yes — Chinese speech goes through dedicated ASR engines (SenseVoice, Paraformer, FireRedASR2) with noticeably better accuracy than general-purpose models, covering dialects, Cantonese and code-switching." } }
+    { "@type": "Question", "name": "Does it work for Chinese video?", "acceptedAnswer": { "@type": "Answer", "text": "Yes — Chinese speech goes through dedicated ASR engines (SenseVoice, Paraformer, FireRedASR2) with noticeably better accuracy than general-purpose models, covering dialects, Cantonese and code-switching." } },
+    { "@type": "Question", "name": "Can I clip other people's streams?", "acceptedAnswer": { "@type": "Answer", "text": "HotClip is for your own content or clips you are authorized to make (e.g. streamer clipping programs). Unauthorized re-uploading is not supported and not welcome." } }
   ]
 }
 </script>
 </head>
 <body>
+<div class="progress" aria-hidden="true"></div>
 <div class="container">
 
-<nav>
+<div class="glow glow-a" aria-hidden="true"></div>
+<div class="glow glow-b" aria-hidden="true"></div>
+<div class="glow glow-c" aria-hidden="true"></div>
+
+<nav id="sitenav">
   <img src="icon.png" alt="HotClip logo">
   <span class="name">HotClip</span>
   <span class="spacer"></span>
+  <a class="plain" href="#how">How it works</a>
+  <a class="plain" href="#features">Features</a>
   <a class="plain" href="#compare">Compare</a>
-  <a class="plain" href="alternatives/opus-clip.html">vs OpusClip</a>
+  <a class="plain" href="#faq">FAQ</a>
   <a class="plain" href="index.html">中文</a>
-  <a class="plain" href="https://github.com/xixihhhh/hotclip">GitHub ★</a>
+  <a class="plain" href="https://github.com/xixihhhh/hotclip">GitHub<span id="gh-stars-nav"></span></a>
+  <a class="nav-cta" href="https://github.com/xixihhhh/hotclip/releases/latest">Download free</a>
 </nav>
 
+<main>
 <header class="hero">
-  <h1>Long videos &amp; livestream replays<br>→ <span class="hl">viral vertical shorts</span></h1>
-  <p class="sub">A free, open-source AI clip generator that runs 100% on your machine. AI highlight detection · 9:16 face-tracked reframe · karaoke word-level captions — ready for TikTok, Reels, Shorts, Douyin and Bilibili.</p>
+  <span class="eyebrow"><span class="dot"></span>Open source (AGPL-3.0) · no sign-up · double-click to run</span>
+  <h1 id="hero-title">Long videos &amp; livestreams,<br>clipped into <span class="hl">viral vertical shorts</span></h1>
+  <p class="sub">A free, open-source <strong>AI video clipper that runs 100% on your machine</strong>. AI highlight detection · face-tracked <strong>9:16 auto-reframe</strong> · <strong>karaoke word-level captions</strong> — ready for TikTok, Reels, Shorts, Douyin and Bilibili.</p>
   <div class="chips">
-    <span class="chip">100% local — no uploads</span>
-    <span class="chip">Free &amp; open source</span>
-    <span class="chip">No watermark</span>
-    <span class="chip">No credits</span>
-    <span class="chip">No length caps</span>
+    <span class="chip">🔒 100% local — no uploads</span>
+    <span class="chip">🆓 Free &amp; open source</span>
+    <span class="chip">💧 No watermark</span>
+    <span class="chip">🚫 No credits</span>
+    <span class="chip">∞ No length caps</span>
   </div>
   <div class="cta">
     <a class="btn btn-primary" href="https://github.com/xixihhhh/hotclip/releases/latest">⬇️ Download free (Windows / macOS)</a>
     <a class="btn btn-ghost" href="https://github.com/xixihhhh/hotclip">Star on GitHub</a>
   </div>
-  <p class="note">Open source (AGPL-3.0) · no Python, no Docker — a real desktop app</p>
+  <p class="note">No Python, no Docker, no account — a real desktop app you double-click</p>
+  <div class="meta-badges">
+    <span>Latest <b id="gh-version">v0.9.4</b></span>
+    <span>GitHub <b id="gh-stars">★</b></span>
+    <span>Windows · macOS</span>
+  </div>
   <div class="shot">
-    <img src="screenshots/04-highlights.png" alt="HotClip AI highlight candidates with virality scores, hooks and four-dimension scoring" loading="eager">
+    <img src="screenshots/04-highlights.png" alt="HotClip AI highlight candidates with virality scores, hooks and four-dimension scoring" loading="eager" width="2880" height="2520">
     <p class="cap">The AI reads the whole transcript and nominates highlights — each with a virality score, hook, reasoning and word-accurate cut points. You make the call.</p>
+  </div>
+
+  <div class="stats" role="region" aria-label="How HotClip differs from credit-metered clippers">
+    <div class="stat" data-reveal><div class="num">$<span data-count="0" data-decimals="0">0</span></div><div class="lab">Free forever · no credits</div></div>
+    <div class="stat" data-reveal><div class="num"><span data-count="100">0</span>%</div><div class="lab">Local processing · no uploads</div></div>
+    <div class="stat" data-reveal><div class="num"><span data-count="3">0</span> steps</div><div class="lab">Import → pick → export</div></div>
+    <div class="stat" data-reveal><div class="num">∞</div><div class="lab">Unlimited length · no watermark</div></div>
+  </div>
+
+  <div class="marquee" role="region" aria-label="Platforms your clips are ready for">
+    <div class="marquee-track">
+      <span class="p">Post straight to <b>TikTok</b></span>
+      <span class="p"><b>YouTube Shorts</b></span>
+      <span class="p"><b>Instagram Reels</b></span>
+      <span class="p"><b>X / Twitter</b></span>
+      <span class="p"><b>LinkedIn</b></span>
+      <span class="p"><b>Douyin</b></span>
+      <span class="p"><b>Bilibili</b></span>
+      <span class="p">Podcasts clip great too <b>🎙️</b></span>
+    </div>
   </div>
 </header>
 
 <section id="how">
-  <h2>Three steps to publish</h2>
+  <h2>How to turn a long video into shorts — <span class="hl">in three steps</span></h2>
+  <p class="lead">From an hours-long replay to clips you can actually post, with nothing to learn.</p>
   <div class="grid grid-3">
-    <div class="card">
-      <div class="step">STEP 1</div>
+    <div class="card" data-reveal>
+      <div class="step">1</div>
       <h3>Import</h3>
-      <p>Drop in a podcast, livestream replay, lecture or vlog (MP4 / MKV / MOV / FLV / TS, audio-only too). Hours-long replays go straight in — everything is processed locally.</p>
+      <p>Drop in a podcast, livestream replay, lecture or vlog (MP4 / MKV / MOV / FLV / TS, audio-only too). Hours-long replays go straight in — <b>everything stays local</b>.</p>
     </div>
-    <div class="card">
-      <div class="step">STEP 2</div>
+    <div class="card" data-reveal>
+      <div class="step">2</div>
       <h3>Pick highlights</h3>
-      <p>Local word-level transcription, then the AI nominates quotables, conflicts and peak moments — each with a virality score, an opening hook and its reasoning. Untick anything you don't like.</p>
+      <p>Local word-level transcription, then the AI nominates quotables, conflicts and peak moments — each with a <b>virality score, an opening hook and its reasoning</b>. Untick anything you don't like.</p>
     </div>
-    <div class="card">
-      <div class="step">STEP 3</div>
+    <div class="card" data-reveal>
+      <div class="step">3</div>
       <h3>Export</h3>
-      <p>One click produces vertical 9:16 clips: face-tracked reframe, karaoke captions, title cards, loudness normalization — plus a cover image and metadata, ready to post.</p>
+      <p>One click produces vertical 9:16 clips: <b>face-tracked reframe, karaoke captions</b>, title cards, loudness normalization — plus a cover image and metadata, ready to post.</p>
     </div>
   </div>
 </section>
 
 <section id="features">
   <h2>Why <span class="hl">HotClip</span></h2>
+  <p class="lead">Credit metering, forced uploads, black-box scoring, an English-only pipeline — the usual traps, all removed.</p>
+  <div class="grid grid-3">
+    <div class="card" data-reveal><span class="ico">🔥</span><h3>AI highlights generator</h3><p>Six evidence channels (transcript, loudness, shot density, facial expression, visuals, live-chat heat) nominate peak moments — each with a <b>virality score and a four-dimension review</b>.</p></div>
+    <div class="card" data-reveal><span class="ico">🎯</span><h3>Accurate cuts, with receipts</h3><p>The LLM only decides <i>which part</i>; timestamps come from <b>reverse-aligning the word-level transcript</b> — the AI never guesses times. Every cut ships with reasoning you can veto.</p></div>
+    <div class="card" data-reveal><span class="ico">📝</span><h3>Karaoke captions, auto-burned</h3><p>Word-level timestamps drive word-by-word highlighted captions with semantic line breaks; <b>SRT export</b> and bilingual captions included.</p></div>
+    <div class="card" data-reveal><span class="ico">📱</span><h3>9:16 auto-reframe with face tracking</h3><p>Landscape to vertical with <b>per-shot face tracking</b> (three modes) and center-crop fallback; optional dual-format export gives you a landscape set too.</p></div>
+    <div class="card" data-reveal><span class="ico">✂️</span><h3>Remove filler words &amp; silences</h3><p>Silence jump-cuts and an um/uh filler pass make talking-head edits feel hand-made; loudness normalized to the <b>-14 LUFS</b> social standard.</p></div>
+    <div class="card" data-reveal><span class="ico">🗣️</span><h3>Speaker diarization</h3><p>Interviews and multi-host podcasts get <b>who-said-what labels</b> (fully local), so the AI never stitches two speakers into one out-of-context clip.</p></div>
+    <div class="card" data-reveal><span class="ico">🌏</span><h3>Native Chinese + English</h3><p>Dedicated Chinese ASR engines (SenseVoice / Paraformer / FireRedASR2) covering dialects and code-switching; bilingual UI, language-routed prompts.</p></div>
+    <div class="card" data-reveal><span class="ico">🤖</span><h3>Hands-off mode + folder watch</h3><p>One button runs transcribe → detect → export; point the <b>folder watcher</b> at your recording directory and finished streams clip themselves, 24/7.</p></div>
+    <div class="card" data-reveal><span class="ico">🆓</span><h3>Actually free</h3><p>No credits, no watermark, no caps, no paywalled features. Bring your own LLM key — or run a <b>local Ollama model fully offline</b>.</p></div>
+  </div>
+</section>
+
+<section id="who">
+  <h2>Built for <span class="hl">streamers, podcasters &amp; talking heads</span></h2>
   <div class="grid grid-2">
-    <div class="card"><h3>🔒 Footage never leaves your machine</h3><p>Transcription, highlight detection and cutting all run locally. Unreleased footage, client work, NDA material — nothing is handed to a cloud server.</p></div>
-    <div class="card"><h3>🎯 Accurate cuts, with receipts</h3><p>The LLM only decides which part; timestamps come from reverse-aligning the word-level transcript — the AI never guesses times. Every candidate ships with scores and reasoning you can veto.</p></div>
-    <div class="card"><h3>✂️ Edits that feel hand-made</h3><p>Silence jump cuts, filler-word removal, semantic caption line breaks, speaker-colored captions, opening-hook burn-in, -14 LUFS loudness — the whole finishing chain built in.</p></div>
-    <div class="card"><h3>🤖 One-click hands-off mode</h3><p>Press one button: transcribe → find highlights → export finished clips. A processing receipt logs exactly what the AI did to each clip.</p></div>
-    <div class="card"><h3>🌏 Native Chinese + English</h3><p>Dedicated ASR engines for Chinese (dialects and code-switching included), bilingual UI, language-routed prompts — not a translation afterthought.</p></div>
-    <div class="card"><h3>🆓 Actually free</h3><p>No credits, no watermark, no caps, no paywalled features. Bring your own LLM key — or run a local Ollama model fully offline.</p></div>
+    <div class="card who-card" data-reveal><span class="tag">Stream highlights AI</span><h3>Streamers &amp; clippers</h3><p>Clip your own VODs into highlight shorts right after the stream; the folder watcher turns finished recordings into clips <b>while you sleep</b>, and live-chat heat feeds straight into highlight detection.</p></div>
+    <div class="card who-card" data-reveal><span class="tag">Podcast to shorts</span><h3>Podcasters</h3><p>Audio-only episodes still become video — an <b>audiogram waveform</b> plus quote captions turns your podcast into vertical clips; transcription is cached so re-cutting is instant.</p></div>
+    <div class="card who-card" data-reveal><span class="tag">Repurpose long-form</span><h3>Educators &amp; marketers</h3><p>Lectures, webinars and product demos become snackable clips with cover images, titles and metadata — ready for a <b>content pipeline</b>, with a compliance word-lint before publish.</p></div>
+    <div class="card who-card" data-reveal><span class="tag">Filler-word removal</span><h3>Talking-head creators</h3><p>Silences, ums and stutters removed automatically; <b>click-to-fix transcripts</b> and a custom-vocabulary list keep names and jargon right, episode after episode.</p></div>
+  </div>
+</section>
+
+<section id="why-local">
+  <h2>Why <span class="hl">local + open source</span></h2>
+  <div class="why-band" data-reveal>
+    <div class="grid grid-2">
+      <div class="why-item"><span class="ico">🔒</span><div><h3>Footage never leaves your machine</h3><p>Unreleased material, client work, NDA footage — nothing is handed to a cloud server, because there is no cloud.</p></div></div>
+      <div class="why-item"><span class="ico">🧾</span><div><h3>Every cut is auditable</h3><p>Competitors ship a black-box virality score; HotClip attaches reasoning, four-dimension scores and a processing receipt to every clip.</p></div></div>
+      <div class="why-item"><span class="ico">💸</span><div><h3>No credit anxiety</h3><p>No 7-day trial — there is no paid tier. No minute quota — nothing is metered. No credit card — there isn't even an account.</p></div></div>
+      <div class="why-item"><span class="ico">🧑‍💻</span><div><h3>Promises you can read in code</h3><p>AGPL-3.0 open source: "local, no uploads" isn't marketing copy, it's verifiable source code.</p></div></div>
+    </div>
   </div>
 </section>
 
 <section id="compare">
   <h2>How it <span class="hl">compares</span></h2>
-  <div class="tablewrap">
-    <table>
+  <div class="tablewrap" data-reveal>
+    <table id="compare-table">
       <thead><tr><th></th><th>HotClip</th><th>OpusClip / Klap / Vizard</th><th>CapCut smart clipping</th><th>FunClip etc. (open source)</th></tr></thead>
       <tbody>
         <tr><td>Price</td><td class="win">Free &amp; open source</td><td>$15–29+/mo, credits per source minute, expire monthly</td><td>Core features paywalled</td><td>Free</td></tr>
         <tr><td>Your footage</td><td class="win">Stays local</td><td>Mandatory cloud upload</td><td>Mostly cloud</td><td>Local</td></tr>
         <tr><td>Watermark / caps</td><td class="win">None</td><td>Free tier: watermark, caps, projects expire in 3 days</td><td>Some restricted</td><td>None</td></tr>
+        <tr><td>Account</td><td class="win">No sign-up</td><td>Account required, projects deleted on unsubscribe</td><td>Login required</td><td>None</td></tr>
         <tr><td>Setup</td><td class="win">Double-click installer</td><td>Web app</td><td>Easy</td><td>CLI / Docker</td></tr>
         <tr><td>Cut quality</td><td class="win">Word-aligned, reasoning attached</td><td>Black-box scoring</td><td>Black box</td><td>Sentence-level, unranked</td></tr>
       </tbody>
     </table>
   </div>
-  <p style="text-align:center; margin-top:16px; color:var(--fg-dim); font-size:15px">Deep dive: <a href="alternatives/opus-clip.html">HotClip vs OpusClip — a free, local alternative</a></p>
+  <p class="table-note">Deep dive: <a href="alternatives/opus-clip.html">HotClip vs OpusClip — a free, local, open-source alternative</a></p>
 </section>
 
 <section id="faq">
   <h2>FAQ</h2>
-  <details open><summary>Is HotClip free?</summary><p>Yes — open source (AGPL-3.0), local, no watermark, no credits, no length caps. Optional cloud LLMs bill your own key; a local Ollama model makes it fully free and offline.</p></details>
+  <details open><summary>What is the best free Opus Clip alternative without watermark?</summary><p>HotClip — free, open source (AGPL-3.0), local, no watermark, no credits, no length caps. Optional cloud LLMs bill your own key; a local Ollama model makes it fully free and offline.</p></details>
+  <details><summary>Is there an AI clipper that runs locally without uploading my video?</summary><p>Yes — transcription, highlight detection, cutting and export all run on your machine. Only highlight detection calls a cloud LLM by default (your key, transcript text only); point it at local Ollama for a <b>100% offline pipeline</b>.</p></details>
   <details><summary>How is it different from OpusClip / Klap / Vizard?</summary><p>Your footage never leaves your machine. Those tools upload to the cloud and meter credits per source minute (expiring monthly; watermarked free tiers). HotClip is free, local, watermark-free — and every cut comes with auditable reasoning.</p></details>
-  <details><summary>Does it need an internet connection?</summary><p>Transcription, captions, cutting and export are fully offline. Only highlight detection calls a cloud LLM by default (your key) — point it at local Ollama for a 100% offline pipeline.</p></details>
+  <details><summary>How do I add karaoke style captions?</summary><p>They're automatic: local word-level transcription drives word-by-word highlighted captions burned into every clip. <b>SRT export</b> and bilingual captions are one toggle away.</p></details>
+  <details><summary>Can it remove filler words and silences?</summary><p>Yes — silence jump-cuts plus an um/uh filler pass, with caption timing remapped automatically. Every edit is logged to clips.json so you can audit what the AI did.</p></details>
   <details><summary>Do I need a GPU?</summary><p>No — the local ASR models are int8-quantized and run fine on CPU.</p></details>
+  <details><summary>Does it work for Chinese video?</summary><p>Yes, exceptionally well — dedicated Chinese ASR engines (SenseVoice / Paraformer / FireRedASR2) cover dialects, Cantonese and code-switching.</p></details>
   <details><summary>Can I clip other people's streams?</summary><p>HotClip is for your own content or clips you're authorized to make (e.g. streamer clipping programs). Unauthorized re-uploading is not supported and not welcome.</p></details>
 </section>
 
+<div class="final-cta" data-reveal>
+  <h2>Give your next replay to <span class="hl">HotClip</span></h2>
+  <p>Windows / macOS · free &amp; open source · no sign-up · double-click to run</p>
+  <div class="cta">
+    <a class="btn btn-primary" href="https://github.com/xixihhhh/hotclip/releases/latest">⬇️ Download the latest release</a>
+    <a class="btn btn-ghost" href="https://github.com/xixihhhh/hotclip">Star it on GitHub</a>
+  </div>
+</div>
+</main>
+
 <footer>
-  <p>HotClip · Open source (AGPL-3.0) · <a href="https://github.com/xixihhhh/hotclip">GitHub</a> · <a href="https://github.com/xixihhhh/hotclip/releases/latest">Download</a> · <a href="index.html">中文</a></p>
-  <p style="margin-top:8px">For your own content and authorized clips only. Respect each platform's rules.</p>
+  <div class="foot-links">
+    <a href="https://github.com/xixihhhh/hotclip">GitHub</a>
+    <a href="https://github.com/xixihhhh/hotclip/releases/latest">Download</a>
+    <a href="alternatives/opus-clip.html">vs OpusClip</a>
+    <a href="index.html">中文</a>
+    <a href="https://github.com/xixihhhh/hotclip/issues">Feedback</a>
+  </div>
+  <p>HotClip · Open source (AGPL-3.0) · For your own content and authorized clips only. Respect each platform's rules.</p>
 </footer>
 
 </div>
+<script src="vendor/gsap/gsap.min.js"></script>
+<script src="vendor/gsap/ScrollTrigger.min.js"></script>
+<script src="vendor/gsap/ScrollToPlugin.min.js"></script>
+<script src="vendor/gsap/SplitText.min.js"></script>
+<script src="site.js"></script>
 </body>
 </html>
