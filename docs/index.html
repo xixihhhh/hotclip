@@ -77,7 +77,36 @@
 </script>
 </head>
 <body>
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+<symbol id="i-flame" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M12 2c.7 2.4 1.9 4 3.4 5.6C17.3 9.7 19 11.8 19 14.4 19 18.6 15.9 22 12 22s-7-3.4-7-7.6c0-2.6 1.7-4.7 3.6-6.8C10.1 6 11.3 4.4 12 2z"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M9 5.5 18 12l-9 6.5z"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+<symbol id="i-caption" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 14.5h4M14.5 14.5H17M7 10.5h3.5"/></symbol>
+<symbol id="i-reframe" viewBox="0 0 24 24"><rect x="8.5" y="3" width="11" height="18" rx="2.2"/><path d="M5 16V9.5A4.5 4.5 0 0 1 8 5.2M5 16l-1.7-1.9M5 16l1.9-1.7"/></symbol>
+<symbol id="i-scissors" viewBox="0 0 24 24"><circle cx="6" cy="7" r="2.4"/><circle cx="6" cy="17" r="2.4"/><path d="M8.2 8.4 20 20M8.2 15.6 20 4"/></symbol>
+<symbol id="i-voice" viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 20c.6-3.2 2.9-5 5.5-5s4.9 1.8 5.5 5M16.5 7a4.5 4.5 0 0 1 0 7M19 4.5a8 8 0 0 1 0 12"/></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></symbol>
+<symbol id="i-receipt" viewBox="0 0 24 24"><path d="M6 3h12v18l-2-1.4-2 1.4-2-1.4L10 21l-2-1.4L6 21z"/><path d="M9.5 8.5H15M9.5 12.5H15"/></symbol>
+<symbol id="i-bolt" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M13.5 2 5 13.5h5.5L9.5 22 18 10.5h-5.5z"/></symbol>
+<symbol id="i-tag" viewBox="0 0 24 24"><path d="M20.6 13.3 12 4.7A2.4 2.4 0 0 0 10.3 4H6a2 2 0 0 0-2 2v4.3c0 .6.3 1.2.7 1.7l8.6 8.6a2 2 0 0 0 2.8 0l4.5-4.5a2 2 0 0 0 0-2.8z"/><circle cx="8.2" cy="8.2" r="1.2" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3.5V15M12 15l-4.5-4.5M12 15l4.5-4.5M4.5 20.5h15"/></symbol>
+<symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3 2.7 5.6 6.1.8-4.5 4.3 1.1 6-5.4-2.9-5.4 2.9 1.1-6L3.2 9.4l6.1-.8z"/></symbol>
+<symbol id="i-tray" viewBox="0 0 24 24"><path d="M4.5 4.5h15l2 8.5v6a1.5 1.5 0 0 1-1.5 1.5H4a1.5 1.5 0 0 1-1.5-1.5v-6z"/><path d="M2.5 13h5.5l1.6 2.6h4.8L16 13h5.5"/></symbol>
+<symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M7.5 4.5v15M16.5 4.5v15M3 9h4.5M3 15h4.5M16.5 9H21M16.5 15H21"/></symbol>
+<symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M8.5 21.5h7"/></symbol>
+<symbol id="i-cam" viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="13" height="11" rx="2"/><path d="m15.5 10.5 6-3.2v9.4l-6-3.2z"/></symbol>
+<symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="m3 16.5 5-4.6 4.2 3.8 3-2.6 5.8 4.9"/></symbol>
+<symbol id="i-text" viewBox="0 0 24 24"><path d="M4 6.5h16M4 12h16M4 17.5h9"/></symbol>
+<symbol id="i-braces" viewBox="0 0 24 24"><path d="M9 3.5c-2 0-3 1-3 3v2.6c0 1.5-.8 2.4-2.2 2.9C5.2 12.5 6 13.4 6 14.9v2.6c0 2 1 3 3 3"/><path d="M15 3.5c2 0 3 1 3 3v2.6c0 1.5.8 2.4 2.2 2.9-1.4.5-2.2 1.4-2.2 2.9v2.6c0 2-1 3-3 3"/></symbol>
+<symbol id="i-bubble" viewBox="0 0 24 24"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.4c-1.5 0-2.9-.3-4.1-1L3 20.5l1.4-4.4a8.5 8.5 0 1 1 16.6-4.6z"/><path d="M8 10.5h8M8 13.8h5"/></symbol>
+<symbol id="i-gamepad" viewBox="0 0 24 24"><rect x="2" y="7.5" width="20" height="10" rx="5"/><path d="M8 10.5v4M6 12.5h4"/><circle cx="15.5" cy="11" r="1" fill="currentColor" stroke="none"/><circle cx="18" cy="13.5" r="1" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-cart" viewBox="0 0 24 24"><circle cx="9.5" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M3 4h2.4L8 15.5h10L21 7.5H6"/></symbol>
+<symbol id="i-cap" viewBox="0 0 24 24"><path d="M12 4 2 9l10 5 10-5z"/><path d="M6.5 11.3V16c0 1.6 2.5 3 5.5 3s5.5-1.4 5.5-3v-4.7M22 9v5"/></symbol>
+<symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c.8-4 3.9-6 7.5-6s6.7 2 7.5 6"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 2.5 20 5.5v5.8c0 5-3.3 9-8 10.7-4.7-1.7-8-5.7-8-10.7V5.5z"/><path d="m8.8 12 2.2 2.2 4.4-4.4"/></symbol>
+</svg>
 <div class="progress" aria-hidden="true"></div>
+<div class="gridbg" aria-hidden="true"></div>
 <div class="container">
 
 <div class="glow glow-a" aria-hidden="true"></div>
@@ -101,16 +130,9 @@
 <header class="hero">
   <span class="eyebrow"><span class="dot"></span>开源 AGPL-3.0 · 无需注册 · 下载双击即用</span>
   <h1 id="hero-title">直播切片 · 长视频剪辑<br>一键切出<span class="hl">爆款竖屏短视频</span></h1>
-  <p class="sub">播客、直播回放、课程、Vlog 丢进来,<strong>AI 自动找爆点</strong>(金句/冲突/高能瞬间)→ <strong>横屏转竖屏 9:16</strong> + <strong>卡拉OK逐字字幕</strong> → 直接发抖音 / 快手 / B站 / 视频号 / 小红书 / TikTok。</p>
-  <div class="chips">
-    <span class="chip">🔒 本地运行·不上传</span>
-    <span class="chip">🆓 免费开源</span>
-    <span class="chip">💧 无水印</span>
-    <span class="chip">🚫 无积分制</span>
-    <span class="chip">∞ 不限时长</span>
-  </div>
+  <p class="sub">播客、直播回放、课程、Vlog 丢进来,<strong>AI 自动找爆点</strong> → <strong>横屏转竖屏 9:16</strong> + <strong>卡拉OK逐字字幕</strong> → 直接发抖音 / 快手 / B站 / 视频号 / 小红书 / TikTok。<br>免费开源 · 本地运行不上传 · 无水印 · 无积分制 · 不限时长。</p>
   <div class="cta">
-    <a class="btn btn-primary" href="https://github.com/xixihhhh/hotclip/releases/latest">⬇️ 免费下载(Windows / macOS)</a>
+    <a class="btn btn-primary" href="https://github.com/xixihhhh/hotclip/releases/latest"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> 免费下载(Windows / macOS)</a>
     <a class="btn btn-ghost" href="https://github.com/xixihhhh/hotclip">GitHub 源码</a>
   </div>
   <p class="note">不用 Python、不用 Docker、连账号都不用注册——下载安装包,双击即用</p>
@@ -119,16 +141,38 @@
     <span>GitHub <b id="gh-stars">★</b></span>
     <span>Windows · macOS</span>
   </div>
-  <div class="shot">
-    <img src="screenshots/04-highlights.png" alt="HotClip AI 直播切片界面:每条爆点候选附爆款分、开场钩子与四维打分" loading="eager" width="2880" height="2520">
-    <p class="cap">AI 通读全文挑爆点——每条候选附爆款分、开场钩子、四维分项与逐字精确切点,取舍全在你手</p>
-  </div>
 
-  <div class="stats" role="region" aria-label="HotClip 与积分制切片工具的差别">
-    <div class="stat" data-reveal><div class="num">¥<span data-count="0" data-decimals="0">0</span></div><div class="lab">永久免费 · 无积分制</div></div>
-    <div class="stat" data-reveal><div class="num"><span data-count="100">0</span>%</div><div class="lab">本地处理 · 素材不上传</div></div>
-    <div class="stat" data-reveal><div class="num"><span data-count="3">0</span> 步</div><div class="lab">导入 → 挑爆点 → 出片</div></div>
-    <div class="stat" data-reveal><div class="num">∞</div><div class="lab">不限时长 · 无水印</div></div>
+  <!-- 切片装置:一条长视频的时间轴上,火苗标记的高能段被"切"成三条竖屏成片 -->
+  <div class="rig" aria-hidden="true">
+    <div class="rig-cards">
+      <div class="clip-card c1">
+        <div class="clip-score"><svg class="ic" aria-hidden="true"><use href="#i-flame"/></svg> 95</div>
+        <div class="clip-play"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg></div>
+        <div class="clip-cap"><span class="w">这段</span><span class="w">直接</span><span class="w">起飞</span></div>
+        <span class="clip-beam"></span>
+      </div>
+      <div class="clip-card c2">
+        <div class="clip-score"><svg class="ic" aria-hidden="true"><use href="#i-flame"/></svg> 88</div>
+        <div class="clip-play"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg></div>
+        <div class="clip-cap"><span class="w">金句</span><span class="w">就是</span><span class="w">这句</span></div>
+        <span class="clip-beam"></span>
+      </div>
+      <div class="clip-card c3">
+        <div class="clip-score"><svg class="ic" aria-hidden="true"><use href="#i-flame"/></svg> 92</div>
+        <div class="clip-play"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg></div>
+        <div class="clip-cap"><span class="w">三二一</span><span class="w">上链接</span></div>
+        <span class="clip-beam"></span>
+      </div>
+    </div>
+    <div class="film">
+      <div class="holes-t"></div>
+      <div class="wave" id="film-wave"></div>
+      <div class="holes-b"></div>
+      <div class="cut" style="left:16%"><span class="flame"><svg class="ic" aria-hidden="true"><use href="#i-flame"/></svg></span></div>
+      <div class="cut" style="left:45.5%"><span class="flame"><svg class="ic" aria-hidden="true"><use href="#i-flame"/></svg></span></div>
+      <div class="cut" style="left:75%"><span class="flame"><svg class="ic" aria-hidden="true"><use href="#i-flame"/></svg></span></div>
+    </div>
+    <p class="rig-label">一条 3 小时的直播回放 → AI 圈出高能段 → 切成能直接发的竖屏成片</p>
   </div>
 
   <div class="marquee" role="region" aria-label="成片可直接发布的平台">
@@ -141,67 +185,174 @@
       <span class="p"><b>TikTok</b></span>
       <span class="p"><b>YouTube Shorts</b></span>
       <span class="p"><b>Instagram Reels</b></span>
-      <span class="p">播客金句也能切 <b>🎙️</b></span>
+      <span class="p"><b>播客</b>金句也能切</span>
     </div>
   </div>
 </header>
 
-<section id="how">
+<section id="how" class="scrolly">
   <h2>直播切片怎么做?<span class="hl">三步出片</span></h2>
-  <p class="lead">从几小时的直播回放到能直接发布的竖屏成片,中间只有三步——不会剪辑也能用。</p>
-  <div class="grid grid-3">
-    <div class="card" data-reveal>
-      <div class="step">1</div>
-      <h3>导入长视频</h3>
-      <p>把播客、直播回放、课程、Vlog 丢进来(MP4 / MKV / MOV / FLV / TS,纯音频也行)。数小时的直播回放直接进,<b>全程本地处理</b>。</p>
+  <p class="lead">从几小时的直播回放到能直接发布的竖屏成片,中间只有三步——往下滚动,看看每一步发生了什么。</p>
+  <div class="stage-wrap">
+    <div class="stage-progress" aria-hidden="true">
+      <span class="sp sp-1 active">01 · 导入</span>
+      <span class="sp sp-2">02 · AI 找爆点</span>
+      <span class="sp sp-3">03 · 一键出片</span>
     </div>
-    <div class="card" data-reveal>
-      <div class="step">2</div>
-      <h3>AI 找爆点</h3>
-      <p>本地逐字转写 → AI 通读全文挑出金句、冲突、高能片段,每条附<b>爆款分、开场钩子和推荐理由</b>,切点精确到词。看不顺眼的取消勾选即可。</p>
-    </div>
-    <div class="card" data-reveal>
-      <div class="step">3</div>
-      <h3>一键出片</h3>
-      <p>竖屏 9:16 成片一键导出:<b>人脸跟随取景、卡拉OK逐字字幕</b>、标题贴片、响度归一,附封面图和发布文案,打开就能发。</p>
+    <div class="stages">
+      <div class="stage stage-1">
+        <div class="st-copy">
+          <span class="st-k">STEP 01 · 导入</span>
+          <h3>几小时的回放,整个丢进来</h3>
+          <p>播客、直播回放、课程、Vlog——<b>纯音频也行</b>。数小时的录播直接进,<b>全程本地处理</b>,素材不出你的电脑。</p>
+          <div class="st-chips"><span>MP4</span><span>MKV</span><span>MOV</span><span>FLV</span><span>TS</span><span>纯音频</span></div>
+        </div>
+        <div class="st-visual">
+          <div class="import-tray">
+            <div class="tray-icon"><svg class="ic" aria-hidden="true"><use href="#i-tray"/></svg></div>
+            <div class="tray-text">拖进来就开始——不用切段、不用转码</div>
+          </div>
+          <span class="file-chip fc-1"><svg class="ic" aria-hidden="true"><use href="#i-film"/></svg> 直播回放.flv <small>· 3h12m</small></span>
+          <span class="file-chip fc-2"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg> 播客第41期.mp3 <small>· 1h48m</small></span>
+          <span class="file-chip fc-3"><svg class="ic" aria-hidden="true"><use href="#i-cam"/></svg> 口播素材.mp4 <small>· 26m</small></span>
+        </div>
+      </div>
+      <div class="stage stage-2">
+        <div class="st-copy">
+          <span class="st-k">STEP 02 · AI 找爆点</span>
+          <h3>每条候选,都讲得出理由</h3>
+          <p>本地逐字转写后,AI 通读全文挑出金句、冲突、高能段。<b>爆款分 + 四维评审 + 推荐理由</b>,切点由逐字转写反向对齐、精确到词——不是黑盒,看不顺眼取消勾选即可。</p>
+          <div class="st-chips"><span>文本</span><span>响度</span><span>镜头</span><span>表情</span><span>视觉</span><span>弹幕</span></div>
+        </div>
+        <div class="st-visual">
+          <div class="cand-card">
+            <div class="cc-top">
+              <span class="cc-title"><svg class="ic" aria-hidden="true"><use href="#i-flame"/></svg> 金句时刻</span>
+              <span class="cc-score">爆款分 <b class="cc-num" data-target="92">0</b></span>
+            </div>
+            <p class="cc-quote">"很多人以为切片靠运气,其实爆点是有结构的——钩子、冲突、反转,一个都不能少。"</p>
+            <div class="cc-dims">
+              <div class="cc-dim">钩子<div class="cc-bar"><i data-w="0.88"></i></div></div>
+              <div class="cc-dim">结构<div class="cc-bar"><i data-w="0.76"></i></div></div>
+              <div class="cc-dim">价值<div class="cc-bar"><i data-w="0.92"></i></div></div>
+              <div class="cc-dim">热点<div class="cc-bar"><i data-w="0.64"></i></div></div>
+            </div>
+            <div class="cc-why">AI 复评:开场 3 秒有钩子,信息密度高,独立可看——建议发布</div>
+          </div>
+          <div class="cand-mini"><svg class="ic" aria-hidden="true"><use href="#i-scissors"/></svg> 切点 <b>00:42:17.320 → 00:42:49.860</b><br>逐字对齐 · 精确到词 · 可手动微调</div>
+        </div>
+      </div>
+      <div class="stage stage-3">
+        <div class="st-copy">
+          <span class="st-k">STEP 03 · 一键出片</span>
+          <h3>出来就是能发的成片</h3>
+          <p><b>人脸跟随</b>横转竖 9:16、<b>卡拉OK逐字字幕</b>烧进画面、标题贴片、去气口、响度归一 -14 LUFS——每条附封面图和发布文案,打开就能发。</p>
+          <div class="st-chips"><span>抖音</span><span>快手</span><span>B站</span><span>视频号</span><span>小红书</span><span>TikTok</span></div>
+        </div>
+        <div class="st-visual">
+          <div class="phone">
+            <div class="ph-notch"></div>
+            <div class="ph-title">切片靠的不是运气</div>
+            <div class="ph-cap"><span class="w">爆点</span><span class="w">是有</span><span class="w">结构的</span></div>
+            <div class="ph-wave" id="phone-wave"></div>
+          </div>
+          <div class="export-list">
+            <span class="export-item"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg> 封面图 JPG</span>
+            <span class="export-item"><svg class="ic" aria-hidden="true"><use href="#i-bubble"/></svg> SRT 字幕</span>
+            <span class="export-item"><svg class="ic" aria-hidden="true"><use href="#i-text"/></svg> 发布文案</span>
+            <span class="export-item"><svg class="ic" aria-hidden="true"><use href="#i-braces"/></svg> clips.json 回执</span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
+<div class="karaoke-demo" role="region" aria-label="卡拉OK逐字字幕效果演示">
+  <p class="kd-line" id="karaoke-line">爆点一开口,字幕就跟着点亮</p>
+  <p class="kd-sub">↑ 卡拉OK逐字字幕(自动加字幕)· 成片效果演示,实际直接烧录进视频画面,SRT 可导出</p>
+</div>
+
 <section id="features">
   <h2>为什么选 <span class="hl">HotClip</span></h2>
-  <p class="lead">按分钟扣积分、必须上传云端、切点黑盒、中文识别拉胯——市面工具的坑,这里一次填平。</p>
-  <div class="grid grid-3">
-    <div class="card" data-reveal><span class="ico">🔥</span><h3>AI 找爆点 · 直播高光切片</h3><p>六路证据链(文本/响度/镜头/表情/视觉/弹幕)圈出高能时刻,每条候选附<b>爆款分与四维评审</b>,弱片自动标「不建议发布」。</p></div>
-    <div class="card" data-reveal><span class="ico">🎯</span><h3>切点准,而且讲得出理由</h3><p>大模型只负责«挑哪段»,时间戳由逐字转写<b>反向对齐</b>——不让 AI 猜时间。每一刀为什么这么切,回执里写得明明白白。</p></div>
-    <div class="card" data-reveal><span class="ico">📝</span><h3>自动加字幕 · 卡拉OK逐字点亮</h3><p>词级时间戳驱动的逐字点亮字幕直接烧进画面,语义断行不「拦腰截断」;<b>SRT 可导出</b>,双语字幕一键开。</p></div>
-    <div class="card" data-reveal><span class="ico">📱</span><h3>横屏转竖屏 9:16</h3><p><b>人脸跟随智能取景</b>(镜头级三模式),人不在画面中间也不切歪;无人脸自动回退居中裁剪,还能一键双画幅竖横同出。</p></div>
-    <div class="card" data-reveal><span class="ico">✂️</span><h3>口播剪辑:去气口、剪口头禅</h3><p>自动删停顿静音、剪掉嗯/呃与结巴重复,字幕时间轴同步重映射;响度归一到 <b>-14 LUFS</b> 社媒标准,成片像人剪的。</p></div>
-    <div class="card" data-reveal><span class="ico">🗣️</span><h3>说话人分离</h3><p>访谈、连麦、多人播客一键标注<b>谁在说话</b>(本地运行零上传),AI 按说话人挑段不断章取义,气泡字幕还能按人上色。</p></div>
-    <div class="card" data-reveal><span class="ico">🇨🇳</span><h3>中文原生</h3><p>中文识别走 <b>SenseVoice / Paraformer / FireRedASR2</b> 专用引擎,方言、粤语、中英混说都稳;不是英文产品硬翻。</p></div>
-    <div class="card" data-reveal><span class="ico">🤖</span><h3>一键全托管 + 录播监听</h3><p>点一个按钮全自动跑完转写→找爆点→成片;开「录播监听」<b>7×24 无人值守</b>,直播录完自动出片,主播睡觉切片机干活。</p></div>
-    <div class="card" data-reveal><span class="ico">🆓</span><h3>真免费,没有套路</h3><p>无积分制、无水印、不限时长、不锁功能。可选云端大模型用你自己的 Key,或接<b>本机 Ollama 完全离线</b>。</p></div>
+  <p class="lead">按分钟扣积分、必须上传云端、切点黑盒、中文识别拉胯——市面工具的坑,一次填平。</p>
+  <div class="bento">
+    <div class="b-cell b-lg b-hotspot" data-reveal>
+      <span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-flame"/></svg></span>
+      <h3>AI 找爆点 · 直播高光切片</h3>
+      <p>六路证据链(文本/响度/镜头/表情/视觉/弹幕)圈出高能时刻,每条候选附<b>爆款分与四维评审</b>,弱片自动标「不建议发布」。爆款分是同批次排名,不是玄学。</p>
+      <div class="mini-cand" aria-hidden="true">
+        <div class="cc-top"><span><svg class="ic" aria-hidden="true"><use href="#i-flame"/></svg> 金句时刻</span><span class="cc-score">92</span></div>
+        <div class="cc-dims">
+          <div class="cc-dim">钩子<div class="cc-bar"><i data-w="0.88"></i></div></div>
+          <div class="cc-dim">结构<div class="cc-bar"><i data-w="0.76"></i></div></div>
+          <div class="cc-dim">价值<div class="cc-bar"><i data-w="0.92"></i></div></div>
+          <div class="cc-dim">热点<div class="cc-bar"><i data-w="0.64"></i></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="b-cell b-lg b-privacy" data-reveal>
+      <span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg></span>
+      <h3>素材不出你的电脑</h3>
+      <p>转写、找爆点、切片、导出全在本机跑。未发布的素材、客户内容、带 NDA 的商单,不用交给任何云端服务器;接<b>本机 Ollama</b> 后整条流水线 100% 离线。</p>
+      <div class="shield-wrap" aria-hidden="true">
+        <span class="shield"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span>
+        <div class="upload-zero">0<small>次上传 · 全程本地 · 代码可查(AGPL-3.0)</small></div>
+      </div>
+    </div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-caption"/></svg></span><h3>自动加字幕 · 卡拉OK逐字点亮</h3><p>词级时间戳驱动,语义断行不「拦腰截断」;<b>SRT 可导出</b>,双语字幕一键开。</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-reframe"/></svg></span><h3>横屏转竖屏 9:16</h3><p><b>人脸跟随取景</b>(镜头级三模式),无人脸自动回退居中;一键双画幅竖横同出。</p></div>
+    <div class="b-cell b-wave" data-reveal>
+      <span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-scissors"/></svg></span><h3>口播剪辑:去气口、剪口头禅</h3><p>自动删停顿、剪掉嗯/呃,响度归一 <b>-14 LUFS</b>,成片像人剪的。</p>
+      <div class="wave-demo" aria-hidden="true"><i></i><i></i><i></i><i class="cut-gap"></i><i></i><i></i><i class="cut-gap"></i><i></i><i></i><i></i></div>
+    </div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-voice"/></svg></span><h3>说话人分离</h3><p>访谈、连麦一键标注<b>谁在说话</b>(本地零上传),字幕还能按人上色。</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-globe"/></svg></span><h3>中文原生</h3><p>SenseVoice / Paraformer / FireRedASR2 专用引擎,方言、粤语、中英混说都稳。</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg></span><h3>每一刀都可审计</h3><p>切点理由、剪了哪些口头禅、用了什么样式——<b>clips.json 回执</b>全记录,可否决可推翻。</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>一键全托管 + 录播监听</h3><p>点一个按钮全自动出片;录播监听 <b>7×24 无人值守</b>,主播睡觉切片机干活。</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-tag"/></svg></span><h3>真免费,没有套路</h3><p>无积分制、无水印、不限时长、不锁功能,连账号都没有。</p></div>
+    <figure class="b-cell b-full b-shot" data-reveal>
+      <img src="screenshots/04-highlights.png" alt="HotClip 真实界面:AI 爆点候选,每条附爆款分、开场钩子与四维打分" loading="lazy" width="2880" height="2520">
+      <figcaption>真实界面(演示素材:一段带货直播回放)——AI 通读全文挑爆点,取舍全在你手</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="manifesto" role="region" aria-label="HotClip 与积分制工具的区别宣言">
+  <p class="m-line" data-reveal>没有 7 天试用,<span>因为没有付费版</span></p>
+  <p class="m-line" data-reveal>没有分钟额度,<span>因为根本不计费</span></p>
+  <p class="m-line" data-reveal>不需要信用卡,<span>因为连账号都没有</span></p>
+  <p class="m-note" data-reveal>OpusClip 免费档 60 分钟 ≈ 一场直播的零头;HotClip 不数分钟。</p>
+  <div class="stats">
+    <div class="stat" data-reveal><div class="num">¥<span data-count="0" data-decimals="0">0</span></div><div class="lab">永久免费 · 无积分制</div></div>
+    <div class="stat" data-reveal><div class="num"><span data-count="100">0</span>%</div><div class="lab">本地处理 · 素材不上传</div></div>
+    <div class="stat" data-reveal><div class="num"><span data-count="3">0</span> 步</div><div class="lab">导入 → 挑爆点 → 出片</div></div>
+    <div class="stat" data-reveal><div class="num">∞</div><div class="lab">不限时长 · 无水印</div></div>
   </div>
 </section>
 
 <section id="who">
   <h2>谁在用:<span class="hl">直播切片 · 切片带货 · 播客剪辑 · 口播剪辑</span></h2>
-  <div class="grid grid-2">
-    <div class="card who-card" data-reveal><span class="tag">直播切片 · 录播切片</span><h3>主播 / 切片手</h3><p>下播后把几小时直播回放自动切成高光短视频;录播姬/OBS 目录挂上「录播监听」,录完自动出片;<b>弹幕热度</b>就是观众逐秒投的票,直接进爆点判断。虚拟主播切片同样适用。</p></div>
-    <div class="card who-card" data-reveal><span class="tag">切片带货(已授权)</span><h3>带货 / 矩阵团队</h3><p><b>商品讲解模式</b>按转化逻辑选段(试用实测 &gt; 卖点 &gt; 价格机制),一键托管批量出片,每条附发布文案、封面图与 clips.json 元数据,120+ 平台违禁词规则发布前点名。</p></div>
-    <div class="card who-card" data-reveal><span class="tag">播客剪辑 · 播客视频化</span><h3>播客主</h3><p>纯音频也能出片——自动合成<b>波形动画画面</b> + 金句字幕,播客节目直接变竖屏视频;转写缓存让你换设置多切几条不用重跑。</p></div>
-    <div class="card who-card" data-reveal><span class="tag">口播剪辑</span><h3>知识区 / 口播博主</h3><p>自动<b>去气口、剪口头禅</b>、删停顿,长口播变利落短视频;逐句稿即点即改,热词词表一次纠错期期生效。</p></div>
-  </div>
-</section>
-
-<section id="why-local">
-  <h2>为什么坚持<span class="hl">本地 + 开源</span></h2>
-  <div class="why-band" data-reveal>
-    <div class="grid grid-2">
-      <div class="why-item"><span class="ico">🔒</span><div><h3>素材不出你的电脑</h3><p>未发布的素材、客户内容、带 NDA 的商单,不用交给任何云端服务器——转写、找爆点、切片全在本机跑。</p></div></div>
-      <div class="why-item"><span class="ico">🧾</span><div><h3>每一刀都可审计</h3><p>竞品的「病毒式评分」是黑盒;HotClip 每条切片附理由、四维分项和处理回执,AI 动了什么一目了然,可否决可推翻。</p></div></div>
-      <div class="why-item"><span class="ico">💸</span><div><h3>没有积分焦虑</h3><p>没有 7 天试用,因为没有付费版;没有分钟数额度,因为根本不计费;不需要信用卡,因为连账号体系都没有。</p></div></div>
-      <div class="why-item"><span class="ico">🧑‍💻</span><div><h3>承诺写在代码里</h3><p>AGPL-3.0 开源,「本地处理、不上传」不是宣传话术,是任何人都能查证的代码事实。</p></div></div>
+  <div class="who-list">
+    <div class="who-row" data-reveal>
+      <div><h3>主播 / 切片手</h3><span class="who-tag">直播切片 · 录播切片</span></div>
+      <p>下播后几小时回放自动切成高光短视频;录播姬/OBS 目录挂上「录播监听」录完自动出片;<b>弹幕热度</b>直接进爆点判断。虚拟主播切片同样适用。</p>
+      <span class="who-ico"><svg class="ic" aria-hidden="true"><use href="#i-gamepad"/></svg></span>
+    </div>
+    <div class="who-row" data-reveal>
+      <div><h3>带货 / 矩阵团队</h3><span class="who-tag">切片带货(已授权)</span></div>
+      <p><b>商品讲解模式</b>按转化逻辑选段(试用实测 &gt; 卖点 &gt; 价格机制),批量托管出片附文案/封面/元数据,120+ 违禁词规则发布前点名。</p>
+      <span class="who-ico"><svg class="ic" aria-hidden="true"><use href="#i-cart"/></svg></span>
+    </div>
+    <div class="who-row" data-reveal>
+      <div><h3>播客主</h3><span class="who-tag">播客剪辑 · 播客视频化</span></div>
+      <p>纯音频也能出片——自动合成<b>波形动画画面</b> + 金句字幕,播客节目直接变竖屏视频;转写缓存,换设置重切秒进。</p>
+      <span class="who-ico"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg></span>
+    </div>
+    <div class="who-row" data-reveal>
+      <div><h3>知识区 / 口播博主</h3><span class="who-tag">口播剪辑</span></div>
+      <p>自动<b>去气口、剪口头禅</b>、删停顿,长口播变利落短视频;逐句稿即点即改,热词词表一次纠错期期生效。</p>
+      <span class="who-ico"><svg class="ic" aria-hidden="true"><use href="#i-cap"/></svg></span>
     </div>
   </div>
 </section>
@@ -241,8 +392,8 @@
   <h2>把下一场直播回放,交给 <span class="hl">HotClip</span></h2>
   <p>Windows / macOS · 免费开源 · 无需注册 · 双击即用</p>
   <div class="cta">
-    <a class="btn btn-primary" href="https://github.com/xixihhhh/hotclip/releases/latest">⬇️ 免费下载最新版</a>
-    <a class="btn btn-ghost" href="https://github.com/xixihhhh/hotclip">去 GitHub 点个 ⭐</a>
+    <a class="btn btn-primary" href="https://github.com/xixihhhh/hotclip/releases/latest"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> 免费下载最新版</a>
+    <a class="btn btn-ghost" href="https://github.com/xixihhhh/hotclip">去 GitHub 点个 <svg class="ic" aria-hidden="true"><use href="#i-star"/></svg></a>
   </div>
 </div>
 </main>

@@ -75,7 +75,36 @@
 </script>
 </head>
 <body>
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+<symbol id="i-flame" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M12 2c.7 2.4 1.9 4 3.4 5.6C17.3 9.7 19 11.8 19 14.4 19 18.6 15.9 22 12 22s-7-3.4-7-7.6c0-2.6 1.7-4.7 3.6-6.8C10.1 6 11.3 4.4 12 2z"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M9 5.5 18 12l-9 6.5z"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+<symbol id="i-caption" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 14.5h4M14.5 14.5H17M7 10.5h3.5"/></symbol>
+<symbol id="i-reframe" viewBox="0 0 24 24"><rect x="8.5" y="3" width="11" height="18" rx="2.2"/><path d="M5 16V9.5A4.5 4.5 0 0 1 8 5.2M5 16l-1.7-1.9M5 16l1.9-1.7"/></symbol>
+<symbol id="i-scissors" viewBox="0 0 24 24"><circle cx="6" cy="7" r="2.4"/><circle cx="6" cy="17" r="2.4"/><path d="M8.2 8.4 20 20M8.2 15.6 20 4"/></symbol>
+<symbol id="i-voice" viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 20c.6-3.2 2.9-5 5.5-5s4.9 1.8 5.5 5M16.5 7a4.5 4.5 0 0 1 0 7M19 4.5a8 8 0 0 1 0 12"/></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></symbol>
+<symbol id="i-receipt" viewBox="0 0 24 24"><path d="M6 3h12v18l-2-1.4-2 1.4-2-1.4L10 21l-2-1.4L6 21z"/><path d="M9.5 8.5H15M9.5 12.5H15"/></symbol>
+<symbol id="i-bolt" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M13.5 2 5 13.5h5.5L9.5 22 18 10.5h-5.5z"/></symbol>
+<symbol id="i-tag" viewBox="0 0 24 24"><path d="M20.6 13.3 12 4.7A2.4 2.4 0 0 0 10.3 4H6a2 2 0 0 0-2 2v4.3c0 .6.3 1.2.7 1.7l8.6 8.6a2 2 0 0 0 2.8 0l4.5-4.5a2 2 0 0 0 0-2.8z"/><circle cx="8.2" cy="8.2" r="1.2" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3.5V15M12 15l-4.5-4.5M12 15l4.5-4.5M4.5 20.5h15"/></symbol>
+<symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3 2.7 5.6 6.1.8-4.5 4.3 1.1 6-5.4-2.9-5.4 2.9 1.1-6L3.2 9.4l6.1-.8z"/></symbol>
+<symbol id="i-tray" viewBox="0 0 24 24"><path d="M4.5 4.5h15l2 8.5v6a1.5 1.5 0 0 1-1.5 1.5H4a1.5 1.5 0 0 1-1.5-1.5v-6z"/><path d="M2.5 13h5.5l1.6 2.6h4.8L16 13h5.5"/></symbol>
+<symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M7.5 4.5v15M16.5 4.5v15M3 9h4.5M3 15h4.5M16.5 9H21M16.5 15H21"/></symbol>
+<symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M8.5 21.5h7"/></symbol>
+<symbol id="i-cam" viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="13" height="11" rx="2"/><path d="m15.5 10.5 6-3.2v9.4l-6-3.2z"/></symbol>
+<symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="m3 16.5 5-4.6 4.2 3.8 3-2.6 5.8 4.9"/></symbol>
+<symbol id="i-text" viewBox="0 0 24 24"><path d="M4 6.5h16M4 12h16M4 17.5h9"/></symbol>
+<symbol id="i-braces" viewBox="0 0 24 24"><path d="M9 3.5c-2 0-3 1-3 3v2.6c0 1.5-.8 2.4-2.2 2.9C5.2 12.5 6 13.4 6 14.9v2.6c0 2 1 3 3 3"/><path d="M15 3.5c2 0 3 1 3 3v2.6c0 1.5.8 2.4 2.2 2.9-1.4.5-2.2 1.4-2.2 2.9v2.6c0 2-1 3-3 3"/></symbol>
+<symbol id="i-bubble" viewBox="0 0 24 24"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.4c-1.5 0-2.9-.3-4.1-1L3 20.5l1.4-4.4a8.5 8.5 0 1 1 16.6-4.6z"/><path d="M8 10.5h8M8 13.8h5"/></symbol>
+<symbol id="i-gamepad" viewBox="0 0 24 24"><rect x="2" y="7.5" width="20" height="10" rx="5"/><path d="M8 10.5v4M6 12.5h4"/><circle cx="15.5" cy="11" r="1" fill="currentColor" stroke="none"/><circle cx="18" cy="13.5" r="1" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-cart" viewBox="0 0 24 24"><circle cx="9.5" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M3 4h2.4L8 15.5h10L21 7.5H6"/></symbol>
+<symbol id="i-cap" viewBox="0 0 24 24"><path d="M12 4 2 9l10 5 10-5z"/><path d="M6.5 11.3V16c0 1.6 2.5 3 5.5 3s5.5-1.4 5.5-3v-4.7M22 9v5"/></symbol>
+<symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c.8-4 3.9-6 7.5-6s6.7 2 7.5 6"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 2.5 20 5.5v5.8c0 5-3.3 9-8 10.7-4.7-1.7-8-5.7-8-10.7V5.5z"/><path d="m8.8 12 2.2 2.2 4.4-4.4"/></symbol>
+</svg>
 <div class="progress" aria-hidden="true"></div>
+<div class="gridbg" aria-hidden="true"></div>
 <div class="container">
 
 <div class="glow glow-a" aria-hidden="true"></div>
@@ -99,16 +128,9 @@
 <header class="hero">
   <span class="eyebrow"><span class="dot"></span>Open source (AGPL-3.0) · no sign-up · double-click to run</span>
   <h1 id="hero-title">Long videos &amp; livestreams,<br>clipped into <span class="hl">viral vertical shorts</span></h1>
-  <p class="sub">A free, open-source <strong>AI video clipper that runs 100% on your machine</strong>. AI highlight detection · face-tracked <strong>9:16 auto-reframe</strong> · <strong>karaoke word-level captions</strong> — ready for TikTok, Reels, Shorts, Douyin and Bilibili.</p>
-  <div class="chips">
-    <span class="chip">🔒 100% local — no uploads</span>
-    <span class="chip">🆓 Free &amp; open source</span>
-    <span class="chip">💧 No watermark</span>
-    <span class="chip">🚫 No credits</span>
-    <span class="chip">∞ No length caps</span>
-  </div>
+  <p class="sub">Drop in a podcast, VOD or lecture — <strong>AI finds the highlights</strong> → <strong>9:16 face-tracked reframe</strong> + <strong>karaoke word-level captions</strong> → ready for TikTok, Reels, Shorts, Douyin and Bilibili.<br>Free &amp; open source · 100% local, no uploads · no watermark · no credits · no length caps.</p>
   <div class="cta">
-    <a class="btn btn-primary" href="https://github.com/xixihhhh/hotclip/releases/latest">⬇️ Download free (Windows / macOS)</a>
+    <a class="btn btn-primary" href="https://github.com/xixihhhh/hotclip/releases/latest"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Download free (Windows / macOS)</a>
     <a class="btn btn-ghost" href="https://github.com/xixihhhh/hotclip">Star on GitHub</a>
   </div>
   <p class="note">No Python, no Docker, no account — a real desktop app you double-click</p>
@@ -117,16 +139,38 @@
     <span>GitHub <b id="gh-stars">★</b></span>
     <span>Windows · macOS</span>
   </div>
-  <div class="shot">
-    <img src="screenshots/04-highlights.png" alt="HotClip AI highlight candidates with virality scores, hooks and four-dimension scoring" loading="eager" width="2880" height="2520">
-    <p class="cap">The AI reads the whole transcript and nominates highlights — each with a virality score, hook, reasoning and word-accurate cut points. You make the call.</p>
-  </div>
 
-  <div class="stats" role="region" aria-label="How HotClip differs from credit-metered clippers">
-    <div class="stat" data-reveal><div class="num">$<span data-count="0" data-decimals="0">0</span></div><div class="lab">Free forever · no credits</div></div>
-    <div class="stat" data-reveal><div class="num"><span data-count="100">0</span>%</div><div class="lab">Local processing · no uploads</div></div>
-    <div class="stat" data-reveal><div class="num"><span data-count="3">0</span> steps</div><div class="lab">Import → pick → export</div></div>
-    <div class="stat" data-reveal><div class="num">∞</div><div class="lab">Unlimited length · no watermark</div></div>
+  <!-- The clipping rig: one long timeline, flame-marked peaks cut into vertical shorts -->
+  <div class="rig" aria-hidden="true">
+    <div class="rig-cards">
+      <div class="clip-card c1">
+        <div class="clip-score"><svg class="ic" aria-hidden="true"><use href="#i-flame"/></svg> 95</div>
+        <div class="clip-play"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg></div>
+        <div class="clip-cap"><span class="w">This</span> <span class="w">part</span> <span class="w">slaps</span></div>
+        <span class="clip-beam"></span>
+      </div>
+      <div class="clip-card c2">
+        <div class="clip-score"><svg class="ic" aria-hidden="true"><use href="#i-flame"/></svg> 88</div>
+        <div class="clip-play"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg></div>
+        <div class="clip-cap"><span class="w">That's</span> <span class="w">the</span> <span class="w">quote</span></div>
+        <span class="clip-beam"></span>
+      </div>
+      <div class="clip-card c3">
+        <div class="clip-score"><svg class="ic" aria-hidden="true"><use href="#i-flame"/></svg> 92</div>
+        <div class="clip-play"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg></div>
+        <div class="clip-cap"><span class="w">Wait</span> <span class="w">for</span> <span class="w">it…</span></div>
+        <span class="clip-beam"></span>
+      </div>
+    </div>
+    <div class="film">
+      <div class="holes-t"></div>
+      <div class="wave" id="film-wave"></div>
+      <div class="holes-b"></div>
+      <div class="cut" style="left:16%"><span class="flame"><svg class="ic" aria-hidden="true"><use href="#i-flame"/></svg></span></div>
+      <div class="cut" style="left:45.5%"><span class="flame"><svg class="ic" aria-hidden="true"><use href="#i-flame"/></svg></span></div>
+      <div class="cut" style="left:75%"><span class="flame"><svg class="ic" aria-hidden="true"><use href="#i-flame"/></svg></span></div>
+    </div>
+    <p class="rig-label">One 3-hour replay → AI marks the peak moments → shorts you can post right away</p>
   </div>
 
   <div class="marquee" role="region" aria-label="Platforms your clips are ready for">
@@ -138,67 +182,174 @@
       <span class="p"><b>LinkedIn</b></span>
       <span class="p"><b>Douyin</b></span>
       <span class="p"><b>Bilibili</b></span>
-      <span class="p">Podcasts clip great too <b>🎙️</b></span>
+      <span class="p"><b>Podcasts</b> clip great too</span>
     </div>
   </div>
 </header>
 
-<section id="how">
+<section id="how" class="scrolly">
   <h2>How to turn a long video into shorts — <span class="hl">in three steps</span></h2>
-  <p class="lead">From an hours-long replay to clips you can actually post, with nothing to learn.</p>
-  <div class="grid grid-3">
-    <div class="card" data-reveal>
-      <div class="step">1</div>
-      <h3>Import</h3>
-      <p>Drop in a podcast, livestream replay, lecture or vlog (MP4 / MKV / MOV / FLV / TS, audio-only too). Hours-long replays go straight in — <b>everything stays local</b>.</p>
+  <p class="lead">From an hours-long replay to clips you can actually post. Scroll to see what happens at each step.</p>
+  <div class="stage-wrap">
+    <div class="stage-progress" aria-hidden="true">
+      <span class="sp sp-1 active">01 · Import</span>
+      <span class="sp sp-2">02 · AI highlights</span>
+      <span class="sp sp-3">03 · Export</span>
     </div>
-    <div class="card" data-reveal>
-      <div class="step">2</div>
-      <h3>Pick highlights</h3>
-      <p>Local word-level transcription, then the AI nominates quotables, conflicts and peak moments — each with a <b>virality score, an opening hook and its reasoning</b>. Untick anything you don't like.</p>
-    </div>
-    <div class="card" data-reveal>
-      <div class="step">3</div>
-      <h3>Export</h3>
-      <p>One click produces vertical 9:16 clips: <b>face-tracked reframe, karaoke captions</b>, title cards, loudness normalization — plus a cover image and metadata, ready to post.</p>
+    <div class="stages">
+      <div class="stage stage-1">
+        <div class="st-copy">
+          <span class="st-k">STEP 01 · IMPORT</span>
+          <h3>Drop the whole replay in</h3>
+          <p>Podcasts, VODs, lectures, vlogs — <b>audio-only works too</b>. Hours-long recordings go straight in, <b>processed entirely on your machine</b>.</p>
+          <div class="st-chips"><span>MP4</span><span>MKV</span><span>MOV</span><span>FLV</span><span>TS</span><span>audio-only</span></div>
+        </div>
+        <div class="st-visual">
+          <div class="import-tray">
+            <div class="tray-icon"><svg class="ic" aria-hidden="true"><use href="#i-tray"/></svg></div>
+            <div class="tray-text">Just drag it in — no splitting, no transcoding</div>
+          </div>
+          <span class="file-chip fc-1"><svg class="ic" aria-hidden="true"><use href="#i-film"/></svg> stream-vod.flv <small>· 3h12m</small></span>
+          <span class="file-chip fc-2"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg> podcast-ep41.mp3 <small>· 1h48m</small></span>
+          <span class="file-chip fc-3"><svg class="ic" aria-hidden="true"><use href="#i-cam"/></svg> talking-head.mp4 <small>· 26m</small></span>
+        </div>
+      </div>
+      <div class="stage stage-2">
+        <div class="st-copy">
+          <span class="st-k">STEP 02 · AI HIGHLIGHTS</span>
+          <h3>Every candidate comes with receipts</h3>
+          <p>After local word-level transcription, the AI nominates quotables, conflicts and peak moments. <b>Virality score + four-dimension review + reasoning</b>; timestamps are reverse-aligned from the transcript, accurate to the word. Untick anything you don't like.</p>
+          <div class="st-chips"><span>transcript</span><span>loudness</span><span>shots</span><span>emotion</span><span>vision</span><span>live chat</span></div>
+        </div>
+        <div class="st-visual">
+          <div class="cand-card">
+            <div class="cc-top">
+              <span class="cc-title"><svg class="ic" aria-hidden="true"><use href="#i-flame"/></svg> Quotable moment</span>
+              <span class="cc-score">Score <b class="cc-num" data-target="92">0</b></span>
+            </div>
+            <p class="cc-quote">"People think viral clips are luck. They're not — hooks, conflict, payoff. It's structure."</p>
+            <div class="cc-dims">
+              <div class="cc-dim">Hook<div class="cc-bar"><i data-w="0.88"></i></div></div>
+              <div class="cc-dim">Structure<div class="cc-bar"><i data-w="0.76"></i></div></div>
+              <div class="cc-dim">Value<div class="cc-bar"><i data-w="0.92"></i></div></div>
+              <div class="cc-dim">Trend<div class="cc-bar"><i data-w="0.64"></i></div></div>
+            </div>
+            <div class="cc-why">AI review: hook within 3 seconds, high info density, stands alone — recommended</div>
+          </div>
+          <div class="cand-mini"><svg class="ic" aria-hidden="true"><use href="#i-scissors"/></svg> Cut points <b>00:42:17.320 → 00:42:49.860</b><br>word-aligned · adjustable by hand</div>
+        </div>
+      </div>
+      <div class="stage stage-3">
+        <div class="st-copy">
+          <span class="st-k">STEP 03 · EXPORT</span>
+          <h3>What comes out is ready to post</h3>
+          <p><b>Face-tracked</b> 9:16 reframe, <b>karaoke captions</b> burned in, title cards, silence cuts, -14 LUFS loudness — each clip ships with a cover image and post copy.</p>
+          <div class="st-chips"><span>TikTok</span><span>Shorts</span><span>Reels</span><span>Douyin</span><span>Bilibili</span></div>
+        </div>
+        <div class="st-visual">
+          <div class="phone">
+            <div class="ph-notch"></div>
+            <div class="ph-title">Viral clips aren't luck</div>
+            <div class="ph-cap"><span class="w">It's</span> <span class="w">all</span> <span class="w">structure</span></div>
+            <div class="ph-wave" id="phone-wave"></div>
+          </div>
+          <div class="export-list">
+            <span class="export-item"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg> Cover JPG</span>
+            <span class="export-item"><svg class="ic" aria-hidden="true"><use href="#i-bubble"/></svg> SRT captions</span>
+            <span class="export-item"><svg class="ic" aria-hidden="true"><use href="#i-text"/></svg> Post copy</span>
+            <span class="export-item"><svg class="ic" aria-hidden="true"><use href="#i-braces"/></svg> clips.json receipt</span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
+<div class="karaoke-demo" role="region" aria-label="Karaoke caption effect demo">
+  <p class="kd-line" id="karaoke-line">Captions light up as you speak</p>
+  <p class="kd-sub">↑ Karaoke word-level captions · live demo of the effect burned into every clip · SRT export included</p>
+</div>
+
 <section id="features">
   <h2>Why <span class="hl">HotClip</span></h2>
   <p class="lead">Credit metering, forced uploads, black-box scoring, an English-only pipeline — the usual traps, all removed.</p>
-  <div class="grid grid-3">
-    <div class="card" data-reveal><span class="ico">🔥</span><h3>AI highlights generator</h3><p>Six evidence channels (transcript, loudness, shot density, facial expression, visuals, live-chat heat) nominate peak moments — each with a <b>virality score and a four-dimension review</b>.</p></div>
-    <div class="card" data-reveal><span class="ico">🎯</span><h3>Accurate cuts, with receipts</h3><p>The LLM only decides <i>which part</i>; timestamps come from <b>reverse-aligning the word-level transcript</b> — the AI never guesses times. Every cut ships with reasoning you can veto.</p></div>
-    <div class="card" data-reveal><span class="ico">📝</span><h3>Karaoke captions, auto-burned</h3><p>Word-level timestamps drive word-by-word highlighted captions with semantic line breaks; <b>SRT export</b> and bilingual captions included.</p></div>
-    <div class="card" data-reveal><span class="ico">📱</span><h3>9:16 auto-reframe with face tracking</h3><p>Landscape to vertical with <b>per-shot face tracking</b> (three modes) and center-crop fallback; optional dual-format export gives you a landscape set too.</p></div>
-    <div class="card" data-reveal><span class="ico">✂️</span><h3>Remove filler words &amp; silences</h3><p>Silence jump-cuts and an um/uh filler pass make talking-head edits feel hand-made; loudness normalized to the <b>-14 LUFS</b> social standard.</p></div>
-    <div class="card" data-reveal><span class="ico">🗣️</span><h3>Speaker diarization</h3><p>Interviews and multi-host podcasts get <b>who-said-what labels</b> (fully local), so the AI never stitches two speakers into one out-of-context clip.</p></div>
-    <div class="card" data-reveal><span class="ico">🌏</span><h3>Native Chinese + English</h3><p>Dedicated Chinese ASR engines (SenseVoice / Paraformer / FireRedASR2) covering dialects and code-switching; bilingual UI, language-routed prompts.</p></div>
-    <div class="card" data-reveal><span class="ico">🤖</span><h3>Hands-off mode + folder watch</h3><p>One button runs transcribe → detect → export; point the <b>folder watcher</b> at your recording directory and finished streams clip themselves, 24/7.</p></div>
-    <div class="card" data-reveal><span class="ico">🆓</span><h3>Actually free</h3><p>No credits, no watermark, no caps, no paywalled features. Bring your own LLM key — or run a <b>local Ollama model fully offline</b>.</p></div>
+  <div class="bento">
+    <div class="b-cell b-lg b-hotspot" data-reveal>
+      <span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-flame"/></svg></span>
+      <h3>AI highlights generator</h3>
+      <p>Six evidence channels (transcript, loudness, shot density, facial emotion, vision, live-chat heat) nominate peak moments — each with a <b>virality score and four-dimension review</b>. The score is a within-batch ranking, not astrology.</p>
+      <div class="mini-cand" aria-hidden="true">
+        <div class="cc-top"><span><svg class="ic" aria-hidden="true"><use href="#i-flame"/></svg> Quotable moment</span><span class="cc-score">92</span></div>
+        <div class="cc-dims">
+          <div class="cc-dim">Hook<div class="cc-bar"><i data-w="0.88"></i></div></div>
+          <div class="cc-dim">Structure<div class="cc-bar"><i data-w="0.76"></i></div></div>
+          <div class="cc-dim">Value<div class="cc-bar"><i data-w="0.92"></i></div></div>
+          <div class="cc-dim">Trend<div class="cc-bar"><i data-w="0.64"></i></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="b-cell b-lg b-privacy" data-reveal>
+      <span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg></span>
+      <h3>Footage never leaves your machine</h3>
+      <p>Transcription, highlight detection, cutting and export all run locally. Unreleased material, client work, NDA footage — nothing is handed to a cloud server; with a <b>local Ollama model</b> the whole pipeline is 100% offline.</p>
+      <div class="shield-wrap" aria-hidden="true">
+        <span class="shield"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span>
+        <div class="upload-zero">0<small>uploads · fully local · verifiable code (AGPL-3.0)</small></div>
+      </div>
+    </div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-caption"/></svg></span><h3>Karaoke captions, auto-burned</h3><p>Word-level timestamps, semantic line breaks; <b>SRT export</b> and bilingual captions one toggle away.</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-reframe"/></svg></span><h3>9:16 auto-reframe</h3><p><b>Face tracking</b> with per-shot modes, center-crop fallback; optional dual-format export.</p></div>
+    <div class="b-cell b-wave" data-reveal>
+      <span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-scissors"/></svg></span><h3>Filler words &amp; silences, gone</h3><p>Silence jump-cuts and an um/uh pass; loudness normalized to <b>-14 LUFS</b>.</p>
+      <div class="wave-demo" aria-hidden="true"><i></i><i></i><i></i><i class="cut-gap"></i><i></i><i></i><i class="cut-gap"></i><i></i><i></i><i></i></div>
+    </div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-voice"/></svg></span><h3>Speaker diarization</h3><p><b>Who-said-what</b> labels for interviews and multi-host shows (fully local), color-coded captions.</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-globe"/></svg></span><h3>Native Chinese + English</h3><p>Dedicated Chinese ASR engines covering dialects and code-switching; bilingual UI.</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg></span><h3>Every cut is auditable</h3><p>Reasoning, removed fillers, applied styles — all logged to the <b>clips.json receipt</b>. Veto anything.</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>Hands-off mode + folder watch</h3><p>One button runs the whole pipeline; the watch folder clips finished streams <b>24/7</b>.</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-tag"/></svg></span><h3>Actually free</h3><p>No credits, no watermark, no caps, no paywalled features — not even an account.</p></div>
+    <figure class="b-cell b-full b-shot" data-reveal>
+      <img src="screenshots/04-highlights.png" alt="HotClip real UI: AI highlight candidates with virality scores, hooks and four-dimension scoring" loading="lazy" width="2880" height="2520">
+      <figcaption>Real UI (sample: a live-selling stream replay) — the AI reads the whole transcript and nominates highlights; you make the call</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="manifesto" role="region" aria-label="How HotClip differs from credit-metered tools">
+  <p class="m-line" data-reveal>No 7-day trial, <span>because there's no paid tier</span></p>
+  <p class="m-line" data-reveal>No minute quotas, <span>because nothing is metered</span></p>
+  <p class="m-line" data-reveal>No credit card, <span>because there isn't even an account</span></p>
+  <p class="m-note" data-reveal>OpusClip's free tier meters 60 minutes — a fraction of one stream. HotClip doesn't count minutes.</p>
+  <div class="stats">
+    <div class="stat" data-reveal><div class="num">$<span data-count="0" data-decimals="0">0</span></div><div class="lab">Free forever · no credits</div></div>
+    <div class="stat" data-reveal><div class="num"><span data-count="100">0</span>%</div><div class="lab">Local processing · no uploads</div></div>
+    <div class="stat" data-reveal><div class="num"><span data-count="3">0</span> steps</div><div class="lab">Import → pick → export</div></div>
+    <div class="stat" data-reveal><div class="num">∞</div><div class="lab">Unlimited length · no watermark</div></div>
   </div>
 </section>
 
 <section id="who">
   <h2>Built for <span class="hl">streamers, podcasters &amp; talking heads</span></h2>
-  <div class="grid grid-2">
-    <div class="card who-card" data-reveal><span class="tag">Stream highlights AI</span><h3>Streamers &amp; clippers</h3><p>Clip your own VODs into highlight shorts right after the stream; the folder watcher turns finished recordings into clips <b>while you sleep</b>, and live-chat heat feeds straight into highlight detection.</p></div>
-    <div class="card who-card" data-reveal><span class="tag">Podcast to shorts</span><h3>Podcasters</h3><p>Audio-only episodes still become video — an <b>audiogram waveform</b> plus quote captions turns your podcast into vertical clips; transcription is cached so re-cutting is instant.</p></div>
-    <div class="card who-card" data-reveal><span class="tag">Repurpose long-form</span><h3>Educators &amp; marketers</h3><p>Lectures, webinars and product demos become snackable clips with cover images, titles and metadata — ready for a <b>content pipeline</b>, with a compliance word-lint before publish.</p></div>
-    <div class="card who-card" data-reveal><span class="tag">Filler-word removal</span><h3>Talking-head creators</h3><p>Silences, ums and stutters removed automatically; <b>click-to-fix transcripts</b> and a custom-vocabulary list keep names and jargon right, episode after episode.</p></div>
-  </div>
-</section>
-
-<section id="why-local">
-  <h2>Why <span class="hl">local + open source</span></h2>
-  <div class="why-band" data-reveal>
-    <div class="grid grid-2">
-      <div class="why-item"><span class="ico">🔒</span><div><h3>Footage never leaves your machine</h3><p>Unreleased material, client work, NDA footage — nothing is handed to a cloud server, because there is no cloud.</p></div></div>
-      <div class="why-item"><span class="ico">🧾</span><div><h3>Every cut is auditable</h3><p>Competitors ship a black-box virality score; HotClip attaches reasoning, four-dimension scores and a processing receipt to every clip.</p></div></div>
-      <div class="why-item"><span class="ico">💸</span><div><h3>No credit anxiety</h3><p>No 7-day trial — there is no paid tier. No minute quota — nothing is metered. No credit card — there isn't even an account.</p></div></div>
-      <div class="why-item"><span class="ico">🧑‍💻</span><div><h3>Promises you can read in code</h3><p>AGPL-3.0 open source: "local, no uploads" isn't marketing copy, it's verifiable source code.</p></div></div>
+  <div class="who-list">
+    <div class="who-row" data-reveal>
+      <div><h3>Streamers &amp; clippers</h3><span class="who-tag">Stream highlights AI</span></div>
+      <p>Clip your own VODs into highlight shorts right after the stream; the folder watcher turns finished recordings into clips <b>while you sleep</b>, and live-chat heat feeds straight into detection.</p>
+      <span class="who-ico"><svg class="ic" aria-hidden="true"><use href="#i-gamepad"/></svg></span>
+    </div>
+    <div class="who-row" data-reveal>
+      <div><h3>Podcasters</h3><span class="who-tag">Podcast to shorts</span></div>
+      <p>Audio-only episodes still become video — an <b>audiogram waveform</b> plus quote captions turns your podcast into vertical clips; transcription is cached so re-cutting is instant.</p>
+      <span class="who-ico"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg></span>
+    </div>
+    <div class="who-row" data-reveal>
+      <div><h3>Educators &amp; marketers</h3><span class="who-tag">Repurpose long-form</span></div>
+      <p>Lectures, webinars and demos become snackable clips with covers, titles and metadata — ready for a <b>content pipeline</b>, with a banned-words lint before publish.</p>
+      <span class="who-ico"><svg class="ic" aria-hidden="true"><use href="#i-cap"/></svg></span>
+    </div>
+    <div class="who-row" data-reveal>
+      <div><h3>Talking-head creators</h3><span class="who-tag">Filler-word removal</span></div>
+      <p>Silences, ums and stutters removed automatically; <b>click-to-fix transcripts</b> and a custom-vocabulary glossary keep names right, episode after episode.</p>
+      <span class="who-ico"><svg class="ic" aria-hidden="true"><use href="#i-user"/></svg></span>
     </div>
   </div>
 </section>
@@ -224,7 +375,7 @@
 <section id="faq">
   <h2>FAQ</h2>
   <details open><summary>What is the best free Opus Clip alternative without watermark?</summary><p>HotClip — free, open source (AGPL-3.0), local, no watermark, no credits, no length caps. Optional cloud LLMs bill your own key; a local Ollama model makes it fully free and offline.</p></details>
-  <details><summary>Is there an AI clipper that runs locally without uploading my video?</summary><p>Yes — transcription, highlight detection, cutting and export all run on your machine. Only highlight detection calls a cloud LLM by default (your key, transcript text only); point it at local Ollama for a <b>100% offline pipeline</b>.</p></details>
+  <details><summary>Is there an AI clipper that runs locally without uploading my video?</summary><p>Yes — transcription, captions, cutting and export all run on your machine. Only highlight detection calls a cloud LLM by default (your key, transcript text only); point it at local Ollama for a <b>100% offline pipeline</b>.</p></details>
   <details><summary>How is it different from OpusClip / Klap / Vizard?</summary><p>Your footage never leaves your machine. Those tools upload to the cloud and meter credits per source minute (expiring monthly; watermarked free tiers). HotClip is free, local, watermark-free — and every cut comes with auditable reasoning.</p></details>
   <details><summary>How do I add karaoke style captions?</summary><p>They're automatic: local word-level transcription drives word-by-word highlighted captions burned into every clip. <b>SRT export</b> and bilingual captions are one toggle away.</p></details>
   <details><summary>Can it remove filler words and silences?</summary><p>Yes — silence jump-cuts plus an um/uh filler pass, with caption timing remapped automatically. Every edit is logged to clips.json so you can audit what the AI did.</p></details>
@@ -237,7 +388,7 @@
   <h2>Give your next replay to <span class="hl">HotClip</span></h2>
   <p>Windows / macOS · free &amp; open source · no sign-up · double-click to run</p>
   <div class="cta">
-    <a class="btn btn-primary" href="https://github.com/xixihhhh/hotclip/releases/latest">⬇️ Download the latest release</a>
+    <a class="btn btn-primary" href="https://github.com/xixihhhh/hotclip/releases/latest"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Download the latest release</a>
     <a class="btn btn-ghost" href="https://github.com/xixihhhh/hotclip">Star it on GitHub</a>
   </div>
 </div>
