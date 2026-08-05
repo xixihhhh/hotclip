@@ -62,6 +62,11 @@
         $$(".clip-cap .w, .ph-cap .w").forEach(function (w) { w.classList.add("lit"); });
         var kd = $("#karaoke-line");
         if (kd) kd.style.color = "var(--brand-2)";
+        // 减弱动效下自动播放的装饰视频也停掉
+        $$("video.clip-media, video.phone-media").forEach(function (v) {
+          v.removeAttribute("autoplay");
+          v.pause();
+        });
         return;
       }
 
