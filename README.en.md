@@ -18,7 +18,7 @@
   <a href="https://github.com/xixihhhh/hotclip/stargazers"><img src="https://img.shields.io/github/stars/xixihhhh/hotclip?style=social" alt="GitHub stars"></a>
 </p>
 
-**AI highlight detection (with reasoning) · 9:16 face-tracked auto-reframe · karaoke word-level captions · filler-word & silence removal**
+**AI highlight detection (with reasoning) · 9:16 face-tracked auto-reframe · dynamic word-level captions · filler-word & silence removal**
 
 100% local · no watermark · no credits · no length caps · no account
 
@@ -39,7 +39,7 @@
 > No Python, no Docker, no command line, no account — a real desktop app you double-click.
 
 <!-- TODO(P0): 30-60s demo mp4 here (drag into GitHub's README web editor to get a user-attachments inline player):
-     drop in a livestream replay → highlight candidate cards appear → one-click export → vertical clip with karaoke captions -->
+     drop in a livestream replay → highlight candidate cards appear → one-click export → vertical clip with dynamic captions -->
 
 <!-- TODO(P0): "Sample output" table here: 2-3 vertical clips side by side in a <table> with <video> tags -->
 
@@ -47,7 +47,7 @@
 
 1. **Import**: drop in a podcast, livestream replay, lecture or vlog (MP4 / MKV / MOV / FLV / TS, audio-only too). Hours-long VODs go straight in — everything is processed locally
 2. **Pick highlights**: local word-level transcription → the AI reads the whole transcript and nominates quotables, conflicts and peak moments — each with a **virality score, an opening hook and its reasoning**, cut points accurate to the word; untick anything you don't like
-3. **Export**: one click produces vertical 9:16 clips — face-tracked reframe, karaoke captions, title cards, -14 LUFS loudness — plus a cover image and post copy, ready for **TikTok / Reels / Shorts / Douyin / Bilibili**
+3. **Export**: one click produces vertical 9:16 clips — face-tracked reframe, dynamic word-synced captions, title cards, -14 LUFS loudness — plus a cover image and post copy, ready for **TikTok / Reels / Shorts / Douyin / Bilibili**
 
 ## Screenshots
 
@@ -88,7 +88,7 @@ Commercial clippers meter **credits per source minute** (a 2-hour podcast burns 
 | Account | **No sign-up** | Account required, projects deleted on unsubscribe | Login required | None |
 | Beginner-friendly | **Double-click installer** | Web app, easy | Easy | CLI / Docker / self-hosted |
 | Cut quality | **Word-aligned, reasoning attached, veto anything** | Black-box scoring | Black box | Sentence-level, unranked |
-| Vertical captions | **9:16 reframe + karaoke captions built in** | Yes (paid tiers) | Auto-captions paywalled | Mostly no vertical reframe |
+| Vertical captions | **9:16 reframe + dynamic captions built in** | Yes (paid tiers) | Auto-captions paywalled | Mostly no vertical reframe |
 
 <sub>Competitor info verified 2026-07. Deep dive: [HotClip vs OpusClip](https://xixihhhh.github.io/hotclip/alternatives/opus-clip.html)</sub>
 
@@ -104,7 +104,7 @@ Fast SenseVoice (5 languages, 170MB) / balanced Paraformer / most-accurate FireR
 <summary><b>Details</b>: transcript cache · click-to-fix transcripts · hotword glossary · speaker diarization</summary>
 
 - **Local transcript cache**: reopen the same file and jump straight to highlight picking; invalidated when the file or engine changes
-- **Inline transcript correction**: hover any sentence and fix it in place; captions, translation and post copy all use the corrected text, karaoke timing rebuilt automatically
+- **Inline transcript correction**: hover any sentence and fix it in place; captions, translation and post copy all use the corrected text, per-word timing rebuilt automatically
 - **Hotword glossary**: fix a name once, apply to every matching sentence, and every future transcript auto-corrects (whole-word matching, longest wrong term wins); glossary updates replay from cache — no re-recognition
 - **Speaker diarization**: one toggle (local pyannote + 3D-Speaker, zero upload) labels who's speaking; the AI picks segments per speaker and never stitches two people out of context; bubble captions can color per speaker
 </details>
@@ -122,6 +122,7 @@ The LLM only picks *which part* and must quote the transcript; timestamps come f
 - **Live-chat density signal**: auto-discovers the danmaku .xml next to a recording (BililiveRecorder convention); sliding-window density with hype-word weighting — the audience voting second by second, the strongest evidence there is
 - **Facial-emotion peaks (zero-config)**: YuNet + FER+ (MIT-licensed, a few MB) find laughter/surprise/excitement peaks — visual evidence without installing anything
 - **Visual peak signal (optional)**: a local Ollama vision model samples frames for spectacle transcripts can't see; contact-sheet scoring drops VLM calls 20→3
+- **AI visual review (optional)**: after detection, top candidates get a contact-sheet look-over by a vision model — striking visuals boost the score, lifeless visuals demote signal-driven candidates, title/visual mismatches get flagged, and the scene note lands in the reasoning; free with local Ollama, or drop an API key into vision settings for a cloud model
 - **Reference-clip driven detection**: hand in a viral clip to model after — its pacing is measured locally and steers selection (CLI `--reference`)
 - **Review feedback loop**: kept/rejected candidates land in a local preference file steering the next run — it learns your taste, and the data never leaves your machine
 - **On-device two-stage funnel**: a small local model shortlists first, the cloud model reads only the shortlist — an order of magnitude less LLM spend on long videos, zero accuracy loss
@@ -132,7 +133,7 @@ The LLM only picks *which part* and must quote the transcript; timestamps come f
 
 ### 📝 Captions & copy: auto captions and post copy, one toggle each
 
-Karaoke word-by-word captions burned in automatically (semantic line breaks, never chopped mid-phrase); **SRT export** and bilingual captions included; AI titles burned as top cards; post copy generated per clip.
+Dynamic captions in multiple styles — keyword highlight, word pop, bubble, minimal — burned in automatically, word-timestamp driven with semantic line breaks (never chopped mid-phrase); **SRT export** and bilingual captions included; AI titles burned as top cards; post copy generated per clip.
 
 <details>
 <summary><b>Details</b>: bubble captions · opening hook · bilingual · Hormozi style · banned-words lint · AIGC labeling</summary>
@@ -141,6 +142,7 @@ Karaoke word-by-word captions burned in automatically (semantic line breaks, nev
 - **Bubble caption engine**: built-in Chromium renders CSS captions offscreen frame-by-frame — rounded bubbles, gradient keywords, springy entrances; deterministic, same input → same output
 - **Opening hook (first 3 golden seconds)**: the AI's teaser line burned large into the first ~2 seconds, avoiding the subject and title card; skipped when there's no good teaser
 - **Cold open (payoff first)**: the hottest hook line spliced to the very front, then the full clip — the standard retention trick, paywalled elsewhere; skipped when the hook can't be located (never done wrong rather than done badly)
+- **Flash-forward cold open**: flash the clip's most explosive 0.3-1s before the story starts, then cut back — only 0.04% of clips ship any visual hook; auto-coordinates with the climax-first cold open (one or the other), skipped when no safe peak exists
 - **Hormozi-style impact captions**: big bold chunks, hard shadows, word-by-word lighting
 - **Bilingual captions**: full-sentence translation burned as a second track, remapped through jump-cut compression; competitors sell this as a paid tier
 - **SRT export**: timestamps already reflect the jump-cut/filler-removed output; line breaks match the burned captions exactly
@@ -167,6 +169,7 @@ Face-tracked 9:16 reframing (three per-shot modes), silence jump cuts, filler-wo
 - **Render QA + self-repair**: black frames / silences / loudness / duration / mid-word cuts re-checked into clips.json; fixable warnings fixed on the spot and kept only if the re-check improves
 - **Smart cover frame**: the loudest moment inside the clip becomes the cover (usually the laugh or the shout); transitions avoided
 - **Frame-accurate cutting**: fast seek + re-encode; hours-long FLV/TS replays go straight in
+- **Precision cut points (Paraformer second pass)**: selected clips are re-decoded before export; integrated word timestamps (±50ms, better than forced alignment) fix captions, jump cuts and cut boundaries — covering the fast ASR tier's weakness; ~240MB model downloaded on first use, falls back safely when alignment is unreliable
 - **Cancellable exports + real-time progress**: ffmpeg progress streamed live; cancel kills the encoder instantly, finished clips stay
 </details>
 
@@ -236,11 +239,12 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 
 ## What's new
 
-**[v0.11.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.11.0)** (2026-08-05) "Ready to post": **platform publish packs** — after export, clips are organized into per-platform folders under `发布包/`, each with the video (hard-linked, no double disk usage), a cover re-cropped to that platform's aspect (RedNote 3:4, Bilibili 16:10, WeChat Channels 6:7), and post copy trimmed to platform limits (RedNote's hard 20-char title cap, per-platform hashtag counts), plus a manifest recording what was adapted — post the same batch to N platforms without re-fitting specs by hand. **Multi-version variants** — each clip can export 2-3 genuinely different packagings in one run: different hook-angle title cards, opening teasers and post copy, with covers pulled from the next loudness peak; multi-account posting through real variation (platforms now judge originality by substantive added value and flag frame-dropping/mirroring tricks as reposts — we deliberately don't build those). Variants are tagged `variantOf` in clips.json; compilations and EDL automatically include originals only.
+**[v0.12.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.12.0)** (2026-08-05) "Pick sharper, open louder": **flash-forward cold opens** — flash the clip's most explosive 0.3-1s before the story starts, then cut back (only 0.04% of clips ship any visual hook); auto-coordinates with the climax-first cold open and skips itself when no safe peak exists. **AI visual review** — after detection, top candidates get a contact-sheet look-over by a vision model: striking visuals boost the score, lifeless visuals demote signal-driven candidates, and title/visual mismatches get flagged, with the scene note added to the reasoning; free with local Ollama, or drop an API key into vision settings for a cloud model. **Precision cut points** — selected clips are re-decoded with Paraformer before export; its integrated word timestamps (±50ms, better than forced alignment) fix captions, jump cuts and cut boundaries, covering the fast ASR tier's weakness; falls back safely when alignment is unreliable. **Hook payoff check** — numbers promised by the hook must actually appear in the clip, or QA reports it (no clickbait clips). **Caption modernization** — the default style is now keyword highlight (the old full-line karaoke sweep is dated and demoted to an option), and word-pop gained per-word brand-color lighting with a damped entrance, matching the current word-by-word caption mainstream. Plus a fix for four desktop export toggles (denoise / cold open / compilation / dual-aspect) that were never wired up.
 
 <details>
-<summary><b>Release history</b> (v0.4.3 → v0.10.1) and milestones</summary>
+<summary><b>Release history</b> (v0.4.3 → v0.11.0) and milestones</summary>
 
+- **[v0.11.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.11.0)** (2026-08-05) "Ready to post": **platform publish packs** (per-platform folders after export: hard-linked video + covers re-cropped per platform aspect + copy trimmed to platform limits, with an adaptation manifest); **multi-version variants** (2-3 genuinely different packagings per clip: hook-angle title cards, teasers, copy and covers; tagged `variantOf`, compilations/EDL include originals only); **SFX cues & BGM** (whoosh on hard cuts, ding on the emotional peak, soft pop under the hook, ≤3 per clip; BGM loops with voice ducking and end fade, mixed in a separate zero-quality-loss pass); plus the **dynamic minimal** caption style
 - **[v0.10.1](https://github.com/xixihhhh/hotclip/releases/tag/v0.10.1)** (2026-08-05) "Switchable models, tolerant of hiccups": **the model picker is now always reachable** — previously, once configured, there was no way to change provider or model at all (the panel only reappeared on a detection error), so v0.10.0's seven new providers were unreachable for existing users; a toolbar button now shows the current model and reopens the panel, and confirming after a change re-runs detection; **malformed LLM JSON retried once** (mainstream endpoints intermittently emit junk tokens mid-JSON, killing the whole run); **the signal path nominates fewer moments** (12 candidates made the model return an unfilled template; capped at 8)
 - **[v0.10.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.10.0)** (2026-08-05) "Pick better": a rework of **what gets picked** — clips can now be **stitched from multiple parts** (placing two moments ten minutes apart side by side is what makes a "caught contradicting himself" clip work at all); **stream-genre criteria** rebuilt against the **real category taxonomies** of Bilibili/Douyin (adding VTuber, radio, pets, food, esports, crafts and co-watching, which were missing entirely — and co-watching now explicitly forbids clipping the copyrighted content on screen); a new **signal-driven candidate path** so dance/pet/outdoor streams, whose transcripts are empty and which previously yielded nothing at all, get located by audio and visual signals instead; laughter is no longer treated as the highlight itself (it lags the punchline that caused it). Also: **vocal-tone and laughter/applause** as two new evidence paths, **auto-zoom**, **retake cutting**, **recorder webhooks** (BililiveRecorder/blrec), **multi-provider LLM presets** (DeepSeek, Model Studio, GLM, Kimi, SiliconFlow, OpenRouter, OpenAI) and **one-click model-list fetch** (model ids rot as vendors ship new generations — ask the endpoint instead)
 - **[v0.9.4](https://github.com/xixihhhh/hotclip/releases/tag/v0.9.4)** (2026-07-31) "Chinese usernames are off the hook": fixes guaranteed transcription failure under non-ASCII Windows usernames ([#4](https://github.com/xixihhhh/hotclip/issues/4)) — model paths auto-convert to 8.3 short paths, audio samples read app-side; cross-drive model moves unblocked; model-load failures now say what to actually do
@@ -276,8 +280,8 @@ Yes — transcription, captions, cutting and export all run on your machine. Onl
 **How do I turn a podcast or livestream replay into shorts?**
 Import the file → the AI transcribes and flags highlights (fully editable) → export vertical 9:16 clips with captions, covers and post copy.
 
-**How do I add karaoke style captions to a video?**
-They're automatic — word-level timestamps drive word-by-word highlighted captions burned into every clip; SRT export and bilingual captions are one toggle away.
+**How do I add animated word-by-word captions to a video?**
+They're automatic — word-level timestamps drive dynamic captions burned into every clip (keyword highlight, word pop, bubble and more, one toggle to switch); SRT export and bilingual captions are one toggle away.
 
 **Can it remove filler words and silences?**
 Yes — silence jump cuts plus an um/uh filler pass, with caption timing remapped and every edit logged to clips.json.
@@ -301,7 +305,7 @@ pnpm dev        # run the desktop app in dev mode
 pnpm test       # run unit tests
 ```
 
-**Tech stack**: Electron + React 19 + TypeScript + Tailwind 4 · ffmpeg (bundled) · sherpa-onnx local ASR + speaker diarization · libass karaoke captions + offscreen-Chromium bubble caption engine · LLM highlight detection (Atlas Cloud / Ollama / any OpenAI-compatible endpoint, BYO key)
+**Tech stack**: Electron + React 19 + TypeScript + Tailwind 4 · ffmpeg (bundled) · sherpa-onnx local ASR + speaker diarization · libass dynamic captions + offscreen-Chromium bubble caption engine · LLM highlight detection (Atlas Cloud / Ollama / any OpenAI-compatible endpoint, BYO key)
 
 <details>
 <summary><b>Standing on the shoulders of</b></summary>
