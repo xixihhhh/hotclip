@@ -154,7 +154,7 @@ Karaoke word-by-word captions burned in automatically (semantic line breaks, nev
 Face-tracked 9:16 reframing (three per-shot modes), silence jump cuts, filler-word removal, -14 LUFS loudness, frame-accurate cutting — with render QA and self-repair after every export.
 
 <details>
-<summary><b>Details</b>: reframe · silence cuts · denoise · QA & self-repair · smart covers</summary>
+<summary><b>Details</b>: reframe · silence cuts · denoise · SFX · BGM · QA & self-repair · smart covers</summary>
 
 - **Face-tracked smart reframing**: locked / smooth-pan / One Euro tracking per shot; center-crop fallback when no face is found
 - **Screen-recording UI removal**: status bars and letterboxing detected via temporal variance and cropped out
@@ -162,6 +162,8 @@ Face-tracked 9:16 reframing (three per-shot modes), silence jump cuts, filler-wo
 - **Filler-word removal**: um/uh-class fillers and stutters cut (deliberately conservative), itemized in clips.json
 - **Loudness normalization**: -14 LUFS (EBU R128) per clip, measured on the spliced audio after jump cuts
 - **One-click denoise**: double highpass + spectral subtraction; measured -7.9dB noise floor with speech moved just 0.2dB — honest basic denoising, not AI audio repair
+- **SFX cues**: a whoosh on stitch/cold-open hard cuts, a ding on the clip's emotional peak, a soft pop as the opening hook lands — rule-based placement, at most 3 per clip; effects are synthesized locally (zero assets, zero licensing), drop in your own same-named wav files to replace them
+- **Background music (with ducking)**: pick any local audio file — it loops to fit the clip, sits well under the voice, ducks automatically while speech plays and fades out at the end; mixed in a separate pass with the video stream copied untouched
 - **Render QA + self-repair**: black frames / silences / loudness / duration / mid-word cuts re-checked into clips.json; fixable warnings fixed on the spot and kept only if the re-check improves
 - **Smart cover frame**: the loudest moment inside the clip becomes the cover (usually the laugh or the shout); transitions avoided
 - **Frame-accurate cutting**: fast seek + re-encode; hours-long FLV/TS replays go straight in
@@ -173,10 +175,12 @@ Face-tracked 9:16 reframing (three per-shot modes), silence jump cuts, filler-wo
 A clip review workbench (play in-app, drag cut points word-by-word on a waveform), platform-accurate caption safe-zone masks, brand style presets, render prefs memory.
 
 <details>
-<summary><b>Details</b>: workbench · safe zones · brand templates · dual aspect · compilation · EDL · settings</summary>
+<summary><b>Details</b>: workbench · safe zones · publish packs · variants · brand templates · dual aspect · compilation · EDL · settings</summary>
 
 - **Clip review workbench**: play candidates in-app, drag waveform handles to fine-tune word by word (snapping to word boundaries), one-click restore of AI cuts; manually tuned clips skip shot-snapping — the machine never overrides a human decision
 - **Caption safe-zone preview**: overlay each platform's real UI occlusion areas — nine presets from measured data (Douyin / Kuaishou / Bilibili / WeChat Channels / RedNote / TikTok / Reels / Shorts + generic union)
+- **Platform publish packs (post right after cutting)**: per-platform folders with the video hard-linked, the cover re-cropped to that platform's aspect (RedNote 3:4, Bilibili 16:10, Channels 6:7) and post copy trimmed to platform limits, plus a manifest of what was adapted — open the folder, upload platform by platform
+- **Multi-version variants (real differentiation for multi-account posting)**: 2-3 packagings of each clip in one run — different hook-angle title cards, opening teasers, post copy, covers from different loudness peaks; built on added value, not the frame-dropping/mirroring tricks platforms now flag as reposts
 - **Brand style templates**: one highlight color, caption size/position, logo watermark — named presets applied to every clip, recorded in the receipt
 - **Dual aspect ratios in one click**: vertical 9:16 plus a landscape set in one run (title card dropped, captions switch layout) — competitors export one ratio per run
 - **One-click compilation**: the batch spliced into a highlights reel via stream copy (milliseconds, zero quality loss) with a `.chapters.txt` chapter file
@@ -232,12 +236,12 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 
 ## What's new
 
-**[v0.10.1](https://github.com/xixihhhh/hotclip/releases/tag/v0.10.1)** (2026-08-05) "Switchable models, tolerant of hiccups": **the model picker is now always reachable** — previously, once configured, there was no way to change provider or model at all (the panel only reappeared on a detection error), so v0.10.0's seven new providers were unreachable for existing users; a toolbar button now shows the current model and reopens the panel, and confirming after a change re-runs detection. **Malformed LLM JSON is retried once** — mainstream endpoints intermittently emit junk tokens mid-JSON (`"score":数和 90`, `"momentId": vii`), which killed the whole run; a parse failure now re-sends. **The signal path nominates fewer moments** — handing the model 12 candidates made it return an unfilled template; capping at 8 with truncated reference text fixed it.
-
+**[v0.11.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.11.0)** (2026-08-05) "Ready to post": **platform publish packs** — after export, clips are organized into per-platform folders under `发布包/`, each with the video (hard-linked, no double disk usage), a cover re-cropped to that platform's aspect (RedNote 3:4, Bilibili 16:10, WeChat Channels 6:7), and post copy trimmed to platform limits (RedNote's hard 20-char title cap, per-platform hashtag counts), plus a manifest recording what was adapted — post the same batch to N platforms without re-fitting specs by hand. **Multi-version variants** — each clip can export 2-3 genuinely different packagings in one run: different hook-angle title cards, opening teasers and post copy, with covers pulled from the next loudness peak; multi-account posting through real variation (platforms now judge originality by substantive added value and flag frame-dropping/mirroring tricks as reposts — we deliberately don't build those). Variants are tagged `variantOf` in clips.json; compilations and EDL automatically include originals only.
 
 <details>
-<summary><b>Release history</b> (v0.4.3 → v0.10.0) and milestones</summary>
+<summary><b>Release history</b> (v0.4.3 → v0.10.1) and milestones</summary>
 
+- **[v0.10.1](https://github.com/xixihhhh/hotclip/releases/tag/v0.10.1)** (2026-08-05) "Switchable models, tolerant of hiccups": **the model picker is now always reachable** — previously, once configured, there was no way to change provider or model at all (the panel only reappeared on a detection error), so v0.10.0's seven new providers were unreachable for existing users; a toolbar button now shows the current model and reopens the panel, and confirming after a change re-runs detection; **malformed LLM JSON retried once** (mainstream endpoints intermittently emit junk tokens mid-JSON, killing the whole run); **the signal path nominates fewer moments** (12 candidates made the model return an unfilled template; capped at 8)
 - **[v0.10.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.10.0)** (2026-08-05) "Pick better": a rework of **what gets picked** — clips can now be **stitched from multiple parts** (placing two moments ten minutes apart side by side is what makes a "caught contradicting himself" clip work at all); **stream-genre criteria** rebuilt against the **real category taxonomies** of Bilibili/Douyin (adding VTuber, radio, pets, food, esports, crafts and co-watching, which were missing entirely — and co-watching now explicitly forbids clipping the copyrighted content on screen); a new **signal-driven candidate path** so dance/pet/outdoor streams, whose transcripts are empty and which previously yielded nothing at all, get located by audio and visual signals instead; laughter is no longer treated as the highlight itself (it lags the punchline that caused it). Also: **vocal-tone and laughter/applause** as two new evidence paths, **auto-zoom**, **retake cutting**, **recorder webhooks** (BililiveRecorder/blrec), **multi-provider LLM presets** (DeepSeek, Model Studio, GLM, Kimi, SiliconFlow, OpenRouter, OpenAI) and **one-click model-list fetch** (model ids rot as vendors ship new generations — ask the endpoint instead)
 - **[v0.9.4](https://github.com/xixihhhh/hotclip/releases/tag/v0.9.4)** (2026-07-31) "Chinese usernames are off the hook": fixes guaranteed transcription failure under non-ASCII Windows usernames ([#4](https://github.com/xixihhhh/hotclip/issues/4)) — model paths auto-convert to 8.3 short paths, audio samples read app-side; cross-drive model moves unblocked; model-load failures now say what to actually do
 - **[v0.9.3](https://github.com/xixihhhh/hotclip/releases/tag/v0.9.3)** (2026-07-28) "You decide where things live": Settings page ([#3](https://github.com/xixihhhh/hotclip/issues/3)) — model storage visible & movable, three export quality tiers (Compact 66% smaller), default caption style & export location
