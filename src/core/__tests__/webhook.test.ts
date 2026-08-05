@@ -8,6 +8,15 @@ import {
   type RecorderEvent,
   type WebhookServerHandle,
 } from "../webhook";
+import { normalize } from "path";
+
+/**
+ * 期望路径按当前平台的分隔符写。webhook 解析用的是 Node 的 path(平台相关),
+ * 在 Windows 上 "/rec/a.flv" 会被规整成 "\rec\a.flv" —— 那是**正确行为**
+ * (成片最终要在本机打开),所以断言必须跟着平台走,不能写死斜杠。
+ * 这条是 Windows CI 抓出来的:本机 macOS 全绿,Windows 上四条全红。
+ */
+const P = (posix: string): string => normalize(posix);
 
 describe("parseRecorderWebhook — 录播姬 Webhook v2", () => {
   const fileClosed = {
@@ -26,7 +35,7 @@ describe("parseRecorderWebhook — 录播姬 Webhook v2", () => {
   it("FileClosed:相对路径拼上工作目录成绝对路径", () => {
     const e = parseRecorderWebhook(fileClosed, "/rec")!;
     expect(e.source).toBe("bililive-recorder");
-    expect(e.path).toBe("/rec/23058/录播-23058-20260805.flv");
+    expect(e.path).toBe(P("/rec/23058/录播-23058-20260805.flv"));
     expect(e.room).toBe("23058");
     expect(e.title).toBe("今天开黑");
   });
@@ -58,7 +67,7 @@ describe("parseRecorderWebhook — blrec", () => {
       "/rec"
     )!;
     expect(e.source).toBe("blrec");
-    expect(e.path).toBe("/data/blrec/直播回放.mp4");
+    expect(e.path).toBe(P("/data/blrec/直播回放.mp4"));
     expect(e.room).toBe("12345");
   });
 
@@ -67,7 +76,7 @@ describe("parseRecorderWebhook — blrec", () => {
       { type: "VideoFileCompletedEvent", data: { room_id: 1, path: "/data/a.flv" } },
       undefined
     );
-    expect(e?.path).toBe("/data/a.flv");
+    expect(e?.path).toBe(P("/data/a.flv"));
   });
 
   it("其他事件类型忽略", () => {
@@ -153,7 +162,7 @@ describe("startWebhookServer", () => {
     });
     expect(res.status).toBe(200);
     expect(got).toHaveLength(1);
-    expect(got[0].path).toBe("/rec/r/a.flv");
+    expect(got[0].path).toBe(P("/rec/r/a.flv"));
   });
 
   it("白名单之外的路径被挡下,并且记了日志", async () => {
