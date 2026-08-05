@@ -21,6 +21,15 @@ import { buildEdl, type EdlClip } from "./edl";
 import { runAudiogram, audiogramSpec } from "./audiogram";
 import { pickCoverTime } from "./cover";
 import { findFillerWords, dropFillerWords, fillerCutSpans, type FillerHit } from "./fillers";
+import { findRetakes, dropRetakeWords, retakeCutSpans, type RetakeHit } from "./retakes";
+import {
+  normalizePieces,
+  pieceCutSpans,
+  piecesDurationSec,
+  planFromPieces,
+  withinOnePiece,
+  type ClipPiece,
+} from "../shared/pieces";
 import { extractPeaks } from "./audio-peaks";
 import { detectUiCrop, type UiCrop } from "./uicrop";
 import { generateCropPlan, renderCropXExpr, mapToOutputTime } from "./reframe";
@@ -40,6 +49,11 @@ export interface ExportClipSpec {
   title: string;
   startSec: number;
   endSec: number;
+  /**
+   * 多片段拼接的段清单(按时间序;≥2 段才生效)。给了它就用它,startSec/endSec
+   * 退化为跨度首尾——段间空隙走跳剪机器剪掉,字幕/译文/封面/EDL 自动对齐。
+   */
+  pieces?: ClipPiece[];
   /** Words the clip covers (absolute source time) — needed for caption burn-in. */
   words?: TranscriptWord[];
   /** Verbatim keywords to emphasize (keyword caption style). */
@@ -67,6 +81,41 @@ export interface ExportClipSpec {
 
 /** How long the opening hook (teaser) stays on screen — the 黄金3秒 window. */
 const OPENING_HOOK_SEC = 2.2;
+
+/**
+ * 抽峰值轨的最大跨度。拼接片的跨度可能横跨几十分钟(「前后打脸」的两段本来
+ * 就隔得远),整段解码抽峰值又慢又没用——超过这个跨度就不抽,跳剪的静音门
+ * 和智能封面各自按既有 fail-open 路径退化(与"提取失败"完全同一条分支)。
+ */
+export const PEAK_SPAN_MAX_SEC = 300;
+
+function peakSpanTooLong(clip: { startSec: number; endSec: number }): boolean {
+  return clip.endSec - clip.startSec > PEAK_SPAN_MAX_SEC;
+}
+
+/**
+ * 拼接片的人脸取景:逐段检测再把关键帧平移到「相对切片起点」的同一时间基,
+ * 裁窗尺寸取第一段成功的那版(同一源片,各段算出来必然一致)。
+ * 全部失败返回 null → 上游回退中心裁,与单段路径同一语义。
+ */
+async function cropPlanOverPieces(
+  inputPath: string,
+  pieces: ClipPiece[],
+  clipStartSec: number,
+  modelsRoot: string,
+  uiCrop?: UiCrop
+): Promise<Awaited<ReturnType<typeof generateCropPlan>>> {
+  let merged: Awaited<ReturnType<typeof generateCropPlan>> = null;
+  for (const p of pieces) {
+    const cp = await generateCropPlan(inputPath, p.startSec, p.endSec, modelsRoot, uiCrop).catch(() => null);
+    if (!cp) continue;
+    const shift = p.startSec - clipStartSec;
+    const kfs = cp.keyframes.map((k) => ({ ...k, t: k.t + shift }));
+    if (!merged) merged = { ...cp, keyframes: kfs };
+    else merged.keyframes.push(...kfs);
+  }
+  return merged;
+}
 
 /**
  * Summarize a jump-cut/filler splice plan into the clips.json `edit` block.
@@ -98,6 +147,10 @@ export interface ClipRenderOutcome {
   edit: { splices: number; keptSec: number; removedSec: number; cutRatio: number } | null;
   /** Number of filler/stutter words removed. */
   fillersRemoved: number;
+  /** 剪掉的重录废稿句数(开了「剪重录」才可能非 0)。 */
+  retakesRemoved: number;
+  /** 多片段拼接的段数(0 表示这条是一段连续内容)。 */
+  stitchedPieces: number;
   /** True when audio was matched to the -14 LUFS social loudness target. */
   loudnessNormalized: boolean;
   /** True 表示走了基础降噪链(高通×2+afftdn)。 */
@@ -123,6 +176,10 @@ export interface ExportRenderOptions {
   jumpCut?: boolean;
   /** Splice out hesitation sounds (嗯/呃/um/uh) and stutter repeats. */
   cleanFillers?: boolean;
+  /** 剪掉重录废稿:同一句紧挨着说了两遍时,只留最后一遍(见 retakes.ts)。 */
+  cutRetakes?: boolean;
+  /** 自动运镜:竖屏成片叠一层缓慢推拉镜头(见 autozoom.ts)。 */
+  autoZoom?: boolean;
   /** Auto-detect & crop static screen-recording chrome (status bars, app UI). */
   trimUi?: boolean;
   /** Face-tracking vertical reframe (needs modelsRoot); falls back to center. */
@@ -289,6 +346,8 @@ export async function exportClips(
     const renderByClip = new Map<number, ClipRenderOutcome>();
     // 吸附后的实际切点(clips.json 的 sourceStart/End 要报真实值)
     const snappedRange = new Map<number, { startSec: number; endSec: number }>();
+    // 规整后的拼接段清单(clips.json 报的是真正剪进去的那几段)
+    const piecesByClip = new Map<number, ClipPiece[]>();
     // 时间线导出:每条切片实际保留的源片区间(跳剪时一条多段)
     const edlClips: EdlClip[] = [];
     for (let i = 0; i < clips.length; i++) {
@@ -296,10 +355,16 @@ export async function exportClips(
       if (signal?.aborted) throw new Error("export cancelled");
       onProgress?.({ current: i + 1, total: totalUnits, clipId: clip.id, stage: "cutting" });
 
+      // 多片段拼接:段清单在这里定型,后面所有阶段都以它为准
+      const pieces = normalizePieces(clip.pieces ?? []);
+      const stitched = pieces.length > 1;
+      if (stitched) piecesByClip.set(clip.id, pieces);
+
       // 切点吸附:起止点吸到最近的镜头边界(词边界守卫,检测失败回退不吸附)。
       // 必须在跳剪/字幕/取景之前调整——下游全部消费 clip.startSec/endSec。
+      // 拼接片跳过:内部切点是「意思」定的,吸到镜头边界会把对照关系吸歪。
       let shotSnap: ClipRenderOutcome["shotSnap"] = null;
-      if (options.snapToShots && options.modelsRoot && !clip.manualBounds && !audioOnly) {
+      if (options.snapToShots && options.modelsRoot && !clip.manualBounds && !audioOnly && !stitched) {
         const pad = SNAP_MAX_OUT_SEC + 0.4;
         const boundaries = await detectShotBoundaries(
           inputPath, clip.startSec - pad, clip.endSec + pad, options.modelsRoot
@@ -327,25 +392,37 @@ export async function exportClips(
       // Filler cleanup rides the same splice machinery: hesitation sounds and
       // stutters become forced-cut spans (they are audible speech — neither
       // the gap rule nor the silence gate would remove them).
+      // 拼接片的段间空隙就是强制剪除区间——拼接完全复用跳剪机器,不另起时间轴
+      const stitchSpans = stitched ? pieceCutSpans(pieces) : [];
       let plan = null;
       let fillerHits: FillerHit[] = [];
+      let retakeHits: RetakeHit[] = [];
       // 峰值轨提升作用域:跳剪的静音门用,封面选帧也用(见下)
       let clipPeaks: Awaited<ReturnType<typeof extractPeaks>> | undefined;
-      if ((options.jumpCut || options.cleanFillers) && clip.words && clip.words.length > 0) {
+      if ((options.jumpCut || options.cleanFillers || options.cutRetakes || stitched) && clip.words && clip.words.length > 0) {
         fillerHits = options.cleanFillers ? findFillerWords(clip.words) : [];
-        const planWords = dropFillerWords(clip.words, fillerHits);
-        const peaks = options.jumpCut
+        // 重录废稿:在去掉语气词之后判(口误"呃"不该影响两遍话的相似度)
+        const deFilled = dropFillerWords(clip.words, fillerHits);
+        retakeHits = options.cutRetakes ? findRetakes(deFilled) : [];
+        const planWords = dropRetakeWords(deFilled, retakeHits);
+        const peaks = options.jumpCut && !peakSpanTooLong(clip)
           ? await extractPeaks(inputPath, clip.startSec, clip.endSec).catch(() => undefined)
           : undefined;
         clipPeaks = peaks;
-        // filler-only mode with nothing found → leave the clip untouched
-        if (options.jumpCut || fillerHits.length > 0) {
+        // filler/retake-only mode with nothing found → leave the clip untouched
+        if (options.jumpCut || stitched || fillerHits.length > 0 || retakeHits.length > 0) {
           plan = computeJumpCut(planWords, clip.startSec, clip.endSec, {
             peaks,
-            forceCutSpans: fillerCutSpans(fillerHits),
+            forceCutSpans: [...stitchSpans, ...fillerCutSpans(fillerHits), ...retakeCutSpans(retakeHits)].sort(
+              (a, b) => a.startSec - b.startSec
+            ),
             gapThresholdSec: options.jumpCut ? undefined : Infinity,
           });
         }
+      }
+      // 拼接片但没有词表(不烧字幕也不跳剪):段清单本身就是成片计划
+      if (!plan && stitched) {
+        plan = planFromPieces(pieces);
       }
       const captionWords = plan ? plan.words : clip.words;
       const captionShift = plan ? 0 : clip.startSec;
@@ -394,9 +471,13 @@ export async function exportClips(
       // Face-aware reframe: plan per clip; any failure falls back to center.
       let trackPlan;
       if (options.vertical && options.faceTrack && options.modelsRoot && !audioOnly) {
-        const cp = await generateCropPlan(
-          inputPath, clip.startSec, clip.endSec, options.modelsRoot, uiCrop
-        ).catch(() => null);
+        // 拼接片逐段各算一版:整段跨度可能有几十分钟,人脸检测按跨度跑纯属白烧。
+        // 每段的关键帧相对本段起点,统一平移到「相对切片起点」再走同一条重映射。
+        const cp = stitched
+          ? await cropPlanOverPieces(inputPath, pieces, clip.startSec, options.modelsRoot, uiCrop)
+          : await generateCropPlan(
+              inputPath, clip.startSec, clip.endSec, options.modelsRoot, uiCrop
+            ).catch(() => null);
         if (cp) {
           let kfs = cp.keyframes;
           if (plan) {
@@ -439,11 +520,18 @@ export async function exportClips(
       const aigcMeta = options.aigcLabel
         ? { comment: `AIGC=true; Label=AI-assisted-editing; Tool=HotClip; ContentId=${basename(outPath)}` }
         : undefined;
+      // 自动运镜:只对竖屏画面有意义(音频波形图和横屏原片不做);
+      // 帧率未知就不开——zoompan 会把素材重采样到 25fps
+      const autoZoom =
+        options.autoZoom && options.vertical && !audioOnly && srcInfo && srcInfo.fps > 0
+          ? { durationSec: clipDuration, fps: srcInfo.fps }
+          : undefined;
       const cutOptions = trackPlan
-        ? { trackPlan, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, watermark, metadata: aigcMeta, crf: options.crf }
+        ? { trackPlan, autoZoom, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, watermark, metadata: aigcMeta, crf: options.crf }
         : {
             uiCrop,
             vertical: options.vertical,
+            autoZoom,
             subtitlePath,
             fontsDir: subtitlePath ? options.fontsDir : undefined,
             normalizeLoudness: options.normalizeLoudness,
@@ -523,6 +611,11 @@ export async function exportClips(
       const coldOpenHook = clip.meta?.hook?.trim();
       if (options.coldOpen && !audioOnly && !webStyle && coldOpenHook && clip.words && clip.words.length > 0) {
         coldOpenPlan = planColdOpen(clip.words, coldOpenHook, clip.startSec);
+        // 拼接片:迷你片是从源片单独切一刀,必须整个落在某一段内,
+        // 否则会把被剪掉的空隙内容当作钩子重新放进成片
+        if (coldOpenPlan && stitched && !withinOnePiece(pieces, coldOpenPlan.startSec, coldOpenPlan.endSec)) {
+          coldOpenPlan = null;
+        }
         const coPlan = coldOpenPlan;
         if (coPlan) {
           const miniPath = outPath.replace(/\.mp4$/, ".hook.mp4");
@@ -638,7 +731,7 @@ export async function exportClips(
       const coverPath = outPath.replace(/\.mp4$/, ".jpg");
       // 智能封面:切片内响度最高的一帧(峰值≈情绪最高点);没跳剪时补提一次
       // 峰值轨,失败回退固定 0.8s 帧
-      if (!clipPeaks) {
+      if (!clipPeaks && !peakSpanTooLong(clip)) {
         clipPeaks = await extractPeaks(inputPath, clip.startSec, clip.endSec).catch(() => undefined);
       }
       // cold-open 让输出时间轴整体后移一个迷你片时长,封面时刻同步平移;
@@ -716,13 +809,17 @@ export async function exportClips(
         title: clip.title,
         segments: plan ? plan.segments : [{ startSec: clip.startSec, endSec: clip.endSec }],
       });
-      const origDur = clip.endSec - clip.startSec;
+      // 剪掉多少的基准:拼接片按「各段之和」算(跨度里那几十分钟本来就不该
+      // 进成片,拿它当分母会报出「剪掉了 97%」这种毫无意义的数)
+      const origDur = stitched ? piecesDurationSec(pieces) : clip.endSec - clip.startSec;
       renderByClip.set(clip.id, {
         captionStyle: wantCaptions ? (webStyle ?? assStyle) : "none",
         captionsBurned: wantCaptions && !webRenderFailed,
         reframe: audioOnly ? "audiogram" : options.vertical ? (trackPlan ? "face-track" : "center-crop") : "none",
         edit: summarizeEdit(origDur, plan),
         fillersRemoved: fillerHits.length,
+        retakesRemoved: retakeHits.length,
+        stitchedPieces: stitched ? pieces.length : 0,
         loudnessNormalized: Boolean(options.normalizeLoudness),
         denoised: Boolean(options.denoise),
         coldOpenSec,
@@ -786,6 +883,8 @@ export async function exportClips(
         captionStyle: options.captionStyle ?? "none",
         jumpCut: Boolean(options.jumpCut),
         cleanFillers: Boolean(options.cleanFillers),
+        cutRetakes: Boolean(options.cutRetakes),
+        autoZoom: Boolean(options.autoZoom),
         trimUi: Boolean(options.trimUi),
         titleCard: Boolean(options.titleCard),
         openingHook: Boolean(options.openingHook),
@@ -823,6 +922,12 @@ export async function exportClips(
           durationSec: Number(r.durationSec.toFixed(3)),
           sourceStartSec: range?.startSec ?? spec?.startSec ?? null,
           sourceEndSec: range?.endSec ?? spec?.endSec ?? null,
+          // 多片段拼接的段清单(单段切片为 null)——矩阵管线核对成片由哪几处拼成
+          sourcePieces:
+            piecesByClip.get(r.id)?.map((p) => ({
+              startSec: Number(p.startSec.toFixed(3)),
+              endSec: Number(p.endSec.toFixed(3)),
+            })) ?? null,
           keywords: spec?.keywords ?? [],
           removedFillers: removedFillersByClip.get(r.id) ?? [],
           render: renderByClip.get(r.id) ?? null,

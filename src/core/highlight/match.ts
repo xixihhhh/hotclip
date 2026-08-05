@@ -10,6 +10,7 @@
  *   3. "segment"  — fall back to the LLM's segment-id range boundaries
  */
 import type { Transcript, TranscriptWord } from "../transcribe/types";
+import { normalizePieces, PIECE_JOINER, type ClipPiece } from "../../shared/pieces";
 
 /** Normalization: strip everything except letters/digits/CJK; lowercase latin. */
 export function normalizeText(text: string): string {
@@ -118,6 +119,14 @@ export function matchQuote(
   return { startSec: words[startTok].startSec, endSec: words[endTok].endSec, boundary: "anchored" };
 }
 
+/** 多片段拼接里的一段:定位方式与单段完全一样,只是没有标题/评分。 */
+export interface RawPart {
+  startSegmentId: number;
+  endSegmentId: number;
+  quoteStart: string;
+  quoteEnd: string;
+}
+
 export interface RawSelection {
   title: string;
   hook: string;
@@ -129,6 +138,11 @@ export interface RawSelection {
   quoteEnd: string;
   /** Verbatim in-clip keywords for caption emphasis (may be empty). */
   keywords: string[];
+  /**
+   * 多片段拼接:相隔很远的两三处内容拼成一条(「前后打脸」这类爆点的前提)。
+   * 缺省即普通连续切片;解析不出至少两段时自动退回顶层 quote 的单段定位。
+   */
+  parts?: RawPart[];
 }
 
 export interface ResolvedRange {
@@ -136,14 +150,55 @@ export interface ResolvedRange {
   endSec: number;
   text: string;
   boundary: "exact" | "anchored" | "segment";
+  /** 多片段拼接的段清单(≥2 段才有);startSec/endSec 是它的跨度首尾。 */
+  pieces?: ClipPiece[];
 }
+
+/** 匹配质量排序:多段拼接取其中最差的那一段作为整条的质量标注。 */
+const BOUNDARY_RANK: Record<ResolvedRange["boundary"], number> = { exact: 2, anchored: 1, segment: 0 };
 
 /**
  * Resolve one LLM selection to timed boundaries.
- * Quote matching is scoped to the declared segment range (± one segment of
- * slack) so identical catchphrases elsewhere in a livestream don't hijack it.
+ *
+ * 先试多片段(sel.parts):逐段各自反查,规整后至少剩两段才算拼接成立;
+ * 否则退回单段——顶层 quoteStart/quoteEnd 始终填着第一段开头/最后一段结尾,
+ * 所以退化路径不会拿到空定位。
  */
 export function resolveSelection(transcript: Transcript, sel: RawSelection): ResolvedRange | null {
+  if (sel.parts && sel.parts.length >= 2) {
+    const stitched = resolveParts(transcript, sel.parts);
+    if (stitched) return stitched;
+  }
+  return resolveSingle(transcript, sel);
+}
+
+/** 逐段反查 + 规整;不足两段返回 null(调用方退回单段)。 */
+function resolveParts(transcript: Transcript, parts: RawPart[]): ResolvedRange | null {
+  const resolved = parts
+    .map((p) => resolveSingle(transcript, p))
+    .filter((r): r is ResolvedRange => r !== null);
+  if (resolved.length < 2) return null;
+  const pieces = normalizePieces(resolved.map((r) => ({ startSec: r.startSec, endSec: r.endSec })));
+  if (pieces.length < 2) return null;
+  const boundary = resolved.reduce<ResolvedRange["boundary"]>(
+    (worst, r) => (BOUNDARY_RANK[r.boundary] < BOUNDARY_RANK[worst] ? r.boundary : worst),
+    "exact"
+  );
+  return {
+    startSec: pieces[0].startSec,
+    endSec: pieces[pieces.length - 1].endSec,
+    pieces,
+    // 省略标记让评审和用户一眼看出「这里跳了」——拼接最大的风险就是断章取义
+    text: pieces.map((p) => textBetween(transcript, p.startSec, p.endSec)).join(PIECE_JOINER),
+    boundary,
+  };
+}
+
+/** 单段定位(历史行为):引文优先,失败回退句 id 区间。 */
+function resolveSingle(
+  transcript: Transcript,
+  sel: Pick<RawSelection, "startSegmentId" | "endSegmentId" | "quoteStart" | "quoteEnd">
+): ResolvedRange | null {
   const segments = transcript.segments;
   if (segments.length === 0) return null;
 

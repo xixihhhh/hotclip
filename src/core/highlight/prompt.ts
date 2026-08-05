@@ -12,38 +12,110 @@ import type { ClipLength } from "../../shared/api-types";
 import type { MediaSignals } from "../signals";
 import { referencePromptSection, type ReferenceProfile } from "../reference";
 import { reviewMemorySection, type ReviewRecord } from "../review-memory";
+import { genreSection } from "../genre";
+import { clipDurationSec, isStitched, type ClipPiece } from "../../shared/pieces";
 
 export const HIGHLIGHT_SYSTEM_PROMPT_ZH = `你是一位顶级短视频切片操盘手。给你一份长视频的逐句稿,你要从中挑出最可能在抖音/快手/B站/TikTok 上爆的片段。
 
-【什么样的片段能爆】
-- 强钩子开场:反常识观点、冲突、悬念提问、惊人数字、情绪爆发
-- 完整表达:片段自成一体,离开上下文也能看懂,有起有收
-- 高价值密度:金句、干货、翻车/反转瞬间、真情实感、抖包袱
-- 时长 8~40 秒(对应逐句稿里约 2~8 句),开头一定要是钩子句,不要慢热铺垫
+【先记住:能爆的内容极其稀缺】
+一场两小时的直播,真正值得剪的通常不到五分钟。绝大多数内容都是平淡的过场。宁可只给两三条真爆点,也不要为凑数把平庸内容包装成爆点——凑数的片段发出去会拉垮整个账号。
+
+【动手前先判断这是什么内容,再决定信哪路证据】
+素材可能是带货直播、游戏直播、才艺/跳舞、聊天连麦、讲课、户外探店、访谈播客、赛事解说、开箱评测……不同类型的爆点位置完全不同,先自己判断,再按下面的权重去找:
+- **话里有内容的**(带货/讲课/访谈/解说/评测):爆点在说了什么,以文字稿为主判断
+- **靠反应的**(游戏/聊天/户外/赛事):精彩瞬间的文字常常只有"卧槽/我去/没了"几个字,毫无信息量。这类要重点看语气激动时段和弹幕峰值,文字稿只用来确认发生了什么
+- **靠画面的**(才艺/跳舞/唱歌/风景):文字稿基本是空的,别因为某句话"读起来还行"就选它——那不是观众看的东西。以画面高能时段、音乐节奏和弹幕为主
+判断不了就按"话里有内容"处理,但别把明显没信息量的口水话当金句。
+
+【按爆款概率从高到低找这些时刻】
+1. 前后打脸/自相矛盾:同一个人前面一套后面一套——刚说"绝不降价"转头就降价、先吹爆再拆台、承诺和后来做的对不上、双标。这类反差是最强的爆点,值得从相隔很远的两处内容里挖
+2. 冲突与尖锐:被问到不想回答的问题、当场反驳别人、翻车、意外状况、真吵起来
+3. 反常识金句:一句话颠覆认知("越努力越穷"这种),脱离上下文也能独立传播
+4. 情绪顶点:讲到激动处、破防、真情流露、突然低落——语气本身就是内容
+5. 笑点:必须是完整的「铺垫→包袱」结构。光有观众在笑、却没有那句抖出来的包袱,绝对不要选
+6. 硬核干货:让人想收藏的方法/清单/具体数字(平台现在收藏权重最高)
+7. 带货场景专属:产品出现意外效果、价格揭晓的那一下、真实试用翻车、被追问成分/售后
+
+【开头第一句就是生死线】
+片段的第一句必须自带钩子。能停住手指的句式:
+- 反常识/打脸型(停留力最强):"你以为X其实Y"、"别再信X了"、"真正的X不是Y"、"越X越Y"
+- 结果反差型:"我X个月做到了Y"、"从X到Y"、"没想到X"
+- 悬念型:"我发现了一个秘密"、"千万不要X"、"这就是为什么X"
+- 痛点型:"你是不是也X"、"90%的人不知道X"
+寒暄、自我介绍、"接下来我们看下一个"、慢热铺垫——一律不能当片段开头。
+
+【长度】
+时长 8~40 秒(对应逐句稿里约 2~8 句)。
+
+【多片段拼接:两处内容隔得远,就必须用 parts】
+绝大多数切片是一段连续内容,直接用 quoteStart/quoteEnd 就够了。
+但只要你想选的两处内容**中间隔着一大段无关的话**(第 1 类「前后打脸」几乎总是这样:立誓在开头,打脸在十几分钟后),就**必须**输出 parts 把它们分别框出来。
+⚠ 这一步不是可选的:此时如果你只给 startSegmentId=前面那句、endSegmentId=后面那句,系统会把中间那一大段全部剪进成片——时长直接超标,这条候选会被丢掉,你挑出的爆点等于白挑。
+parts 的写法:
+- 按原视频时间先后列 2~3 段,每段自带 quoteStart/quoteEnd 和句 id;parts 的顺序就是成片播放顺序,不能倒放
+- 每段都要是完整、没被掐断的一句以上的话(至少 2 秒);各段时长加起来仍要满足上面的长度要求(跨度多长不算数,只算真正剪进去的)
+- 用了 parts 时顶层字段照填:startSegmentId/quoteStart 填第一段的开头,endSegmentId/quoteEnd 填最后一段的结尾
+- 拼接绝不能制造原话里没有的意思——这是最容易翻车的地方。两段中间如果隔着"但是/不过"之类的转折,或者后一段其实是在说别的事,就不要拼,这条干脆别选;不确定就老老实实切一段连续的
 
 【铁律】
 1. 只能从逐句稿原文里选,quoteStart/quoteEnd 必须逐字照抄原文(含标点),绝不改写、绝不自己编
 2. quoteStart = 片段第一句的开头原文(≥6个字/词);quoteEnd = 片段最后一句的结尾原文(≥6个字/词)
-3. startSegmentId/endSegmentId 填片段起止句的 [id]
-4. 不要输出时间戳——时间由系统按原文反查,你只负责挑内容
+3. startSegmentId/endSegmentId 必须填逐句稿里**真实存在的那两个 [id] 数字**(如首句是 [21] 就填 21),绝不能填 -1、0 或留空;score 必须是 0-100 的整数,同样不能填 -1
+4. 不要输出「时:分:秒」这类时间戳——时间由系统按你抄的原文反查;但上面那两个句 id 和 score 是必填的,别一起省掉
 5. 片段之间不要重叠;宁缺毋滥,没有爆点潜质的内容不要硬凑
-6. title/hook/reason 用逐句稿同款语言写`;
+6. 不能断章取义:剪出来的意思必须和原话一致。靠掐掉半句制造的"爆点"会反噬账号,一律不要
+7. title/hook/reason 用逐句稿同款语言写`;
 
 export const HIGHLIGHT_SYSTEM_PROMPT_EN = `You are a top short-form clipping strategist. Given the sentence-level transcript of a long video, pick the segments most likely to go viral on TikTok / Reels / Shorts.
 
-【What makes a clip viral】
-- Strong hook opening: counterintuitive takes, conflict, suspenseful questions, striking numbers, emotional peaks
-- Self-contained: the clip makes sense without outside context, with a clear arc
-- High value density: quotables, actionable insight, fail/twist moments, raw emotion, punchlines
-- Length 8–40 seconds (roughly 2–8 transcript sentences); it MUST open on the hook line, never a slow build-up
+【Viral material is RARE】
+In a two-hour stream, under five minutes is usually worth clipping. Most of it is filler. Returning two or three genuine hits beats padding the list — weak clips published to a channel drag the whole account down.
+
+【First work out what this footage IS, then decide which evidence to trust】
+It could be live selling, gaming, a dance/music performance, a chat stream, a lecture, an outdoor walk-and-talk, an interview podcast, sports commentary, an unboxing… the highlights sit in completely different places. Judge the type first, then weight accordingly:
+- **Content-in-the-words** (selling / lecture / interview / commentary / review): the highlight is what was said — judge from the transcript
+- **Reaction-driven** (gaming / chat / outdoor / sports): at a peak moment the text is often just "holy—" with zero information. Lean on vocal-emotion peaks and live-chat spikes; use the transcript only to confirm what happened
+- **Visual-driven** (dance / singing / scenery): the transcript is essentially empty — never pick a moment just because a line reads well. Go by visual-energy windows, musical phrasing and chat
+If you can't tell, default to content-in-the-words — but don't dress up filler chatter as a quotable.
+
+【Hunt these, in descending order of viral odds】
+1. Self-contradiction / getting caught out: the same person saying opposite things — "we'll never discount" followed by a discount, hyping then trashing, promises that don't match what they did, double standards. The strongest hook there is; worth digging out of two far-apart parts of the transcript
+2. Conflict and friction: a question they don't want to answer, pushing back on someone live, a fail, an accident, a real argument
+3. Counterintuitive one-liners: a single sentence that flips conventional wisdom ("the harder you work, the poorer you get") and travels on its own
+4. Emotional peaks: worked up, breaking down, raw sincerity, a sudden drop — tone itself is the content
+5. Jokes: only as a complete setup→punchline unit. A clip where the audience laughs but the punchline itself is missing is NEVER acceptable
+6. Dense, saveable value: methods, checklists, concrete numbers (platforms now weight saves highest)
+7. Live-selling specifics: a product behaving unexpectedly, the moment the price drops, a demo going wrong, being pressed on ingredients or returns
+
+【The first line decides everything】
+A clip's opening sentence must carry the hook. Patterns that stop the scroll:
+- Counterintuitive / caught-out (strongest): "you think X, actually Y", "stop believing X", "real X isn't Y", "the more X the more Y"
+- Result-gap: "I did Y in X months", "from X to Y", "turns out X"
+- Suspense: "I found a secret", "never do X", "this is why X"
+- Pain point: "are you also X?", "90% of people don't know X"
+Greetings, self-introductions, "next up let's look at…", slow build-ups — never open a clip on these.
+
+【Length】
+Length 8–40 seconds (roughly 2–8 transcript sentences).
+
+【Two far-apart moments? Then "parts" is REQUIRED】
+Almost every clip is one continuous stretch — just use quoteStart/quoteEnd.
+But whenever the two moments you want are **separated by a long stretch of unrelated talk** (category 1, getting caught out, almost always is: the promise early on, the contradiction ten minutes later), you MUST emit a "parts" array framing each one.
+⚠ This is not optional: if you instead set startSegmentId to the earlier line and endSegmentId to the later one, the system cuts EVERYTHING in between into the clip — it blows past the length limit and the candidate gets dropped, so the hook you found is wasted.
+How to write parts:
+- List 2–3 parts in source-time order; that order IS the playback order — never reverse it
+- Each part must be a complete, un-truncated thought (≥2 seconds); the SUM of the parts must still satisfy the length requirement above (the span between them doesn't count — only what actually gets cut in)
+- With "parts", still fill the top-level fields: startSegmentId/quoteStart from the first part, endSegmentId/quoteEnd from the last
+- Stitching must never manufacture a meaning that was not there. If the gap contains a "but/however" that reverses it, or the second part is actually about something else, don't stitch — drop the candidate. When in doubt, cut one continuous clip
 
 【Hard rules】
 1. Select ONLY from the transcript verbatim: quoteStart/quoteEnd must be copied character-for-character (punctuation included) — never paraphrase, never invent
 2. quoteStart = the opening words of the clip's first sentence (≥6 words/characters); quoteEnd = the closing words of its last sentence (≥6 words/characters)
-3. startSegmentId/endSegmentId are the [id] of the clip's first and last sentences
-4. NEVER output timestamps — the system reverse-matches your quotes; you only pick content
+3. startSegmentId/endSegmentId must be the **actual [id] numbers from the transcript** (if the first line is [21], put 21) — never -1, 0 or blank; score must be an integer 0-100, likewise never -1
+4. Do not output clock timestamps (hh:mm:ss) — the system reverse-matches the text you quoted; but the two sentence ids and score above ARE required, don't drop them too
 5. Clips must not overlap; quality over quantity — do not force weak picks
-6. Write title/hook/reason in the SAME language as the transcript`;
+6. Never quote-mine: the clipped meaning must match what was actually said. A "hook" manufactured by cutting a sentence in half will backfire on the account
+7. Write title/hook/reason in the SAME language as the transcript`;
 
 /** zh when the engine says so or the text itself is CJK-dominant. */
 export function isChineseTranscript(transcript: Transcript): boolean {
@@ -70,7 +142,8 @@ export function highlightSystemPrompt(
   length: ClipLength = "standard",
   products: string[] = [],
   reference?: ReferenceProfile,
-  reviewMemory?: ReviewRecord[]
+  reviewMemory?: ReviewRecord[],
+  genre?: { id?: string; custom?: string }
 ): string {
   const zh = isChineseTranscript(transcript);
   let base = zh ? HIGHLIGHT_SYSTEM_PROMPT_ZH : HIGHLIGHT_SYSTEM_PROMPT_EN;
@@ -81,6 +154,8 @@ export function highlightSystemPrompt(
       .replace("时长 8~40 秒", `时长 ${minSec}~${maxSec} 秒(硬要求,宁短勿超)`)
       .replace("Length 8–40 seconds", `Length ${minSec}–${maxSec} seconds (hard requirement)`);
   }
+  // 品类判据:不同品类连"该信哪路证据"都不一样,放在通用判据之后覆盖它
+  if (genre) base += genreSection(genre.id, zh, genre.custom);
   if (products.length > 0) base += productSection(products, zh);
   // 参考爆款画像:节奏偏好段(用户丢了对标切片时才有)
   if (reference) base += referencePromptSection(reference, zh);
@@ -155,6 +230,22 @@ const OUTPUT_SHAPE = `{
   ]
 }`;
 
+/**
+ * 多片段拼接的可选字段说明。单独列出而不是塞进 OUTPUT_SHAPE:示例里出现
+ * parts 会让模型以为每条都该拼,而拼接本来就应该是少数情况。
+ */
+const PARTS_SHAPE_ZH = `需要多片段拼接时(只有必须前后对照的那一条才用),在那一条 clip 里额外加 parts 字段;不需要拼接就完全不要出现这个字段:
+"parts": [
+  {"startSegmentId": 12, "endSegmentId": 13, "quoteStart": "...", "quoteEnd": "..."},
+  {"startSegmentId": 88, "endSegmentId": 90, "quoteStart": "...", "quoteEnd": "..."}
+]`;
+
+const PARTS_SHAPE_EN = `When a clip genuinely needs stitching (only the one that requires the before/after contrast), add a "parts" field to THAT clip; omit the field entirely otherwise:
+"parts": [
+  {"startSegmentId": 12, "endSegmentId": 13, "quoteStart": "...", "quoteEnd": "..."},
+  {"startSegmentId": 88, "endSegmentId": 90, "quoteStart": "...", "quoteEnd": "..."}
+]`;
+
 function fmtClock(sec: number): string {
   const m = Math.floor(sec / 60);
   const ss = Math.floor(sec % 60);
@@ -178,6 +269,17 @@ export function renderSignals(signals: MediaSignals | undefined, zh: boolean): s
   }
   if (signals.emotionPeaks && signals.emotionPeaks.length > 0) {
     lines.push(zh ? `- 人脸表情峰值时段(大笑/惊讶/激动): ${fmt(signals.emotionPeaks)}` : `- Facial-emotion peaks (laughter/surprise/excitement): ${fmt(signals.emotionPeaks)}`);
+  }
+  if (signals.voiceEmotionPeaks && signals.voiceEmotionPeaks.length > 0) {
+    lines.push(zh ? `- 说话人语气激动时段(笑着说/吼出来/惊到了——同一句话文字看不出的情绪): ${fmt(signals.voiceEmotionPeaks)}` : `- Vocal-emotion peaks (said while laughing / shouted / startled — tone the text cannot show): ${fmt(signals.voiceEmotionPeaks)}`);
+  }
+  if (signals.audioEventPeaks && signals.audioEventPeaks.length > 0) {
+    // 笑声是滞后结果:包袱在它之前。这里必须写清用法,否则 LLM 会直接切哄笑段(那里没人说话)
+    lines.push(
+      zh
+        ? `- 观众笑声/掌声时段: ${fmt(signals.audioEventPeaks)}\n  ⚠ 笑声是「结果」不是爆点本身——引爆它的那句包袱落在笑声开始之前。要往前找到那句话、连同它的铺垫一起选,笑声只留一点点做收尾;绝不要只切观众在笑的那几秒(那里根本没人说话)`
+        : `- Audience laughter / applause: ${fmt(signals.audioEventPeaks)}\n  ⚠ Laughter is the RESULT, not the highlight — the punchline that triggered it lands BEFORE the laughter starts. Walk back to that line, include its setup, and keep only a beat of laughter as the tail; never clip just the laughing seconds (nobody is speaking there)`
+    );
   }
   if (signals.danmakuPeaks && signals.danmakuPeaks.length > 0) {
     lines.push(zh ? `- 弹幕热度峰值时段(观众实时高能反应,证据力最强): ${fmt(signals.danmakuPeaks)}` : `- Live-chat density peaks (real-time audience hype, strongest evidence): ${fmt(signals.danmakuPeaks)}`);
@@ -206,6 +308,8 @@ ${speakerNote(transcript, true)}${renderSignals(signals, true)}
 【输出格式】严格输出 JSON,不要任何多余文字:
 ${OUTPUT_SHAPE}
 
+${PARTS_SHAPE_ZH}
+
 字段说明:title=适合发布的短标题(≤20字);hook=开头钩子句原文;score=0-100 相对排序分;reason=一句话为什么能爆;quoteStart/quoteEnd=片段首句开头/末句结尾的逐字原文;keywords=该片段里 3-5 个最有冲击力的词,必须逐字取自片段原文(用于字幕划重点)。
 要求:按 score 从高到低排;片段互不重叠。`;
   }
@@ -217,8 +321,112 @@ ${speakerNote(transcript, false)}${renderSignals(signals, false)}
 【Output format】Respond with STRICT JSON only, no extra text:
 ${OUTPUT_SHAPE}
 
+${PARTS_SHAPE_EN}
+
 Fields: title = a post-ready short title (≤ 12 words); hook = the verbatim opening hook line; score = 0-100 relative ranking; reason = one line on why it can go viral; quoteStart/quoteEnd = verbatim opening/closing words of the clip; keywords = the 3-5 punchiest words/phrases inside the clip, copied verbatim (used to emphasize caption keywords).
 Sort by score descending; clips must not overlap.`;
+}
+
+// ---------- 信号驱动通道:文字稿没内容时按「时刻」挑 ----------
+
+export const MOMENT_SYSTEM_PROMPT_ZH = `你是一位顶级短视频切片操盘手,现在处理的是一场**文字稿基本没有信息量**的直播——跳舞、才艺、唱歌、户外、游戏这类,观众看的是画面和反应,不是台词。
+
+所以这次不要求你引用原话。系统已经用画面和声音信号圈出了若干「高能时刻」并编好号,你的工作是:从中挑出真正值得剪成短视频的几个,给它们起标题、写钩子。
+
+【怎么判断一个时刻值不值得剪】
+- 证据里出现「画面高能/镜头切换密集」→ 大概率是动作、场面或表演的高潮
+- 出现「弹幕峰值」→ 观众在这一刻真的有反应,这是最硬的证据(观众用实时投票告诉你哪里好看)
+- 出现「语气激动/笑声掌声」→ 主播或现场在这一刻情绪爆发
+- 只有「响度峰值」一路孤证 → 很可能只是背景音乐变大或环境噪声,要谨慎
+- 证据种类越多、越互相印证的时刻越可信;只有一路信号的要敢于放弃
+
+【铁律】
+1. 只能从给定的时刻里挑,momentId 必须是真实存在的编号,绝不能自己编时间
+2. 宁缺毋滥:一场直播真正值得剪的通常只有两三个时刻,不要为凑数把普通片段说成高能
+3. 附带的原话只是参考,可能是空的、可能是错字连篇(户外收音差)——**绝不要因为"某句话读起来还行"就选它**,也不要把明显读不通的转写当内容
+4. title 要写观众刷到时会点开的那种,而不是"精彩片段1";没有台词可用时,就描述画面上会发生什么
+5. hook 写这条片子开头会呈现的画面或那一下动作(一句话),不要编造台词
+6. score 是 0-100 的整数,必填,不能填 -1
+7. title/hook/reason 用与附带原话相同的语言写(原话为空时用中文)`;
+
+export const MOMENT_SYSTEM_PROMPT_EN = `You are a top short-form clipping strategist. This stream's transcript carries almost no information — dance, performance, singing, outdoor or gaming content, where viewers come for the picture and the reactions, not the words.
+
+So you are NOT asked to quote anything. The system has already used audio and visual signals to mark numbered "high-energy moments". Your job: pick the ones genuinely worth cutting, and title them.
+
+【How to judge a moment】
+- Visual-energy / dense scene cuts → likely the peak of an action, a spectacle or a performance
+- Live-chat spike → the audience actually reacted here; this is the hardest evidence there is
+- Vocal-emotion peak / laughter / applause → the host or the room broke out at this instant
+- Loudness alone, with nothing else → often just louder music or ambient noise. Be skeptical
+- The more signal types corroborate each other, the more trustworthy. Drop single-signal moments freely
+
+【Hard rules】
+1. Pick ONLY from the given moments; momentId must be a real number from the list — never invent times
+2. Quality over quantity: a stream usually has two or three moments truly worth clipping
+3. The attached transcript is reference only — it may be empty or full of garbled ASR (outdoor audio is poor). NEVER pick a moment just because a line reads well, and don't treat unreadable transcription as content
+4. Write a title someone would actually tap, not "Highlight 1". With no usable dialogue, describe what happens on screen
+5. hook = the image or the beat this clip opens on, in one line. Do not invent dialogue
+6. score is an integer 0-100, required, never -1
+7. Write title/hook/reason in the same language as the attached transcript (Chinese when it is empty)`;
+
+const MOMENT_SHAPE = `{
+  "clips": [
+    { "momentId": 3, "title": "...", "hook": "...", "score": 88, "reason": "...", "keywords": ["...", "..."] }
+  ]
+}`;
+
+/** 信号种类 → 人话标签(证据链既给 LLM 看,也给用户看)。 */
+export const EVIDENCE_LABELS: Record<string, { zh: string; en: string }> = {
+  loud: { zh: "响度峰值", en: "loudness peak" },
+  cut: { zh: "镜头切换密集", en: "dense scene cuts" },
+  visual: { zh: "画面高能(视觉模型)", en: "visual energy (vision model)" },
+  emotion: { zh: "人脸表情峰值", en: "facial-emotion peak" },
+  voice: { zh: "语气激动", en: "vocal-emotion peak" },
+  audioEvent: { zh: "笑声/掌声", en: "laughter/applause" },
+  danmaku: { zh: "弹幕峰值", en: "live-chat spike" },
+};
+
+export interface PromptMoment {
+  id: number;
+  startSec: number;
+  endSec: number;
+  evidence: string[];
+  /** 该时段的原话(可能为空/无信息量——提示词里已明确不要以它为准)。 */
+  text: string;
+}
+
+export function buildMomentPrompt(moments: PromptMoment[], maxClips: number, zh: boolean): string {
+  const lines = moments
+    .map((m) => {
+      const ev = m.evidence.map((e) => EVIDENCE_LABELS[e]?.[zh ? "zh" : "en"] ?? e).join(zh ? "、" : ", ");
+      const dur = Math.round(m.endSec - m.startSec);
+      const text = m.text.trim();
+      return zh
+        ? `[${m.id}] ${fmtClock(m.startSec)}-${fmtClock(m.endSec)}(${dur}秒)\n  证据:${ev || "(无)"}\n  该时段原话:${text || "(没有台词)"}`
+        : `[${m.id}] ${fmtClock(m.startSec)}-${fmtClock(m.endSec)} (${dur}s)\n  Evidence: ${ev || "(none)"}\n  Transcript here: ${text || "(no dialogue)"}`;
+    })
+    .join("\n");
+  return zh
+    ? `下面是系统按画面与声音信号圈出的高能时刻,请从中挑出最多 ${maxClips} 个值得剪成短视频的。
+
+【高能时刻清单】
+${lines}
+
+【输出格式】严格输出 JSON,不要任何多余文字:
+${MOMENT_SHAPE}
+
+字段说明:momentId=上面清单里的编号(必须真实存在);title=适合发布的短标题(≤20字);hook=开头呈现的画面/动作(一句话);score=0-100 相对排序分;reason=一句话为什么值得剪(要说清你信的是哪路证据);keywords=2-5 个描述这条内容的词(用于发布文案话题)。
+按 score 从高到低排;宁可少给几条,也不要把平淡时刻硬说成高能。`
+    : `Below are high-energy moments marked by audio and visual signals. Pick at most ${maxClips} worth cutting.
+
+【Moments】
+${lines}
+
+【Output format】STRICT JSON only, no extra text:
+${MOMENT_SHAPE}
+
+Fields: momentId = a real number from the list; title = post-ready short title (≤12 words); hook = the opening image or beat, one line; score = 0-100 relative ranking; reason = one line on why it's worth cutting (say which evidence you trusted); keywords = 2-5 descriptive words for post hashtags.
+Sort by score descending; returning fewer, stronger picks beats padding the list.`;
 }
 
 /** Extract the first JSON object/array from LLM output (handles \`\`\`json fences). */
@@ -234,7 +442,7 @@ export function extractJson(text: string): string {
 
 export const REVIEW_SYSTEM_PROMPT_ZH = `你是一位极其严格的短视频内容评审。给你若干条已切好的候选片段,你从「刷到这条视频的陌生观众」视角盲评每一条,分四个维度分别打分(0-100)并各给一句话理由:
 - hook 钩子:前 3 秒(第一句)能不能让人停下滑动?平淡开场直接不及格
-- flow 结构:是不是断章取义?开头是否像半截话、结尾有没有收住?逻辑顺不顺?
+- flow 结构:是不是断章取义?开头是否像半截话、结尾有没有收住?逻辑顺不顺?片段文本里出现「……」表示这条是把相隔很远的两段拼起来的,要按更严的标准查:拼起来之后的意思是不是原话本来的意思?有没有靠跳过中间内容制造出一个原本不存在的矛盾?只要拼得牵强就 keep=false
 - value 价值:不看原视频,这条有没有信息量或情绪价值?值不值得看完?
 - trend 热点:话题/情绪贴不贴近当下平台上正在火的内容?
 另外给每条写一个 teaser:≤15 个字的悬念句,能印在视频开头当文字钩子,要勾人但不剧透。
@@ -242,7 +450,7 @@ export const REVIEW_SYSTEM_PROMPT_ZH = `你是一位极其严格的短视频内�
 
 export const REVIEW_SYSTEM_PROMPT_EN = `You are a ruthless short-form content reviewer. You receive pre-cut clip candidates and judge each one blind, as a stranger scrolling past, scoring FOUR dimensions (0-100 each) with a one-line reason per dimension:
 - hook: does the FIRST line stop the scroll within 3 seconds? Flat openings fail.
-- flow: is it quote-mined? Does it start mid-thought or end without landing? Does it flow?
+- flow: is it quote-mined? Does it start mid-thought or end without landing? Does it flow? A "……" inside the clip text means it was stitched from two far-apart moments — hold those to a stricter bar: does the stitched meaning match what was actually said, or was a contradiction manufactured by skipping what sat in between? Any strained stitch gets keep=false
 - value: without the source video, is it informative or emotionally worth watching to the end?
 - trend: does the topic/emotion ride what is currently hot on the platforms?
 Also write a teaser per clip: a suspense line of ≤8 words that could be printed at the top of the video as a text hook — intriguing, no spoilers.
@@ -272,6 +480,8 @@ interface ReviewableClip {
   startSec: number;
   endSec: number;
   text: string;
+  /** 多片段拼接的段清单;有它时时长要按各段之和报,不是跨度。 */
+  pieces?: ClipPiece[];
 }
 
 /** One sentence of context on each side, so the reviewer can spot quote-mining. */
@@ -290,10 +500,15 @@ export function buildReviewPrompt(transcript: Transcript, clips: ReviewableClip[
   const blocks = clips
     .map((c) => {
       const ctx = contextAround(transcript, c.startSec, c.endSec);
-      const dur = Math.round(c.endSec - c.startSec);
+      const dur = Math.round(clipDurationSec(c));
+      const stitched = isStitched(c.pieces)
+        ? zh
+          ? `(${c.pieces!.length} 段拼接)`
+          : ` (${c.pieces!.length}-part stitch)`
+        : "";
       return zh
-        ? `【候选 ${c.id}】《${c.title}》 时长${dur}秒\n前文:${ctx.before || "(无)"}\n片段:${c.text}\n后文:${ctx.after || "(无)"}`
-        : `【Candidate ${c.id}】"${c.title}" ${dur}s\nBefore: ${ctx.before || "(none)"}\nClip: ${c.text}\nAfter: ${ctx.after || "(none)"}`;
+        ? `【候选 ${c.id}】《${c.title}》 时长${dur}秒${stitched}\n前文:${ctx.before || "(无)"}\n片段:${c.text}\n后文:${ctx.after || "(无)"}`
+        : `【Candidate ${c.id}】"${c.title}" ${dur}s${stitched}\nBefore: ${ctx.before || "(none)"}\nClip: ${c.text}\nAfter: ${ctx.after || "(none)"}`;
     })
     .join("\n\n");
   return zh

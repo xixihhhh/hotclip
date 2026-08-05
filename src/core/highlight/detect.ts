@@ -14,9 +14,22 @@ import {
   buildReviewPrompt,
   extractJson,
   CLIP_LENGTH_RANGES,
+  isChineseTranscript,
+  MOMENT_SYSTEM_PROMPT_ZH,
+  MOMENT_SYSTEM_PROMPT_EN,
+  buildMomentPrompt,
 } from "./prompt";
-import { resolveSelection, type RawSelection } from "./match";
+import { resolveSelection, type RawSelection, type RawPart } from "./match";
 import { prefilterTranscript } from "./prefilter";
+import { clipDurationSec, MAX_PIECES, type ClipPiece } from "../../shared/pieces";
+import { genrePreset, normalizeGenreId, type EvidenceClass } from "../genre";
+import {
+  fuseMoments,
+  shouldRunMoments,
+  speechRatio,
+  MOMENT_WEIGHTS,
+  type SignalMoment,
+} from "./moments";
 
 /**
  * 时长档过滤界:目标范围外放容差(下 0.5×/上 1.5×)——LLM 轻微超标的候选
@@ -78,6 +91,31 @@ export async function chatComplete(llm: LlmConfig, system: string, user: string,
   return content;
 }
 
+/**
+ * 解析多片段拼接的 parts 数组(缺省/畸形一律当作没写,退回单段)。
+ * 每段至少要有引文或有效句 id 才收;超过 MAX_PIECES 的多余段在 normalizePieces
+ * 里按时长取舍,这里只做防爆量截断。
+ */
+export function parseParts(raw: unknown): RawPart[] | undefined {
+  if (!Array.isArray(raw) || raw.length < 2) return undefined;
+  const out: RawPart[] = [];
+  for (const p of raw.slice(0, MAX_PIECES * 2)) {
+    if (typeof p !== "object" || p === null) continue;
+    const o = p as Record<string, unknown>;
+    const quoteStart = String(o.quoteStart ?? "").trim();
+    const startSegmentId = Number(o.startSegmentId);
+    const endSegmentId = Number(o.endSegmentId);
+    if (!quoteStart && !Number.isFinite(startSegmentId)) continue;
+    out.push({
+      startSegmentId: Number.isFinite(startSegmentId) ? startSegmentId : -1,
+      endSegmentId: Number.isFinite(endSegmentId) ? endSegmentId : -1,
+      quoteStart,
+      quoteEnd: String(o.quoteEnd ?? "").trim(),
+    });
+  }
+  return out.length >= 2 ? out : undefined;
+}
+
 /** Parse + validate the LLM's clips JSON into RawSelections (drops malformed rows). */
 export function parseSelections(content: string): RawSelection[] {
   let parsed: unknown;
@@ -98,6 +136,7 @@ export function parseSelections(content: string): RawSelection[] {
     const endSegmentId = Number(r.endSegmentId);
     if (!quoteStart && !Number.isFinite(startSegmentId)) continue;
     out.push({
+      parts: parseParts(r.parts),
       title: String(r.title ?? "").trim() || "未命名片段",
       hook: String(r.hook ?? "").trim(),
       score: Math.max(0, Math.min(100, Number(r.score) || 0)),
@@ -109,6 +148,89 @@ export function parseSelections(content: string): RawSelection[] {
       keywords: Array.isArray(r.keywords)
         ? r.keywords.map((k) => String(k).trim()).filter(Boolean).slice(0, 8)
         : [],
+    });
+  }
+  return out;
+}
+
+/** 信号通道的一条选择:LLM 只报时刻编号,不引用原话。 */
+export interface RawMomentPick {
+  momentId: number;
+  title: string;
+  hook: string;
+  score: number;
+  reason: string;
+  keywords: string[];
+}
+
+/** 解析信号通道的输出(畸形行丢弃)。 */
+export function parseMomentPicks(content: string): RawMomentPick[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(extractJson(content));
+  } catch {
+    throw new Error(`LLM 返回的内容不是合法 JSON / invalid JSON: ${content.slice(0, 200)}`);
+  }
+  const clips = (parsed as { clips?: unknown[] })?.clips;
+  if (!Array.isArray(clips)) throw new Error("LLM 输出缺少 clips 数组 / missing clips array");
+  const out: RawMomentPick[] = [];
+  for (const c of clips) {
+    if (typeof c !== "object" || c === null) continue;
+    const r = c as Record<string, unknown>;
+    const momentId = Number(r.momentId);
+    if (!Number.isFinite(momentId)) continue;
+    out.push({
+      momentId,
+      title: String(r.title ?? "").trim() || "未命名片段",
+      hook: String(r.hook ?? "").trim(),
+      score: Math.max(0, Math.min(100, Number(r.score) || 0)),
+      reason: String(r.reason ?? "").trim(),
+      keywords: Array.isArray(r.keywords)
+        ? r.keywords.map((k) => String(k).trim()).filter(Boolean).slice(0, 8)
+        : [],
+    });
+  }
+  return out;
+}
+
+/** 落在 [startSec, endSec] 内的整句文本(信号候选的展示文本)。 */
+export function textInRange(transcript: Transcript, startSec: number, endSec: number): string {
+  return transcript.segments
+    .filter((s) => s.endSec > startSec && s.startSec < endSec)
+    .map((s) => s.text)
+    .join(" ");
+}
+
+/**
+ * 把 LLM 的时刻选择落成候选。时间完全由信号给定(不做任何反查),
+ * boundary 标 "signal" —— UI 和回执要能看出这条不是按原话切的。
+ */
+export function momentsToCandidates(
+  transcript: Transcript,
+  moments: SignalMoment[],
+  picks: RawMomentPick[]
+): HighlightCandidate[] {
+  const byId = new Map(moments.map((m) => [m.id, m]));
+  const out: HighlightCandidate[] = [];
+  for (const p of picks) {
+    const m = byId.get(p.momentId);
+    if (!m) continue; // 编号是编的,丢弃——绝不猜时间
+    const text = textInRange(transcript, m.startSec, m.endSec);
+    out.push({
+      id: out.length + 1,
+      startSec: m.startSec,
+      endSec: m.endSec,
+      text,
+      title: p.title,
+      hook: p.hook,
+      score: p.score,
+      reason: p.reason,
+      boundary: "signal",
+      // 关键词可能来自画面描述而非原话,所以这里不做"必须在片内出现"的过滤
+      keywords: p.keywords,
+      recommended: true,
+      reviewNote: "",
+      signalEvidence: m.evidence,
     });
   }
   return out;
@@ -221,11 +343,23 @@ export function normalizeScores(candidates: HighlightCandidate[]): HighlightCand
   return candidates.map((c) => ({ ...c, score: (c.recommended ? rec : rej).get(c.id) ?? c.score }));
 }
 
-/** Drop overlapping candidates, keeping higher scores (they arrive score-sorted). */
+/** 实际占用的源片区间:多段拼接按段比,否则按整段跨度。 */
+function occupiedRanges(c: HighlightCandidate): ClipPiece[] {
+  return c.pieces && c.pieces.length > 1 ? c.pieces : [{ startSec: c.startSec, endSec: c.endSec }];
+}
+
+/**
+ * Drop overlapping candidates, keeping higher scores (they arrive score-sorted).
+ * 多段拼接按「段与段」比重叠——否则一条横跨十几分钟的拼接片会把中间所有
+ * 候选全吃掉,而它其实只占用了两小段。
+ */
 export function dropOverlaps(candidates: HighlightCandidate[]): HighlightCandidate[] {
   const kept: HighlightCandidate[] = [];
   for (const c of [...candidates].sort((a, b) => b.score - a.score)) {
-    const overlaps = kept.some((k) => c.startSec < k.endSec && c.endSec > k.startSec);
+    const mine = occupiedRanges(c);
+    const overlaps = kept.some((k) =>
+      occupiedRanges(k).some((b) => mine.some((a) => a.startSec < b.endSec && a.endSec > b.startSec))
+    );
     if (!overlaps) kept.push(c);
   }
   return kept.sort((a, b) => a.startSec - b.startSec).map((c, i) => ({ ...c, id: i + 1 }));
@@ -259,7 +393,9 @@ export async function detectHighlights(
   length?: ClipLength,
   products?: string[],
   reference?: ReferenceProfile,
-  reviewMemory?: ReviewRecord[]
+  reviewMemory?: ReviewRecord[],
+  /** 直播品类判据(内置预设 id + 用户自定义文本,见 core/genre.ts)。 */
+  genre?: { id?: string; custom?: string }
 ): Promise<DetectOutcome> {
   if (transcript.segments.length === 0) return { candidates: [] };
 
@@ -282,7 +418,7 @@ export async function detectHighlights(
 
   const content = await chatComplete(
     llm,
-    highlightSystemPrompt(promptTranscript, length, products ?? [], reference, reviewMemory),
+    highlightSystemPrompt(promptTranscript, length, products ?? [], reference, reviewMemory, genre),
     buildHighlightPrompt(promptTranscript, 6, signals),
     signal
   );
@@ -293,12 +429,14 @@ export async function detectHighlights(
   for (const sel of selections) {
     const resolved = resolveSelection(transcript, sel);
     if (!resolved) continue;
-    const dur = resolved.endSec - resolved.startSec;
+    // 时长按「成片时长」算:多段拼接是各段之和,不是跨度(跨度可能有十几分钟)
+    const dur = clipDurationSec(resolved);
     if (dur < lo || dur > hi) continue;
     candidates.push({
       id: candidates.length + 1,
       startSec: resolved.startSec,
       endSec: resolved.endSec,
+      pieces: resolved.pieces,
       text: resolved.text,
       title: sel.title,
       hook: sel.hook,
@@ -317,7 +455,22 @@ export async function detectHighlights(
       reviewNote: "",
     });
   }
-  const kept = dropOverlaps(candidates);
+  const textKept = dropOverlaps(candidates);
+
+  // 信号驱动通道:文字稿没内容的品类(舞见/萌宠/美食/户外/游戏/电台…)靠
+  // 引用原话根本挑不出东西,改从视听信号融合出的「高能时刻」里挑。
+  // fail-open:这一路任何失败都只是没有额外候选,绝不拖垮文本通道的结果。
+  const evidence: EvidenceClass = genrePreset(normalizeGenreId(genre?.id)).evidence;
+  const ratio = speechRatio(transcript);
+  let momentKept: HighlightCandidate[] = [];
+  if (signals && shouldRunMoments(evidence, ratio, textKept.length)) {
+    momentKept = await detectMoments(transcript, llm, signals, evidence, length, signal).catch((e) => {
+      if (signal?.aborted) throw e;
+      return [];
+    });
+  }
+
+  const kept = dropOverlaps([...textKept, ...momentKept]);
   if (kept.length === 0) return { candidates: kept, funnel };
 
   // Stage 2: adversarial review — a stricter pass judges each clip's hook,
@@ -325,15 +478,63 @@ export async function detectHighlights(
   // dropped) so the UI can default-deselect them and hands-off mode skips
   // them. Fail-open: a broken review call must never take down detection.
   // 复评的上下文用全量转写(不是漏斗后的)——评审要看片段前后文防断章取义。
+  //
+  // 信号候选**不送复评**:复评的四个维度(钩子/结构/价值/热点)全部按"读文本"
+  // 打分,拿它去评一段跳舞或萌宠,必然全判死刑——那正是这条通道要救的品类。
+  // applyReviews 对没评到的 id 本来就保持原样(fail-open),所以直接跳过即可。
+  const reviewable = kept.filter((c) => c.boundary !== "signal");
+  if (reviewable.length === 0) return { candidates: normalizeScores(kept), funnel };
   try {
     const reviewContent = await chatComplete(
       llm,
       reviewSystemPrompt(transcript),
-      buildReviewPrompt(transcript, kept),
+      buildReviewPrompt(transcript, reviewable),
       signal
     );
     return { candidates: normalizeScores(applyReviews(kept, parseReviews(reviewContent))), funnel };
   } catch {
     return { candidates: kept, funnel };
   }
+}
+
+/**
+ * 信号通道的一趟检测:融合信号取时刻 → LLM 按编号挑 → 落成候选。
+ * 时间全程由信号给定,LLM 不需要(也不允许)引用原话。
+ */
+export async function detectMoments(
+  transcript: Transcript,
+  llm: LlmConfig,
+  signals: MediaSignals,
+  evidence: EvidenceClass,
+  length: ClipLength | undefined,
+  signal?: AbortSignal
+): Promise<HighlightCandidate[]> {
+  const range = CLIP_LENGTH_RANGES[length ?? "standard"];
+  // words 类走到这里说明是"说话太少/文本通道没产出"触发的,按 reaction 权重兜底
+  const weights = MOMENT_WEIGHTS[evidence === "visual" ? "visual" : "reaction"];
+  const moments = fuseMoments(signals, transcript.durationSec, {
+    weights,
+    minSec: range.minSec,
+    maxSec: range.maxSec,
+  });
+  if (moments.length === 0) return [];
+
+  const zh = isChineseTranscript(transcript);
+  const content = await chatComplete(
+    llm,
+    zh ? MOMENT_SYSTEM_PROMPT_ZH : MOMENT_SYSTEM_PROMPT_EN,
+    buildMomentPrompt(
+      moments.map((m) => ({
+        id: m.id,
+        startSec: m.startSec,
+        endSec: m.endSec,
+        evidence: m.evidence,
+        text: textInRange(transcript, m.startSec, m.endSec),
+      })),
+      4,
+      zh
+    ),
+    signal
+  );
+  return momentsToCandidates(transcript, moments, parseMomentPicks(content));
 }

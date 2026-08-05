@@ -4,7 +4,8 @@
  * segments are built from word timestamps). Pure & platform-neutral so both
  * the renderer (interactive tweaking) and core can use it.
  */
-import type { Transcript, TranscriptSegment } from "./api-types";
+import type { Transcript, TranscriptSegment, ClipPiece } from "./api-types";
+import { normalizePieces, PIECE_JOINER } from "./pieces";
 
 const EPS = 1e-3;
 /** Manual tweaking is allowed a wider range than auto-detection. */
@@ -67,4 +68,45 @@ export function adjustClipBoundary(
     .map((s) => s.text)
     .join(" ");
   return { startSec, endSec, text };
+}
+
+export interface AdjustedCandidate extends AdjustedBoundary {
+  /** 拼接片调整后的段清单;单段切片不带此字段。 */
+  pieces?: ClipPiece[];
+}
+
+/**
+ * 候选级的切点微调。拼接片只动**第一段的起点**和**最后一段的终点**——中间
+ * 那几段是 AI 挑来做对照的,用户按左右箭头时不该被悄悄挪走;调到两段并成
+ * 一段(拼接不复存在)时直接拒绝这次调整,让用户自己去审阅台改。
+ */
+export function adjustCandidateBoundary(
+  transcript: Transcript,
+  clip: { startSec: number; endSec: number; pieces?: ClipPiece[] },
+  edge: "start" | "end",
+  dir: 1 | -1
+): AdjustedCandidate | null {
+  const pieces = clip.pieces;
+  if (!pieces || pieces.length < 2) return adjustClipBoundary(transcript, clip, edge, dir);
+
+  const idx = edge === "start" ? 0 : pieces.length - 1;
+  const moved = adjustClipBoundary(transcript, pieces[idx], edge, dir);
+  if (!moved) return null;
+  const next = normalizePieces(
+    pieces.map((p, i) => (i === idx ? { startSec: moved.startSec, endSec: moved.endSec } : p))
+  );
+  if (next.length < 2) return null;
+  return {
+    startSec: next[0].startSec,
+    endSec: next[next.length - 1].endSec,
+    pieces: next,
+    text: piecesText(transcript, next),
+  };
+}
+
+/** 拼接片的展示文本:各段原文用省略标记连起来,一眼看得出中间跳了。 */
+export function piecesText(transcript: Transcript, pieces: ClipPiece[]): string {
+  return pieces
+    .map((p) => overlapping(transcript, p.startSec, p.endSec).map((s) => s.text).join(" "))
+    .join(PIECE_JOINER);
 }

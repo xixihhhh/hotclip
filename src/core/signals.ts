@@ -24,6 +24,10 @@ export interface MediaSignals {
   visualPeaks?: TimeRange[];
   /** 表情峰值时段(YuNet+FER+,零配置;可选,见 emotion.ts)。 */
   emotionPeaks?: TimeRange[];
+  /** 语音情绪激动时段(SenseVoice 情绪标签短窗重扫;可选,见 voice-emotion.ts)。 */
+  voiceEmotionPeaks?: TimeRange[];
+  /** 笑声/掌声/哭腔时段(SenseVoice 音频事件标签;可选,见 voice-emotion.ts)。 */
+  audioEventPeaks?: TimeRange[];
   /** 弹幕热度峰值时段(同名 .xml 自动发现;可选,见 danmaku.ts)。 */
   danmakuPeaks?: TimeRange[];
 }
@@ -95,6 +99,42 @@ export function cutDensity(cutTimes: number[], windowSec = 15, minCuts = 4): Tim
 
 /** Cap for LLM prompt injection — signals are hints, not the whole story. */
 const MAX_RANGES = 12;
+
+/**
+ * 信号引导的采样规划:在已知的高能窗口(响度峰值/镜头密集段)内按步长密集
+ * 采样,再用均匀网格铺满剩余额度防信号盲区漏段,全程保持最小间隔。
+ * 二级信号采集(抽帧表情、短窗语音情绪)共用——把有限的推理预算花在
+ * 最可能有爆点的地方。纯函数。
+ */
+export function planSignalGuidedTimes(
+  durationSec: number,
+  signals: MediaSignals | undefined,
+  maxCount: number,
+  minSpacingSec: number,
+  windowStepSec: number,
+  edgePadSec = 0.5
+): number[] {
+  if (!(durationSec > 1) || maxCount < 1) return [];
+  const lo = Math.min(edgePadSec, durationSec / 2);
+  const hi = Math.max(lo, durationSec - edgePadSec);
+  const clamp = (t: number): number => Math.min(hi, Math.max(lo, t));
+  const picked: number[] = [];
+  const fits = (t: number): boolean => picked.every((p) => Math.abs(p - t) >= minSpacingSec);
+  const tryPick = (t: number): void => {
+    const c = clamp(t);
+    if (picked.length < maxCount && fits(c)) picked.push(c);
+  };
+  // 信号窗口内步进采样(爆点就藏在响度峰值/镜头密集段里)
+  const windows = [...(signals?.loudPeaks ?? []), ...(signals?.cutDense ?? [])].sort(
+    (a, b) => a.startSec - b.startSec
+  );
+  for (const w of windows) {
+    for (let t = w.startSec; t <= w.endSec; t += windowStepSec) tryPick(t);
+  }
+  // 均匀网格兜底,防信号盲区整段漏掉
+  for (let i = 1; i <= maxCount; i++) tryPick((durationSec * i) / (maxCount + 1));
+  return picked.sort((a, b) => a - b);
+}
 
 /**
  * Run both probes (audio-only + downscaled low-fps video) concurrently.

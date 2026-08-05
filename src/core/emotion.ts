@@ -14,7 +14,7 @@ import { promisify } from "util";
 import { join } from "path";
 import { resolveFfmpegPath } from "./binaries";
 import { modelDir, ensureModel, EMOTION_MODEL } from "./models";
-import type { MediaSignals, TimeRange } from "./signals";
+import { planSignalGuidedTimes, type MediaSignals, type TimeRange } from "./signals";
 import { YunetDetector, pickMainFace, YUNET_INPUT, type FaceBox } from "./reframe/yunet";
 import { visualPeakRanges } from "./highlight/vision";
 
@@ -54,6 +54,7 @@ export interface EmotionOutcome {
 
 /**
  * 规划采样时刻:信号窗口内 2s 步进优先,均匀网格补满,保持最小间隔。纯函数。
+ * (通用规划逻辑在 signals.ts,与短窗语音情绪扫描共用。)
  */
 export function planEmotionFrameTimes(
   durationSec: number,
@@ -62,25 +63,7 @@ export function planEmotionFrameTimes(
   minSpacingSec = EMOTION_MIN_SPACING_SEC,
   windowStepSec = EMOTION_WINDOW_STEP_SEC
 ): number[] {
-  if (!(durationSec > 1) || maxFrames < 1) return [];
-  const lo = 0.5;
-  const hi = durationSec - 0.5;
-  const clamp = (t: number): number => Math.min(hi, Math.max(lo, t));
-  const picked: number[] = [];
-  const fits = (t: number): boolean => picked.every((p) => Math.abs(p - t) >= minSpacingSec);
-  const tryPick = (t: number): void => {
-    const c = clamp(t);
-    if (picked.length < maxFrames && fits(c)) picked.push(c);
-  };
-  // 信号窗口内步进采样(表情峰值就藏在响度峰值/镜头密集段里)
-  const windows = [...(signals?.loudPeaks ?? []), ...(signals?.cutDense ?? [])]
-    .sort((a, b) => a.startSec - b.startSec);
-  for (const w of windows) {
-    for (let t = w.startSec; t <= w.endSec; t += windowStepSec) tryPick(t);
-  }
-  // 均匀网格兜底,防信号盲区整段漏掉
-  for (let i = 1; i <= maxFrames; i++) tryPick((durationSec * i) / (maxFrames + 1));
-  return picked.sort((a, b) => a - b);
+  return planSignalGuidedTimes(durationSec, signals, maxFrames, minSpacingSec, windowStepSec);
 }
 
 /**

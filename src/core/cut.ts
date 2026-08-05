@@ -13,6 +13,7 @@ import { spawn } from "child_process";
 import { writeFile, rm } from "fs/promises";
 import { resolveFfmpegPath } from "./binaries";
 import { toFfmpegTime } from "./time";
+import { buildZoomFilter } from "./autozoom";
 
 /**
  * Social loudness target (EBU R128): -14 LUFS integrated, -1.5 dBTP true-peak
@@ -72,6 +73,11 @@ export interface CutOptions {
   trackPlan?: { cropXExpr: string; cropW: number; cropH: number; cropY: number };
   /** Reframe to 9:16 vertical (center crop → 1080×1920). Requires re-encode. */
   vertical?: boolean;
+  /**
+   * 自动运镜:竖屏成片叠一层缓慢推拉(见 autozoom.ts)。需要源帧率——
+   * zoompan 不传 fps 会把素材重采样到 25fps。字段齐全才生效。
+   */
+  autoZoom?: { durationSec: number; fps: number; emphasisAtSec?: number[] };
   /** Burn an .ass karaoke subtitle file via libass. Requires re-encode. */
   subtitlePath?: string;
   /** Directory holding bundled fonts for libass (subtitles filter fontsdir). */
@@ -183,10 +189,17 @@ export function escapeFilterPath(p: string): string {
 /** Compose the -vf chain for reframing + caption burn-in. Empty = no filter. */
 export function buildVideoFilters(options: CutOptions): string[] {
   const filters: string[] = [];
+  // 自动运镜:zoompan 顶替 scale 那一步(它自己出目标尺寸);返回 null 就照旧
+  const zoom = options.autoZoom
+    ? buildZoomFilter(options.autoZoom.durationSec, options.autoZoom.fps, 1080, 1920, {
+        emphasisAtSec: options.autoZoom.emphasisAtSec,
+      })
+    : null;
+  const toVertical = zoom ? [zoom, "setsar=1"] : ["scale=1080:1920:flags=lanczos", "setsar=1"];
   if (options.trackPlan) {
     const p = options.trackPlan;
     filters.push(`crop=w=${p.cropW}:h=${p.cropH}:x='${p.cropXExpr}':y=${p.cropY}`);
-    filters.push("scale=1080:1920:flags=lanczos", "setsar=1");
+    filters.push(...toVertical);
     if (options.subtitlePath) {
       const fonts = options.fontsDir ? `:fontsdir='${escapeFilterPath(options.fontsDir)}'` : "";
       filters.push(`subtitles=filename='${escapeFilterPath(options.subtitlePath)}'${fonts}`);
@@ -201,7 +214,7 @@ export function buildVideoFilters(options: CutOptions): string[] {
   }
   if (options.vertical) {
     // Center crop to exactly 9:16 (whichever axis binds), then normalize size.
-    filters.push("crop=w='min(iw,ih*9/16)':h='min(ih,iw*16/9)'", "scale=1080:1920:flags=lanczos", "setsar=1");
+    filters.push("crop=w='min(iw,ih*9/16)':h='min(ih,iw*16/9)'", ...toVertical);
   }
   if (options.subtitlePath) {
     const fonts = options.fontsDir ? `:fontsdir='${escapeFilterPath(options.fontsDir)}'` : "";

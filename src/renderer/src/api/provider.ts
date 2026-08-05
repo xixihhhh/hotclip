@@ -67,6 +67,7 @@ type WatchCb = (e: WatchEvent) => void;
 const watchListeners = new Set<WatchCb>();
 let watchRunning = false;
 let watchDirDemo: string | null = null;
+let webhookPortDemo: number | null = null;
 const emitWatch = (e: Omit<WatchEvent, "at">): void => {
   if (watchRunning) watchListeners.forEach((cb) => cb({ ...e, at: Date.now() }));
 };
@@ -184,6 +185,11 @@ const browserMock: HotClipApi = {
   async contactSheet() {
     return "";
   },
+  // 浏览器预览没有主进程可以代发请求——给一份演示清单,让选模型的 UI 走得通
+  async listLlmModels() {
+    await sleep(400);
+    return { ids: ["deepseek-v4-flash", "deepseek-v4-pro", "qwen-plus", "glm-4.7"], error: null };
+  },
   // 浏览器预览没有本地偏好档——记录静默丢弃
   async recordReview() {},
   async getAudioPeaks(_filePath, startSec, endSec) {
@@ -253,6 +259,20 @@ const browserMock: HotClipApi = {
   async watchStatus() {
     return { running: watchRunning, dir: watchDirDemo };
   },
+  // 浏览器预览起不了真的 HTTP 端点,复用同一套演示剧本(UI 流程能完整走通)
+  async webhookStart(dir, llm, outDir, port) {
+    await this.watchStart(dir, llm, outDir);
+    webhookPortDemo = port ?? 17650;
+    return { port: webhookPortDemo, dir };
+  },
+  async webhookStop() {
+    watchRunning = false;
+    watchDirDemo = null;
+    webhookPortDemo = null;
+  },
+  async webhookStatus() {
+    return { running: watchRunning && webhookPortDemo !== null, port: webhookPortDemo, dir: watchDirDemo };
+  },
   onWatchEvent(cb) {
     watchListeners.add(cb);
     return () => watchListeners.delete(cb);
@@ -286,6 +306,8 @@ const browserMock: HotClipApi = {
     const emotionStats = { framesTotal: 96, facesScored: 74, peakCount: 2 };
     // 弹幕信号:演示"录播旁发现了同名弹幕 XML"的情况
     const danmakuStats = { count: 4213, peakCount: 5 };
+    // 语气信号:复用本地转写权重,零配置自动跑,浏览器预览恒给演示统计
+    const voiceStats = { windowsPlanned: 100, windowsScored: 96, emotionPeakCount: 3, eventPeakCount: 2 };
     const segs = transcript.segments;
     const pick = (from: number, to: number, id: number, title: string, hook: string, score: number, reason: string): HighlightCandidate => ({
       id,
@@ -312,9 +334,38 @@ const browserMock: HotClipApi = {
       recommended: id !== 3,
       reviewNote: id === 3 ? "开场是问候语,前3秒没有钩子,独立可看性弱" : "",
     });
+    // 多片段拼接演示:承诺句和后面的打脸句相隔很远,摆在一起才成立——
+    // 浏览器预览要能走通拼接的整条 UI(候选卡的拼接标记 + 审阅台的段清单预览)
+    const stitched: HighlightCandidate = {
+      id: 4,
+      startSec: segs[1].startSec,
+      endSec: segs[5].endSec,
+      pieces: [
+        { startSec: segs[1].startSec, endSec: segs[1].endSec },
+        { startSec: segs[5].startSec, endSec: segs[5].endSec },
+      ],
+      text: `${segs[1].text} …… ${segs[5].text}`,
+      title: "刚说闭眼入,转头就要你下单",
+      hook: "今天给大家带来一款超级好用的纸巾,三层加厚,湿水不破",
+      score: 88,
+      reason: "前后对照,冲突型钩子停留力最强",
+      boundary: "anchored",
+      keywords: ["湿水不破", "小黄车"],
+      scoreDims: { hook: 86, flow: 70, value: 80, trend: 84 },
+      dimNotes: {
+        hook: "承诺句开场,立刻立起对照",
+        flow: "拼接片,已核对两段各自完整、没有断章取义",
+        value: "对照本身就是信息",
+        trend: "打脸型内容平台长期吃香",
+      },
+      teaser: "他自己打了自己的脸",
+      recommended: true,
+      reviewNote: "",
+    };
     const candidates = [
       pick(3, 4, 1, "半杯水都不渗?实测给你看", "你看这个吸水速度,直接倒半杯水都不带渗的", 92, "强演示钩子+价格反差,完播率高"),
       pick(1, 2, 2, "十几块和两块多的纸巾差在哪", "很多朋友问我,这个和超市里十几块的有什么区别", 81, "悬念提问开场,击中比价心理"),
+      stitched,
       pick(0, 1, 3, "欢迎来到直播间", "大家好,欢迎来到我的直播间", 38, "开场白"),
     ];
     // 商品讲解模式:与主进程同款——命中的商品词确定性并入候选 keywords
@@ -336,9 +387,9 @@ const browserMock: HotClipApi = {
           words: (s.words ?? []).map((w) => ({ ...w, speaker: i % 2 })),
         })),
       };
-      return { candidates, transcript: labeled, funnel, vision: visionStats, emotion: emotionStats, danmaku: danmakuStats, reference };
+      return { candidates, transcript: labeled, funnel, vision: visionStats, emotion: emotionStats, danmaku: danmakuStats, voice: voiceStats, reference };
     }
-    return { candidates, funnel, vision: visionStats, emotion: emotionStats, danmaku: danmakuStats, reference };
+    return { candidates, funnel, vision: visionStats, emotion: emotionStats, danmaku: danmakuStats, voice: voiceStats, reference };
   },
 };
 

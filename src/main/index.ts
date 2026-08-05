@@ -22,13 +22,16 @@ import { isModelInstalled, ensureModel, SENSEVOICE_MODEL, PARAFORMER_MODEL, FIRE
 import { runDiarization, labelTranscript } from "@core/diarize";
 import { ASR_CATALOG } from "../shared/asr-catalog";
 import { detectHighlights, chatComplete } from "@core/highlight/detect";
+import { listModels } from "@core/llm-models";
 import { collectVisionSignal } from "@core/highlight/vision";
 import { composeContactSheetJpeg } from "@core/contact-sheet";
 import { collectEmotionSignal } from "@core/emotion";
 import { collectClipSegments, translateSegments, clipTranslationLines } from "@core/translate";
 import { generatePublishCopies } from "@core/publish";
 import { FolderWatcher, isVideoFile, isSeen, type SeenMap, type WatchedFile } from "@core/watch";
+import { startWebhookServer, type WebhookServerHandle } from "@core/webhook";
 import { collectDanmakuSignal } from "@core/danmaku";
+import { collectVoiceEmotionSignal } from "@core/voice-emotion";
 import { checkForUpdate } from "@core/update-check";
 import { clipOutDir } from "@core/appenv";
 import { defaultModelsRoot, readAppSettings, resolveModelsRoot, writeAppSettings } from "@core/app-settings";
@@ -42,10 +45,11 @@ import type { ReferenceProfile } from "@core/reference";
 import { collectSignals } from "@core/signals";
 import { exportClips, sanitizeFilename } from "@core/export";
 import { sliceWords } from "@core/subtitle";
+import { wordsInPieces } from "../shared/pieces";
 import { snapContextAround } from "@core/shots";
 import { renderCaptionOverlay } from "./overlay-renderer";
 import { QUALITY_CRF } from "../shared/api-types";
-import type { Transcript, LlmConfig, HighlightCandidate, ExportOptions, VisionStats, EmotionStats, DanmakuStats, WatchEvent, UpdateInfo } from "../shared/api-types";
+import type { Transcript, TranscriptWord, LlmConfig, HighlightCandidate, ExportOptions, VisionStats, EmotionStats, DanmakuStats, VoiceTagStats, WatchEvent, UpdateInfo } from "../shared/api-types";
 
 const VIDEO_EXTENSIONS = ["mp4", "mkv", "mov", "flv", "ts", "webm", "avi", "m4v"];
 const AUDIO_EXTENSIONS = ["mp3", "m4a", "wav", "aac", "flac"];
@@ -230,6 +234,17 @@ ipcMain.handle("hotclip:contact-sheet", async (_event, filePath: unknown, startS
   return b64 ? `data:image/jpeg;base64,${b64}` : "";
 });
 
+// ---- IPC: 问 LLM 端点要模型清单 ----
+// 模型 id 会随厂商换代失效,写死的预设迟早 404;让用户一键拉真实清单。
+// listModels 自身 fail-open(返回 error 不抛),这里照原样透传给渲染进程。
+
+ipcMain.handle("hotclip:llm-models", async (_event, baseUrl: unknown, apiKey: unknown) => {
+  if (typeof baseUrl !== "string" || !baseUrl.trim()) {
+    return { ids: [], error: "缺少 base_url / missing base_url" };
+  }
+  return listModels(baseUrl.trim(), typeof apiKey === "string" ? apiKey : "");
+});
+
 // ---- IPC: 审阅反馈回流(导出时记录采用/否决,下次检测注入偏好) ----
 
 ipcMain.handle("hotclip:review-record", async (_event, video: unknown, kept: unknown, rejected: unknown) => {
@@ -371,7 +386,7 @@ ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: 
 
 ipcMain.handle(
   "hotclip:detect-highlights",
-  async (_event, transcript: unknown, llm: unknown, filePath: unknown, diarize: unknown, prefilter: unknown, vision: unknown, length: unknown, products: unknown, referencePath: unknown) => {
+  async (_event, transcript: unknown, llm: unknown, filePath: unknown, diarize: unknown, prefilter: unknown, vision: unknown, length: unknown, products: unknown, referencePath: unknown, genre: unknown) => {
     let t = transcript as Transcript;
     const config = llm as LlmConfig;
     if (!t || !Array.isArray(t.segments)) throw new Error("detect-highlights requires a transcript");
@@ -420,6 +435,8 @@ ipcMain.handle(
     let visionStats: VisionStats | undefined;
     let emotionStats: EmotionStats | undefined;
     let danmakuStats: DanmakuStats | undefined;
+    let voiceStats: VoiceTagStats | undefined;
+    let voicePending: Promise<Awaited<ReturnType<typeof collectVoiceEmotionSignal>>> = Promise.resolve(null);
     if (typeof filePath === "string" && filePath.trim()) {
       const media = await probeMedia(filePath).catch(() => null);
       // 弹幕热度(零配置):视频旁同名 .xml(录播姬约定)自动发现,纯音频也适用
@@ -429,6 +446,17 @@ ipcMain.handle(
           signals = { loudPeaks: [], cutDense: [], ...signals, danmakuPeaks: dm.danmakuPeaks };
           danmakuStats = dm.stats;
         }
+        // 语音情绪/笑声掌声(零配置,复用已装的 SenseVoice 权重):纯音频素材也适用,
+        // 与画面侧信号并发跑——它只吃 CPU 解码,不和抽帧抢 ffmpeg
+        voicePending = Promise.race([
+          collectVoiceEmotionSignal({
+            videoPath: filePath,
+            durationSec: media.durationSec,
+            modelsRoot: modelsRoot(),
+            signals,
+          }),
+          new Promise<null>((r) => setTimeout(() => r(null), 120_000)),
+        ]).catch(() => null);
       }
       if (media && media.hasVideo && media.durationSec > 1) {
         const vc = vision as { baseUrl?: unknown; model?: unknown } | null | undefined;
@@ -466,6 +494,17 @@ ipcMain.handle(
           emotionStats = emotionOutcome?.stats;
         }
       }
+      const voiceOutcome = await voicePending;
+      if (voiceOutcome && (voiceOutcome.voiceEmotionPeaks.length > 0 || voiceOutcome.audioEventPeaks.length > 0)) {
+        signals = {
+          loudPeaks: [],
+          cutDense: [],
+          ...signals,
+          voiceEmotionPeaks: voiceOutcome.voiceEmotionPeaks,
+          audioEventPeaks: voiceOutcome.audioEventPeaks,
+        };
+        voiceStats = voiceOutcome.stats;
+      }
     }
     // 时长档:非法值回落标准档
     const clipLength =
@@ -476,8 +515,17 @@ ipcMain.handle(
       : [];
     // 审阅偏好回流:本机历史采用/否决样例进提示词(空记忆无感)
     const reviewMemory = await loadReviewMemory(app.getPath("userData"));
-    const outcome = await detectHighlights(t, config, undefined, signals, localFilter, clipLength, productWords, reference, reviewMemory);
-    return { candidates: outcome.candidates, transcript: labeled, funnel: outcome.funnel, vision: visionStats, emotion: emotionStats, danmaku: danmakuStats, reference: reference ?? null, referenceError };
+    // 品类判据:白名单清洗(id 必须是字符串,自定义文本截断由 core 侧兜)
+    const g = genre as { id?: unknown; custom?: unknown } | null | undefined;
+    const genreArg =
+      g && (typeof g.id === "string" || typeof g.custom === "string")
+        ? {
+            id: typeof g.id === "string" ? g.id : undefined,
+            custom: typeof g.custom === "string" ? g.custom : undefined,
+          }
+        : undefined;
+    const outcome = await detectHighlights(t, config, undefined, signals, localFilter, clipLength, productWords, reference, reviewMemory, genreArg);
+    return { candidates: outcome.candidates, transcript: labeled, funnel: outcome.funnel, vision: visionStats, emotion: emotionStats, danmaku: danmakuStats, voice: voiceStats, reference: reference ?? null, referenceError };
   }
 );
 
@@ -497,6 +545,12 @@ async function diarizeTranscript(t: Transcript, filePath: string): Promise<Trans
 let exportAbort: AbortController | null = null;
 ipcMain.on("hotclip:export-cancel", () => exportAbort?.abort());
 
+/** 一条候选实际要用的词表:拼接片只取落在各段内的词,单段照旧按区间取。 */
+function clipWords(transcript: Transcript, c: HighlightCandidate): TranscriptWord[] {
+  const words = sliceWords(transcript, c.startSec, c.endSec);
+  return c.pieces && c.pieces.length > 1 ? wordsInPieces(words, c.pieces) : words;
+}
+
 ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: unknown, options: unknown) => {
   if (typeof filePath !== "string" || !filePath.trim()) throw new Error("export requires a file path");
   const list = clips as HighlightCandidate[];
@@ -506,7 +560,8 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
     opts.captionStyle && opts.captionStyle !== "none" && opts.transcript ? opts.captionStyle : undefined;
   const jumpCut = Boolean(opts.jumpCut && opts.transcript);
   const cleanFillers = Boolean(opts.cleanFillers && opts.transcript);
-  const needWords = Boolean(style) || jumpCut || cleanFillers;
+  const cutRetakes = Boolean(opts.cutRetakes && opts.transcript);
+  const needWords = Boolean(style) || jumpCut || cleanFillers || cutRetakes;
   const sourceName = sanitizeFilename(basename(filePath, extname(filePath)), "video");
   const outDir = clipOutDir(opts.outDir, app.getPath("videos"), sourceName);
   // bundled caption font: packaged → resources/fonts, dev → repo resources/fonts
@@ -548,9 +603,13 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       title: c.title,
       startSec: c.startSec,
       endSec: c.endSec,
+      // 多片段拼接:段清单原样带下去,段间空隙在 export 里当强制剪除区间处理
+      pieces: Array.isArray(c.pieces) && c.pieces.length > 1 ? c.pieces : undefined,
       snapContext: allWords ? snapContextAround(allWords, c.startSec, c.endSec) : undefined,
       manualBounds: c.manualBounds === true,
-      words: needWords ? sliceWords(opts.transcript!, c.startSec, c.endSec) : undefined,
+      // 拼接片的词表只取真正剪进去的那几段——空隙里的词既不该上字幕,
+      // 也不该参与跳剪/重录判定
+      words: needWords ? clipWords(opts.transcript!, c) : undefined,
       // 多留 1.5s 余量:导出时镜头吸附最多外扩 0.8s,夹取在 export 里做
       translation: translations
         ? clipTranslationLines(translatable, translations, c.startSec - 1.5, c.endSec + 1.5)
@@ -574,6 +633,8 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       captionStyle: style,
       jumpCut,
       cleanFillers,
+      cutRetakes,
+      autoZoom: Boolean(opts.autoZoom),
       trimUi: Boolean(opts.trimUi),
       titleCard: Boolean(opts.titleCard),
       openingHook: Boolean(opts.openingHook),
@@ -618,6 +679,50 @@ async function loadWatchSeen(): Promise<SeenMap> {
   }
 }
 
+/**
+ * 一个录播文件的完整处理(转写→找爆点→导出),watch 文件夹与 webhook 共用。
+ * 成败都记 seen:失败重试要用户手动触发,不能无人值守下反复烧 LLM 花费。
+ */
+function makeRecordingProcessor(
+  seen: SeenMap,
+  config: LlmConfig,
+  outDir: unknown,
+  emit: (e: Omit<WatchEvent, "at">) => void
+): (f: WatchedFile) => Promise<void> {
+  const fontsDir = app.isPackaged
+    ? join(process.resourcesPath, "fonts")
+    : join(app.getAppPath(), "resources", "fonts");
+  return async (f: WatchedFile) => {
+    const file = basename(f.path);
+    emit({ type: "found", file, path: f.path });
+    const markSeen = async (): Promise<void> => {
+      seen[f.path] = { size: f.size, mtimeMs: f.mtimeMs };
+      await writeFile(watchSeenPath(), JSON.stringify(seen), "utf8").catch(() => {});
+    };
+    try {
+      const outcome = await autoClip(f.path, {
+        // 用户自选过导出位置就照办;没选过保持老行为(成片落录播文件旁边)
+        outDir:
+          typeof outDir === "string" && outDir.trim()
+            ? join(outDir.trim(), sanitizeFilename(basename(f.path, extname(f.path)), "video"))
+            : undefined,
+        modelsRoot: modelsRoot(),
+        cacheDir: transcriptCacheDir(),
+        llm: config,
+        fontsDir,
+        glossary: await loadGlossary(app.getPath("userData")),
+        reviewMemory: await loadReviewMemory(app.getPath("userData")),
+        onStage: (stage) => emit({ type: stage, file, path: f.path }),
+      });
+      await markSeen();
+      emit({ type: "done", file, path: f.path, clips: outcome.exported.length, outDir: outcome.outDir });
+    } catch (e) {
+      await markSeen();
+      emit({ type: "error", file, path: f.path, message: e instanceof Error ? e.message : String(e) });
+    }
+  };
+}
+
 ipcMain.handle("hotclip:watch-start", async (event, dir: unknown, llm: unknown, outDir: unknown) => {
   if (typeof dir !== "string" || !dir.trim()) throw new Error("watch requires a directory");
   const config = llm as LlmConfig;
@@ -630,9 +735,7 @@ ipcMain.handle("hotclip:watch-start", async (event, dir: unknown, llm: unknown, 
   const emit = (e: Omit<WatchEvent, "at">): void => {
     if (!event.sender.isDestroyed()) event.sender.send("hotclip:watch-event", { ...e, at: Date.now() });
   };
-  const fontsDir = app.isPackaged
-    ? join(process.resourcesPath, "fonts")
-    : join(app.getAppPath(), "resources", "fonts");
+  const process = makeRecordingProcessor(seen, config, outDir, emit);
   const watcher = new FolderWatcher({
     listDir: async () => {
       const names = await readdir(dir);
@@ -645,36 +748,7 @@ ipcMain.handle("hotclip:watch-start", async (event, dir: unknown, llm: unknown, 
       return files;
     },
     isSeen: (f) => isSeen(seen, f),
-    onStable: async (f) => {
-      const file = basename(f.path);
-      emit({ type: "found", file, path: f.path });
-      // 成败都记 seen:失败重试要用户手动触发,不能无人值守下反复烧 LLM 花费
-      const markSeen = async (): Promise<void> => {
-        seen[f.path] = { size: f.size, mtimeMs: f.mtimeMs };
-        await writeFile(watchSeenPath(), JSON.stringify(seen), "utf8").catch(() => {});
-      };
-      try {
-        const outcome = await autoClip(f.path, {
-          // 用户自选过导出位置就照办;没选过保持老行为(成片落录播文件旁边)
-          outDir:
-            typeof outDir === "string" && outDir.trim()
-              ? join(outDir.trim(), sanitizeFilename(basename(f.path, extname(f.path)), "video"))
-              : undefined,
-          modelsRoot: modelsRoot(),
-          cacheDir: transcriptCacheDir(),
-          llm: config,
-          fontsDir,
-          glossary: await loadGlossary(app.getPath("userData")),
-          reviewMemory: await loadReviewMemory(app.getPath("userData")),
-          onStage: (stage) => emit({ type: stage, file, path: f.path }),
-        });
-        await markSeen();
-        emit({ type: "done", file, path: f.path, clips: outcome.exported.length, outDir: outcome.outDir });
-      } catch (e) {
-        await markSeen();
-        emit({ type: "error", file, path: f.path, message: e instanceof Error ? e.message : String(e) });
-      }
-    },
+    onStable: process,
   });
   watchDirPath = dir;
   watchTimer = setInterval(() => void watcher.tick(), WATCH_POLL_MS);
@@ -688,6 +762,67 @@ ipcMain.handle("hotclip:watch-stop", async () => {
 });
 
 ipcMain.handle("hotclip:watch-status", async () => ({ running: watchTimer !== null, dir: watchDirPath }));
+
+// ---- 录播 webhook:录播姬/blrec 下播回调即出片(比轮询更实时) ----
+// 只绑回环;回调给的路径必须落在用户指定的录播目录内(外部输入不可信)。
+let webhookHandle: WebhookServerHandle | null = null;
+let webhookInfo: { port: number; dir: string } | null = null;
+/** 串行队列:录播机同时只跑一条切片管线,不打爆 CPU(与 watch 的 drain 同思路)。 */
+let webhookChain: Promise<void> = Promise.resolve();
+
+ipcMain.handle(
+  "hotclip:webhook-start",
+  async (event, dir: unknown, llm: unknown, outDir: unknown, port: unknown, token: unknown) => {
+    if (typeof dir !== "string" || !dir.trim()) throw new Error("webhook 需要指定录播目录");
+    const config = llm as LlmConfig;
+    if (!config?.baseUrl || !config?.model) throw new Error("请先在设置里配置 LLM(baseUrl/model)");
+    const recDir = dir.trim();
+    const s = await stat(recDir).catch(() => null);
+    if (!s?.isDirectory()) throw new Error(`录播目录不存在: ${recDir}`);
+    await webhookHandle?.close();
+    webhookHandle = null;
+
+    const seen = await loadWatchSeen();
+    const emit = (e: Omit<WatchEvent, "at">): void => {
+      if (!event.sender.isDestroyed()) event.sender.send("hotclip:watch-event", { ...e, at: Date.now() });
+    };
+    const process = makeRecordingProcessor(seen, config, outDir, emit);
+    const wanted = Number(port);
+    webhookHandle = await startWebhookServer({
+      port: Number.isFinite(wanted) && wanted > 0 && wanted < 65536 ? Math.round(wanted) : 17650,
+      token: typeof token === "string" && token.trim() ? token.trim() : undefined,
+      workDir: recDir,
+      onLog: (message) => emit({ type: "error", file: "webhook", path: recDir, message }),
+      onRecording: (e) => {
+        // 回调只说"写完了",文件是否真的可读由这里核实;重复回调靠 seen 挡掉
+        webhookChain = webhookChain.then(async () => {
+          const st = await stat(e.path).catch(() => null);
+          if (!st?.isFile()) {
+            emit({ type: "error", file: basename(e.path), path: e.path, message: "回调指向的文件不存在或不可读" });
+            return;
+          }
+          const f: WatchedFile = { path: e.path, size: st.size, mtimeMs: st.mtimeMs };
+          if (isSeen(seen, f)) return; // 同一文件的重复回调(写完 + 后处理完)
+          await process(f);
+        });
+      },
+    });
+    webhookInfo = { port: webhookHandle.port, dir: recDir };
+    return webhookInfo;
+  }
+);
+
+ipcMain.handle("hotclip:webhook-stop", async () => {
+  await webhookHandle?.close();
+  webhookHandle = null;
+  webhookInfo = null;
+});
+
+ipcMain.handle("hotclip:webhook-status", async () => ({
+  running: webhookHandle !== null,
+  port: webhookInfo?.port ?? null,
+  dir: webhookInfo?.dir ?? null,
+}));
 
 // ---- 新版本检查:启动后渲染层问一次,失败静默 ----
 let updateCache: UpdateInfo | null | undefined;

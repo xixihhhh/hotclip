@@ -51,7 +51,7 @@ export function ExportView({
       .exportClips(filePath, clips, {
         ...options,
         transcript:
-          options.captionStyle !== "none" || options.jumpCut || options.cleanFillers || Boolean(options.translate)
+          options.captionStyle !== "none" || options.jumpCut || options.cleanFillers || options.cutRetakes || Boolean(options.translate)
             ? transcript
             : undefined,
       })

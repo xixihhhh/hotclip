@@ -13,6 +13,8 @@ export interface RenderPrefs {
   captionStyle: CaptionStyleChoice;
   jumpCut: boolean;
   cleanFillers: boolean;
+  cutRetakes: boolean;
+  autoZoom: boolean;
   trimUi: boolean;
   titleCard: boolean;
   openingHook: boolean;
@@ -27,6 +29,10 @@ export interface RenderPrefs {
   timeline: boolean;
   aigcLabel: boolean;
   clipLength: ClipLength;
+  /** 直播品类判据(见 core/genre.ts);custom 时用 genreCustom 的文本。 */
+  genreId: string;
+  /** 用户改写的判据文本;非空时一律盖过内置预设。 */
+  genreCustom: string;
   /** 成片导出根目录;空串 = 跟随系统默认(~/影片/HotClip)。 */
   outDir: string;
   /** 导出画质档(CRF 18/23/28);出厂 high = 历史默认画质。 */
@@ -39,6 +45,8 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   captionStyle: "karaoke",
   jumpCut: true,
   cleanFillers: true,
+  cutRetakes: false, // 剪掉的是完整一句话,误伤代价高——默认关,由用户按素材开
+  autoZoom: false, // 运镜是风格化选择(素材本身有运动时会打架),默认关
   trimUi: true,
   titleCard: true,
   openingHook: true,
@@ -53,6 +61,8 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   timeline: false,
   aigcLabel: false,
   clipLength: "standard",
+  genreId: "auto", // 出厂不指定品类:通用提示词里已让模型先自判内容类型
+  genreCustom: "",
   outDir: "", // 出厂跟随系统默认目录,用户选过才存绝对路径
   quality: "high", // 与升级前的成片一致,换档是用户的主动选择
 };

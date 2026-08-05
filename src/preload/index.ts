@@ -15,8 +15,8 @@ const api: HotClipApi = {
     ipcRenderer.on("hotclip:transcribe-progress", listener);
     return () => ipcRenderer.removeListener("hotclip:transcribe-progress", listener);
   },
-  detectHighlights: (transcript, llm, filePath, diarize, prefilter, vision, length, products, referencePath) =>
-    ipcRenderer.invoke("hotclip:detect-highlights", transcript, llm, filePath, diarize, prefilter, vision, length, products, referencePath),
+  detectHighlights: (transcript, llm, filePath, diarize, prefilter, vision, length, products, referencePath, genre) =>
+    ipcRenderer.invoke("hotclip:detect-highlights", transcript, llm, filePath, diarize, prefilter, vision, length, products, referencePath, genre),
   exportClips: (filePath, clips, options) => ipcRenderer.invoke("hotclip:export-clips", filePath, clips, options),
   onExportProgress: (cb) => {
     const listener = (_e: IpcRendererEvent, p: ExportProgressEvent): void => cb(p);
@@ -32,6 +32,7 @@ const api: HotClipApi = {
     ipcRenderer.invoke("hotclip:audio-peaks", filePath, startSec, endSec),
   contactSheet: (filePath, startSec, endSec) =>
     ipcRenderer.invoke("hotclip:contact-sheet", filePath, startSec, endSec),
+  listLlmModels: (baseUrl, apiKey) => ipcRenderer.invoke("hotclip:llm-models", baseUrl, apiKey),
   recordReview: (video, kept, rejected) => ipcRenderer.invoke("hotclip:review-record", video, kept, rejected),
   selectDir: () => ipcRenderer.invoke("hotclip:select-dir"),
   defaultOutDir: () => ipcRenderer.invoke("hotclip:default-out-dir"),
@@ -41,6 +42,10 @@ const api: HotClipApi = {
   watchStart: (dir, llm, outDir) => ipcRenderer.invoke("hotclip:watch-start", dir, llm, outDir),
   watchStop: () => ipcRenderer.invoke("hotclip:watch-stop"),
   watchStatus: () => ipcRenderer.invoke("hotclip:watch-status"),
+  webhookStart: (dir, llm, outDir, port, token) =>
+    ipcRenderer.invoke("hotclip:webhook-start", dir, llm, outDir, port, token),
+  webhookStop: () => ipcRenderer.invoke("hotclip:webhook-stop"),
+  webhookStatus: () => ipcRenderer.invoke("hotclip:webhook-status"),
   onWatchEvent: (cb) => {
     const listener = (_e: IpcRendererEvent, p: WatchEvent): void => cb(p);
     ipcRenderer.on("hotclip:watch-event", listener);

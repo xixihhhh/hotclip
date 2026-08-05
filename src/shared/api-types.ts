@@ -132,11 +132,38 @@ export interface DanmakuStats {
   peakCount: number;
 }
 
+/** 语音情绪/音频事件信号统计(SenseVoice 短窗重扫;UI 展示"听了几窗、圈出几段")。 */
+export interface VoiceTagStats {
+  windowsPlanned: number;
+  windowsScored: number;
+  emotionPeakCount: number;
+  eventPeakCount: number;
+}
+
+/** LLM 端点当前提供的模型清单(GET /models 的结果;失败时 ids 为空、error 有原因)。 */
+export interface ModelListResult {
+  ids: string[];
+  error: string | null;
+}
+
+/** 多片段拼接里的一段源片区间(绝对源片时间);详见 core/pieces.ts。 */
+export interface ClipPiece {
+  startSec: number;
+  endSec: number;
+}
+
 /** One AI-nominated clip candidate with frame-accurate boundaries. */
 export interface HighlightCandidate {
   id: number;
+  /** 跨度起点:多段拼接时 = 第一段的起点。 */
   startSec: number;
+  /** 跨度终点:多段拼接时 = 最后一段的终点(≠ 成片时长)。 */
   endSec: number;
+  /**
+   * 多片段拼接的段清单(按时间序)。缺省或只有 1 段 = 普通连续切片。
+   * 成片时长是各段之和,不是 endSec-startSec —— 一律用 clipDurationSec() 取。
+   */
+  pieces?: ClipPiece[];
   /** Verbatim transcript text covered by the clip. */
   text: string;
   /** Suggested post title (transcript language). */
@@ -147,8 +174,14 @@ export interface HighlightCandidate {
   score: number;
   /** One-line reason ("why this clip") — the evidence chain seed. */
   reason: string;
-  /** How boundaries were located (match quality signal for the UI). */
-  boundary: "exact" | "anchored" | "segment";
+  /**
+   * How boundaries were located (match quality signal for the UI).
+   * "signal" = 这条不是按原话切的,时间来自视听信号融合(跳舞/萌宠/户外这类
+   * 文字稿没内容的品类只能这么来;见 core/highlight/moments.ts)。
+   */
+  boundary: "exact" | "anchored" | "segment" | "signal";
+  /** 信号候选命中的证据种类(boundary="signal" 才有);UI 与回执展示证据链。 */
+  signalEvidence?: string[];
   /** Verbatim in-clip keywords (caption emphasis); may be empty. */
   keywords: string[];
   /** Four-dimension virality breakdown (0-100 each) from the stage-2 reviewer. */
@@ -224,6 +257,10 @@ export interface ExportOptions {
   jumpCut: boolean;
   /** Splice out hesitation sounds (嗯/呃/um/uh) and stutter repeats. */
   cleanFillers?: boolean;
+  /** 剪掉重录废稿:同一句紧挨着说了两遍时只留最后一遍。 */
+  cutRetakes?: boolean;
+  /** 自动运镜:竖屏成片叠一层缓慢推拉镜头,固定机位不再死板。 */
+  autoZoom?: boolean;
   /** Auto-crop static screen-recording chrome (status bar, app UI, letterbox). */
   trimUi: boolean;
   /** Burn each clip's title into the top safe zone. */
@@ -280,6 +317,8 @@ export interface DetectHighlightsResult {
   emotion?: EmotionStats;
   /** 弹幕热度信号生效时的统计;视频旁没有同名弹幕 .xml 时缺省。 */
   danmaku?: DanmakuStats;
+  /** 语音情绪/音频事件信号生效时的统计;未装本地转写模型时缺省。 */
+  voice?: VoiceTagStats;
   /** 参考爆款画像(传了 referencePath 且分析成功才有)。 */
   reference?: ReferenceInfo | null;
   /** 参考视频分析失败原因(fail-open 按无参考继续,但失败必须让用户看见)。 */
@@ -365,7 +404,9 @@ export interface HotClipApi {
     /** 商品讲解模式:商品词列表(带货直播按商品选段,命中词并入候选 keywords)。 */
     products?: string[],
     /** 对标爆款视频路径:实测其节奏画像,选段向对标节奏靠拢(偏好不是硬约束)。 */
-    referencePath?: string | null
+    referencePath?: string | null,
+    /** 直播品类判据:内置预设 id + 用户改写的自定义文本(自定义优先)。 */
+    genre?: { id?: string; custom?: string } | null
   ) => Promise<DetectHighlightsResult>;
   /** Cut the selected highlights into mp4 files; resolves with the file list. */
   exportClips: (filePath: string, clips: HighlightCandidate[], options?: ExportOptions) => Promise<ExportedClip[]>;
@@ -383,6 +424,8 @@ export interface HotClipApi {
   getAudioPeaks: (filePath: string, startSec: number, endSec: number) => Promise<AudioPeaks>;
   /** 候选片段的 3×3 接触表(画面速览):返回 data URL;失败/不支持返回空串。 */
   contactSheet: (filePath: string, startSec: number, endSec: number) => Promise<string>;
+  /** 问 LLM 端点要它当前真正提供的模型清单(GET /models);失败返回原因不抛。 */
+  listLlmModels: (baseUrl: string, apiKey: string) => Promise<ModelListResult>;
   /** 审阅反馈回流:导出时记录本场采用/否决的候选(本地偏好档,下次检测注入)。 */
   recordReview: (video: string, kept: ReviewedCandidate[], rejected: ReviewedCandidate[]) => Promise<void>;
   /** 选择一个文件夹(录播监听用);取消返回 null。 */
@@ -399,6 +442,19 @@ export interface HotClipApi {
   watchStart: (dir: string, llm: LlmConfig, outDir?: string) => Promise<void>;
   watchStop: () => Promise<void>;
   watchStatus: () => Promise<{ running: boolean; dir: string | null }>;
+  /**
+   * 起录播 webhook 端点(录播姬/blrec 下播回调即出片)。只绑 127.0.0.1;
+   * 回调里的文件路径必须落在 dir 之下。返回实际监听端口。
+   */
+  webhookStart: (
+    dir: string,
+    llm: LlmConfig,
+    outDir?: string,
+    port?: number,
+    token?: string
+  ) => Promise<{ port: number; dir: string }>;
+  webhookStop: () => Promise<void>;
+  webhookStatus: () => Promise<{ running: boolean; port: number | null; dir: string | null }>;
   /** 订阅监听过程事件;返回退订函数。 */
   onWatchEvent: (cb: (e: WatchEvent) => void) => () => void;
   /** 查一次新版本;断网/失败返回 null(fail-open,绝不打扰)。 */

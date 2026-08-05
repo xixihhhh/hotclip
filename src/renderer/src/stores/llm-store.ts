@@ -46,20 +46,95 @@ function loadLocalEndpoint(key: string, defaults: PrefilterSettings): PrefilterS
   return { ...defaults };
 }
 
-export const LLM_PRESETS = {
-  atlas: {
+export interface LlmPreset {
+  id: string;
+  label: string;
+  baseUrl: string;
+  /** 出厂建议模型。模型 id 会随厂商换代失效——UI 上的「拉取模型」才是准的。 */
+  model: string;
+  /** 申请 key 的地址;本地端点为空。 */
+  keyUrl: string;
+}
+
+/**
+ * 供应商预设。base_url 都对着各家官方文档核过(2026-08);模型只是起点——
+ * 厂商换代很快(deepseek-chat 已于 2026-07-24 下线),所以 UI 提供「拉取模型」
+ * 直接问端点要真实清单,不指望这里的名字长期有效。
+ */
+export const LLM_PRESET_LIST: LlmPreset[] = [
+  {
+    id: "atlas",
     label: "Atlas Cloud",
     baseUrl: "https://api.atlascloud.ai/v1",
     model: "qwen/qwen3.5-flash",
     keyUrl: "https://www.atlascloud.ai",
   },
-  ollama: {
-    label: "Ollama (本地)",
+  {
+    id: "deepseek",
+    label: "DeepSeek 官方",
+    baseUrl: "https://api.deepseek.com/v1",
+    model: "deepseek-v4-flash",
+    keyUrl: "https://platform.deepseek.com/api_keys",
+  },
+  {
+    id: "dashscope",
+    label: "阿里云百炼(通义千问)",
+    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    model: "qwen-plus",
+    keyUrl: "https://bailian.console.aliyun.com/",
+  },
+  {
+    id: "zhipu",
+    label: "智谱 GLM",
+    // 智谱的兼容路径就到 v4 为止,后面直接接 /chat/completions(不带 /v1)
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    model: "glm-4.7",
+    keyUrl: "https://open.bigmodel.cn/usercenter/apikeys",
+  },
+  {
+    id: "moonshot",
+    label: "月之暗面 Kimi",
+    baseUrl: "https://api.moonshot.cn/v1",
+    model: "kimi-k2.5",
+    keyUrl: "https://platform.moonshot.cn/console/api-keys",
+  },
+  {
+    id: "siliconflow",
+    label: "硅基流动",
+    baseUrl: "https://api.siliconflow.cn/v1",
+    model: "deepseek-ai/DeepSeek-V3",
+    keyUrl: "https://cloud.siliconflow.cn/account/ak",
+  },
+  {
+    id: "openrouter",
+    label: "OpenRouter",
+    baseUrl: "https://openrouter.ai/api/v1",
+    model: "deepseek/deepseek-v4-flash",
+    keyUrl: "https://openrouter.ai/keys",
+  },
+  {
+    id: "openai",
+    label: "OpenAI",
+    baseUrl: "https://api.openai.com/v1",
+    model: "gpt-5.6-luna",
+    keyUrl: "https://platform.openai.com/api-keys",
+  },
+  {
+    id: "ollama",
+    label: "Ollama(本地)",
     baseUrl: "http://localhost:11434/v1",
     model: "qwen3:8b",
     keyUrl: "",
   },
-} as const;
+];
+
+/** 按 baseUrl 认出当前选的是哪家(用户改过 baseUrl 就认不出,返回 undefined)。 */
+export function presetForBaseUrl(baseUrl: string): LlmPreset | undefined {
+  return LLM_PRESET_LIST.find((p) => p.baseUrl === baseUrl);
+}
+
+/** 兼容旧引用:仍以 atlas 为默认。 */
+export const LLM_PRESETS = { atlas: LLM_PRESET_LIST[0] } as const;
 
 function load(): LlmConfig {
   try {

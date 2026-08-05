@@ -16,8 +16,10 @@ import type { ReviewRecord } from "./review-memory";
 import { collectSignals } from "./signals";
 import { collectEmotionSignal } from "./emotion";
 import { collectDanmakuSignal } from "./danmaku";
+import { collectVoiceEmotionSignal } from "./voice-emotion";
 import { exportClips, sanitizeFilename, type ExportedClip } from "./export";
 import { sliceWords } from "./subtitle";
+import { wordsInPieces } from "../shared/pieces";
 
 export interface AutoClipConfig {
   modelsRoot: string;
@@ -105,14 +107,24 @@ export async function detectForPipeline(
   }).catch(() => null);
   // 弹幕热度(零配置):录播姬随录播落的同名 .xml 自动发现——录播监听场景的主证据
   const danmaku = await collectDanmakuSignal(videoPath, transcript.durationSec);
+  // 语音情绪/笑声掌声(零配置,复用已装的 SenseVoice 权重):文字稿看不见的那半条证据
+  const voice = await collectVoiceEmotionSignal({
+    videoPath,
+    durationSec: transcript.durationSec,
+    modelsRoot: cfg.modelsRoot,
+    signals,
+  }).catch(() => null);
   const merged =
-    emotion || danmaku
+    emotion || danmaku || voice
       ? {
           loudPeaks: [],
           cutDense: [],
           ...signals,
           ...(emotion ? { emotionPeaks: emotion.emotionPeaks } : {}),
           ...(danmaku ? { danmakuPeaks: danmaku.danmakuPeaks } : {}),
+          ...(voice
+            ? { voiceEmotionPeaks: voice.voiceEmotionPeaks, audioEventPeaks: voice.audioEventPeaks }
+            : {}),
         }
       : signals;
   const outcome = await detectHighlights(
@@ -143,7 +155,13 @@ export async function autoClip(videoPath: string, cfg: AutoClipConfig): Promise<
       title: c.title,
       startSec: c.startSec,
       endSec: c.endSec,
-      words: captions ? sliceWords(transcript, c.startSec, c.endSec) : undefined,
+      // 多片段拼接:段清单带下去,词表只取真正剪进去的那几段
+      pieces: c.pieces && c.pieces.length > 1 ? c.pieces : undefined,
+      words: captions
+        ? c.pieces && c.pieces.length > 1
+          ? wordsInPieces(sliceWords(transcript, c.startSec, c.endSec), c.pieces)
+          : sliceWords(transcript, c.startSec, c.endSec)
+        : undefined,
       keywords: c.keywords,
       meta: { hook: c.hook, score: c.score, reason: c.reason, text: c.text, recommended: c.recommended, reviewNote: c.reviewNote },
     })),

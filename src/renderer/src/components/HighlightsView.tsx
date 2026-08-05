@@ -15,11 +15,14 @@ import {
   LuExternalLink,
   LuCheck,
   LuScissors,
+  LuScissorsLineDashed,
   LuSmartphone,
   LuMonitor,
   LuCaptions,
   LuFastForward,
   LuEraser,
+  LuRepeat2,
+  LuScan,
   LuUsers,
   LuTriangleAlert,
   LuType,
@@ -40,15 +43,17 @@ import {
   LuTarget,
   LuFolderOpen,
 } from "react-icons/lu";
-import { useT } from "../i18n/store";
+import { useT, useLocaleStore } from "../i18n/store";
+import { GENRE_PRESETS, GENRE_CUSTOM_MAX_CHARS } from "../../../core/genre";
 import { getApi, isElectron } from "../api/provider";
-import { useLlmStore, isLlmReady, LLM_PRESETS } from "../stores/llm-store";
+import { useLlmStore, isLlmReady, LLM_PRESETS, LLM_PRESET_LIST, presetForBaseUrl } from "../stores/llm-store";
 import { useBrandStore, activeBrandStyle } from "../stores/brand-store";
 import { useRenderPrefs } from "../stores/render-prefs-store";
-import { adjustClipBoundary } from "../../../shared/boundary";
+import { adjustCandidateBoundary } from "../../../shared/boundary";
+import { clipDurationSec, isStitched } from "../../../shared/pieces";
 import { ClipReviewModal } from "./ClipReviewModal";
 import { BrandStyleModal } from "./BrandStyleModal";
-import type { Transcript, HighlightCandidate, RenderToggles, CaptionStyleChoice, FunnelStats, VisionStats, EmotionStats, DanmakuStats, ClipLength, ReferenceInfo, ReviewedCandidate } from "../../../shared/api-types";
+import type { Transcript, HighlightCandidate, RenderToggles, CaptionStyleChoice, FunnelStats, VisionStats, EmotionStats, DanmakuStats, VoiceTagStats, ClipLength, ReferenceInfo, ReviewedCandidate } from "../../../shared/api-types";
 
 /** Click-to-cycle order for the caption style chip. */
 const CAPTION_CYCLE: CaptionStyleChoice[] = ["karaoke", "keyword", "pop", "hormozi", "bubble", "none"];
@@ -74,6 +79,7 @@ const BOUNDARY_KEY: Record<HighlightCandidate["boundary"], string> = {
   exact: "boundaryExact",
   anchored: "boundaryAnchored",
   segment: "boundarySegment",
+  signal: "boundarySignal",
 };
 
 /**
@@ -131,6 +137,7 @@ export function HighlightsView({
   auto?: boolean;
 }): React.JSX.Element {
   const t = useT("highlights");
+  const lang = useLocaleStore((s) => s.locale);
   const { config, setConfig, prefilter, setPrefilter, vision, setVision } = useLlmStore();
   // browser preview (mock) needs no key; Electron needs a real endpoint
   const gateOpen = !isElectron() || isLlmReady(config);
@@ -146,6 +153,7 @@ export function HighlightsView({
   const [emotionStats, setEmotionStats] = useState<EmotionStats | null>(null);
   /** 弹幕热度信号统计(视频旁同名 .xml 自动发现)。 */
   const [danmakuStats, setDanmakuStats] = useState<DanmakuStats | null>(null);
+  const [voiceStats, setVoiceStats] = useState<VoiceTagStats | null>(null);
   /** 参考爆款:对标视频路径与实测画像(会话内有效——本地路径易失效,不持久化)。 */
   const [referencePath, setReferencePath] = useState<string | null>(null);
   const [referenceInfo, setReferenceInfo] = useState<ReferenceInfo | null>(null);
@@ -153,7 +161,7 @@ export function HighlightsView({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   // 出片偏好持久化:上次的开关组合下次直接生效(解构保持下方 JSX 引用不变)
   const { prefs, setPref } = useRenderPrefs();
-  const { vertical, captionStyle, jumpCut, cleanFillers, trimUi, titleCard, openingHook, coldOpen, alsoLandscape, normalizeLoudness, denoise, compilation, translate, publishCopy, subtitleFile, timeline, aigcLabel, outDir, quality } = prefs;
+  const { vertical, captionStyle, jumpCut, cleanFillers, cutRetakes, autoZoom, trimUi, titleCard, openingHook, coldOpen, alsoLandscape, normalizeLoudness, denoise, compilation, translate, publishCopy, subtitleFile, timeline, aigcLabel, outDir, quality } = prefs;
   /** 出厂导出根目录(主进程才知道 ~/影片 在哪);用户没自选时显示它。 */
   const [defaultOutDir, setDefaultOutDir] = useState("");
   useEffect(() => {
@@ -170,6 +178,8 @@ export function HighlightsView({
   const [editingTitle, setEditingTitle] = useState<number | null>(null);
   /** 切片时长档(短=快节奏竖屏,长=B站/播客金句段);切换即重新检测,选择持久化。 */
   const clipLength = prefs.clipLength;
+  const genreId = prefs.genreId;
+  const genreCustom = prefs.genreCustom;
   /** 商品讲解模式:商品词列表(带货直播按商品选段),持久化本机。 */
   const [products, setProducts] = useState<string[]>(() => {
     try {
@@ -181,6 +191,18 @@ export function HighlightsView({
   });
   /** 审阅台当前打开的候选 id;null = 关闭。 */
   const [reviewId, setReviewId] = useState<number | null>(null);
+  /** 端点当前真正提供的模型清单(点「拉取模型」才去问;换供应商即作废)。 */
+  const [modelList, setModelList] = useState<string[]>([]);
+  const [modelLoading, setModelLoading] = useState(false);
+  const [modelError, setModelError] = useState("");
+  const fetchModels = useCallback(async (): Promise<void> => {
+    setModelLoading(true);
+    setModelError("");
+    const res = await getApi().listLlmModels(config.baseUrl, config.apiKey);
+    setModelList(res.ids);
+    setModelError(res.error ?? "");
+    setModelLoading(false);
+  }, [config.baseUrl, config.apiKey]);
   /** 品牌样式模板弹窗。 */
   const [showBrand, setShowBrand] = useState(false);
   const brandState = useBrandStore();
@@ -200,13 +222,15 @@ export function HighlightsView({
         lengthArg ?? clipLength,
         productsArg ?? products,
         // undefined = 沿用当前参考;null = 显式清掉
-        referenceArg === undefined ? referencePath : referenceArg
+        referenceArg === undefined ? referencePath : referenceArg,
+        { id: genreId, custom: genreCustom }
       );
       setCandidates(result.candidates);
       setFunnel(result.funnel ?? null);
       setVisionStats(result.vision ?? null);
       setEmotionStats(result.emotion ?? null);
       setDanmakuStats(result.danmaku ?? null);
+      setVoiceStats(result.voice ?? null);
       setReferenceInfo(result.reference ?? null);
       setReferenceError(result.referenceError ?? null);
       // reviewer-approved clips are pre-selected; flagged ones start unchecked
@@ -274,7 +298,7 @@ export function HighlightsView({
       if (!prev) return prev;
       return prev.map((c) => {
         if (c.id !== id) return c;
-        const adjusted = adjustClipBoundary(transcript, c, edge, dir);
+        const adjusted = adjustCandidateBoundary(transcript, c, edge, dir);
         // manual edits reset the boundary badge to sentence-aligned honesty
         return adjusted ? { ...c, ...adjusted, boundary: "segment" as const, manualBounds: true } : c;
       });
@@ -319,20 +343,26 @@ export function HighlightsView({
           </h2>
           <p className="mt-2 text-[13px] leading-relaxed text-mut">{t("llmDesc")}</p>
 
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            {Object.entries(LLM_PRESETS).map(([key, preset]) => {
+          <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+            {LLM_PRESET_LIST.map((preset) => {
               const active = config.baseUrl === preset.baseUrl;
               return (
                 <button
-                  key={key}
+                  key={preset.id}
                   type="button"
-                  onClick={() => setConfig({ baseUrl: preset.baseUrl, model: preset.model })}
-                  className={`rounded-xl border px-4 py-3 text-left text-[13px] font-semibold transition-colors ${
+                  onClick={() => {
+                    setConfig({ baseUrl: preset.baseUrl, model: preset.model });
+                    setModelList([]); // 换家了,上一家的模型清单立刻作废
+                    setModelError("");
+                  }}
+                  className={`rounded-xl border px-3 py-2.5 text-left text-[12.5px] font-semibold transition-colors ${
                     active ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
                   }`}
                 >
                   {preset.label}
-                  <div className="mt-0.5 truncate text-[11px] font-normal text-mut">{preset.baseUrl}</div>
+                  <div className="mt-0.5 truncate text-[10.5px] font-normal text-mut">
+                    {preset.baseUrl.replace(/^https?:\/\//, "")}
+                  </div>
                 </button>
               );
             })}
@@ -359,11 +389,35 @@ export function HighlightsView({
             </label>
             <label className="block">
               <span className="text-[11px] font-semibold text-mut">{t("llmModel")}</span>
-              <input
-                value={config.model}
-                onChange={(e) => setConfig({ model: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-line bg-panel-2 px-3 py-2 text-[13px] outline-none focus:border-ember/60"
-              />
+              {/* 模型 id 会随厂商换代失效,所以给一个「问端点要真实清单」的按钮,
+                  而不是让用户对着一个写死的名字猜 */}
+              <div className="mt-1 flex gap-2">
+                <input
+                  value={config.model}
+                  list="hotclip-model-list"
+                  onChange={(e) => setConfig({ model: e.target.value })}
+                  className="min-w-0 flex-1 rounded-lg border border-line bg-panel-2 px-3 py-2 text-[13px] outline-none focus:border-ember/60"
+                />
+                <button
+                  type="button"
+                  disabled={!config.baseUrl || modelLoading}
+                  onClick={fetchModels}
+                  className="shrink-0 rounded-lg border border-line px-3 py-2 text-[12px] font-semibold text-mut transition-colors hover:border-mut hover:text-fg disabled:opacity-40"
+                >
+                  {modelLoading ? t("llmModelsLoading") : t("llmModelsFetch")}
+                </button>
+              </div>
+              <datalist id="hotclip-model-list">
+                {modelList.map((m) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
+              {modelList.length > 0 && (
+                <span className="mt-1 block text-[10.5px] text-mut/80">
+                  {t("llmModelsFound", { n: modelList.length })}
+                </span>
+              )}
+              {modelError && <span className="mt-1 block text-[10.5px] text-amber-400/90">{modelError}</span>}
             </label>
           </div>
 
@@ -455,7 +509,7 @@ export function HighlightsView({
 
           <div className="mt-5 flex items-center justify-between">
             <a
-              href={LLM_PRESETS.atlas.keyUrl}
+              href={presetForBaseUrl(config.baseUrl)?.keyUrl || LLM_PRESETS.atlas.keyUrl}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 text-[12px] text-ember hover:underline"
@@ -546,6 +600,15 @@ export function HighlightsView({
                   })}
                 </p>
               )}
+              {voiceStats && voiceStats.emotionPeakCount + voiceStats.eventPeakCount > 0 && (
+                <p className="mt-1 text-[11.5px] text-teal-300/90">
+                  {t("voiceScanned", {
+                    windows: voiceStats.windowsScored,
+                    emo: voiceStats.emotionPeakCount,
+                    evt: voiceStats.eventPeakCount,
+                  })}
+                </p>
+              )}
               {referenceInfo && (
                 <p className="mt-1 text-[11.5px] text-violet-400/90">
                   {t("refProfile", {
@@ -584,6 +647,33 @@ export function HighlightsView({
                 <LuClock3 className={`h-3.5 w-3.5 ${clipLength !== "standard" ? "text-ember" : ""}`} />
                 {t(clipLength === "short" ? "lengthShort" : clipLength === "long" ? "lengthLong" : "lengthStandard")}
               </button>
+              {/* 品类判据:选预设或自己写。不选也没关系——提示词里已让模型先自判内容类型 */}
+              <select
+                value={genreId}
+                title={t("genreHint")}
+                onChange={(e) => setPref({ genreId: e.target.value })}
+                className={`shrink-0 rounded-lg border px-2.5 py-2 text-xs font-semibold outline-none transition-colors ${
+                  genreId !== "auto" ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut"
+                }`}
+              >
+                {GENRE_PRESETS.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {lang === "zh" ? g.labelZh : g.labelEn}
+                  </option>
+                ))}
+              </select>
+              {(genreId === "custom" || genreCustom.trim()) && (
+                <input
+                  defaultValue={genreCustom}
+                  placeholder={t("genrePlaceholder")}
+                  title={t("genreCustomHint")}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                  }}
+                  onBlur={(e) => setPref({ genreCustom: e.target.value.slice(0, GENRE_CUSTOM_MAX_CHARS) })}
+                  className="w-52 shrink-0 rounded-lg border border-line px-3 py-2 text-xs outline-none transition-colors focus:border-ember/60"
+                />
+              )}
               <input
                 defaultValue={products.join(",")}
                 placeholder={t("productsPlaceholder")}
@@ -782,8 +872,18 @@ export function HighlightsView({
                     </button>
                   ))}
                   <span className="chip rounded-md px-2 py-0.5 font-semibold">
-                    {t("durationChip", { n: Math.round(c.endSec - c.startSec) })}
+                    {t("durationChip", { n: Math.round(clipDurationSec(c)) })}
                   </span>
+                  {/* 拼接片:必须一眼看出「这条不是一段连续录像」——断章取义的风险都在这里 */}
+                  {isStitched(c.pieces) && (
+                    <span
+                      className="chip flex items-center gap-1 rounded-md px-2 py-0.5 font-semibold text-ember"
+                      title={t("stitchedHint")}
+                    >
+                      <LuScissorsLineDashed className="h-3 w-3" />
+                      {t("stitchedChip", { n: c.pieces!.length })}
+                    </span>
+                  )}
                   <span className="chip flex items-center gap-1 rounded-md px-2 py-0.5">
                     <LuCrosshair className="h-3 w-3" />
                     {t(BOUNDARY_KEY[c.boundary])}
@@ -809,6 +909,8 @@ export function HighlightsView({
                     { key: "optColdOpen", on: coldOpen, Icon: LuFastForward, label: t("optColdOpen"), act: () => setPref({ coldOpen: !coldOpen }) },
                     { key: "optJumpCut", on: jumpCut, Icon: LuFastForward, label: t("optJumpCut"), act: () => setPref({ jumpCut: !jumpCut }) },
                     { key: "optCleanFillers", on: cleanFillers, Icon: LuEraser, label: t("optCleanFillers"), act: () => setPref({ cleanFillers: !cleanFillers }) },
+                    { key: "optCutRetakes", on: cutRetakes, Icon: LuRepeat2, label: t("optCutRetakes"), act: () => setPref({ cutRetakes: !cutRetakes }) },
+                    { key: "optAutoZoom", on: autoZoom && vertical, disabled: !vertical, Icon: LuScan, label: t("optAutoZoom"), act: () => setPref({ autoZoom: !autoZoom }) },
                     { key: "optLoudness", on: normalizeLoudness, Icon: LuVolume2, label: t("optLoudness"), act: () => setPref({ normalizeLoudness: !normalizeLoudness }) },
                     { key: "optDenoise", on: denoise, Icon: LuAudioWaveform, label: t("optDenoise"), act: () => setPref({ denoise: !denoise }) },
                     { key: "optTranslate", on: translate, Icon: LuLanguages, label: t(targetLang === "en" ? "optTranslateEn" : "optTranslateZh"), act: () => setPref({ translate: !translate }) },
@@ -873,11 +975,11 @@ export function HighlightsView({
                 onClick={() => {
                   // 审阅反馈回流:本场的采用/否决落本地偏好档(尽力而为,失败不挡导出)
                   const summarize = (list: HighlightCandidate[]): ReviewedCandidate[] =>
-                    list.map((c) => ({ title: c.title, hook: c.hook, score: c.score, durationSec: Math.round(c.endSec - c.startSec), keywords: c.keywords.slice(0, 5) }));
+                    list.map((c) => ({ title: c.title, hook: c.hook, score: c.score, durationSec: Math.round(clipDurationSec(c)), keywords: c.keywords.slice(0, 5) }));
                   void getApi()
                     .recordReview(filePath ?? "", summarize(candidates.filter((c) => selected.has(c.id))), summarize(candidates.filter((c) => !selected.has(c.id))))
                     .catch(() => {});
-                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, cleanFillers, trimUi, titleCard, openingHook, coldOpen, alsoLandscape, normalizeLoudness, denoise, compilation, brand: activeBrandStyle(brandState), translate: translate ? { targetLang, llm: config } : undefined, publishCopy: publishCopy ? { llm: config } : undefined, subtitleFile, timeline, aigcLabel, outDir, quality });
+                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, cleanFillers, cutRetakes, autoZoom, trimUi, titleCard, openingHook, coldOpen, alsoLandscape, normalizeLoudness, denoise, compilation, brand: activeBrandStyle(brandState), translate: translate ? { targetLang, llm: config } : undefined, publishCopy: publishCopy ? { llm: config } : undefined, subtitleFile, timeline, aigcLabel, outDir, quality });
                 }}
                 className="btn-flame inline-flex shrink-0 items-center gap-1.5 rounded-lg px-6 py-2.5 text-[14px] font-bold whitespace-nowrap text-white disabled:opacity-40"
               >
@@ -897,6 +999,9 @@ export function HighlightsView({
             if (!reviewing) return null;
             return (
               <ClipReviewModal
+                // 按候选 id 重建:切换候选时状态(切点/段清单)必须重新初始化,
+                // 复用实例会把上一条的切点当成这一条的「已改动」
+                key={reviewing.id}
                 clip={reviewing}
                 transcript={transcript}
                 filePath={filePath}
