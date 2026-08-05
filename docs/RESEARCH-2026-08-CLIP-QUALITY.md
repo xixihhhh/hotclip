@@ -73,6 +73,17 @@
 
 **明确不接**：Sora 2（API 2026-09-24 下线）、Mubert（订阅门槛）、AssemblyAI/Deepgram（中文非主场）、FLUX（中文文字硬伤）、任何「整场直播全量喂 VLM」方案。百炼 Fun-ASR/CosyVoice 价格页未抓全，接入前控制台复核。
 
+## 五点五、FunClip 拆解（2026-08-05 补充,用户点名调研）
+
+阿里 FunASR 团队的开源切片工具（MIT,6.1k★,2026-08 仍活跃）。模型栈全 PyTorch/funasr:SeACo-Paraformer(中文 ASR+解码期热词)/FSMN-VAD/CT-Transformer 标点/CAM++ 说话人/TwelveLabs 云端视频理解。
+
+**三个关键判断**:
+1. **词级时间戳是 Paraformer 的真优势**——CIF 机制解码时一体化产出,官方宣称超过 Kaldi 强制对齐(±50ms 级);SenseVoice 结构上没有,funasr 官方兜底也只是 VAD 段边界。连阿里 0.8B 的 Fun-ASR-Nano 都因「无可靠字级时间戳」被 FunClip README 建议让位给 Paraformer。
+2. **SeACo 解码期热词(召回 65-87%)出不了 ONNX**——funasr_onnx/sherpa-onnx 均不支持;sherpa-onnx 的解码期热词只有 transducer 模型支持(英文线换 Parakeet 后可白嫖)。为 SeACo 打包 Python sidecar 违背本地轻量定位,不接。
+3. **sherpa-onnx 生态里只有 `paraformer-zh-2023-09-14` 这一档支持时间戳**(int8 243MB,Apache-2.0),其余 paraformer 档均不支持,别下错。
+
+**借鉴清单**:①精对齐第二遍(候选段 Paraformer 重解码修时间戳,不换主 ASR——SenseVoice 的情绪/事件标签是第七八路证据来源不能丢)→ **已落地为「精准切点」**;②「用文字剪视频」交互(划选转写文本直接出片)/③切点微调滑块(±500-1000ms)/④按说话人一键选段——三项均低成本待排期;⑤雷达项:Fun-ASR-Nano GGUF(0.8B/Apache-2.0/llama.cpp 纯 CPU,官方称支持热词,但时间戳标 TODO——若落地即为 Electron 解码期热词第一条可行路径)。**不抄**:LLM 选段 prompt(整份 SRT→正则抠时间戳,落后一代)、moviepy 管线(全程重编码)、Pegasus 云端视频理解(与本地定位冲突)。
+
 ## 六、前沿技术跟踪清单（选段长期升级路径）
 
 - **TripleSumm**（ICLR 2026，HF 可下载）：Mr.HiSum 三模态版——训自己的爆点打分头替代手工加权的现成数据。

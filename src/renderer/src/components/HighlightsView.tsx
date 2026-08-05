@@ -167,7 +167,7 @@ export function HighlightsView({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   // 出片偏好持久化:上次的开关组合下次直接生效(解构保持下方 JSX 引用不变)
   const { prefs, setPref } = useRenderPrefs();
-  const { vertical, captionStyle, jumpCut, cleanFillers, cutRetakes, autoZoom, sfx, bgmPath, trimUi, titleCard, openingHook, coldOpen, alsoLandscape, normalizeLoudness, denoise, compilation, translate, publishCopy, subtitleFile, timeline, aigcLabel, publishPack, packPlatforms, variants, outDir, quality } = prefs;
+  const { vertical, captionStyle, jumpCut, cleanFillers, cutRetakes, autoZoom, sfx, bgmPath, trimUi, titleCard, openingHook, coldOpen, flashForward, preciseAlign, alsoLandscape, normalizeLoudness, denoise, compilation, translate, publishCopy, subtitleFile, timeline, aigcLabel, publishPack, packPlatforms, variants, outDir, quality } = prefs;
   /** 出厂导出根目录(主进程才知道 ~/影片 在哪);用户没自选时显示它。 */
   const [defaultOutDir, setDefaultOutDir] = useState("");
   useEffect(() => {
@@ -240,7 +240,7 @@ export function HighlightsView({
         filePath,
         useDiarize,
         prefilter.enabled ? { baseUrl: prefilter.baseUrl, model: prefilter.model } : null,
-        vision.enabled ? { baseUrl: vision.baseUrl, model: vision.model } : null,
+        vision.enabled ? { baseUrl: vision.baseUrl, model: vision.model, apiKey: vision.apiKey || undefined } : null,
         lengthArg ?? clipLength,
         productsArg ?? products,
         // undefined = 沿用当前参考;null = 显式清掉
@@ -522,6 +522,17 @@ export function HighlightsView({
                   <input
                     value={vision.model}
                     onChange={(e) => setVision({ model: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-line bg-panel-2 px-3 py-2 text-[13px] outline-none focus:border-ember/60"
+                  />
+                </label>
+                {/* 云端视觉端点(Atlas 等)要 Key;本地 Ollama 留空 */}
+                <label className="col-span-2 block">
+                  <span className="text-[11px] font-semibold text-mut">{t("visionApiKey")}</span>
+                  <input
+                    type="password"
+                    value={vision.apiKey ?? ""}
+                    onChange={(e) => setVision({ apiKey: e.target.value })}
+                    placeholder={t("visionApiKeyPlaceholder")}
                     className="mt-1 w-full rounded-lg border border-line bg-panel-2 px-3 py-2 text-[13px] outline-none focus:border-ember/60"
                   />
                 </label>
@@ -946,7 +957,9 @@ export function HighlightsView({
                     { key: "optTitleCard", on: titleCard, Icon: LuType, label: t("optTitleCard"), act: () => setPref({ titleCard: !titleCard }) },
                     { key: "optOpeningHook", on: openingHook, Icon: LuZap, label: t("optOpeningHook"), act: () => setPref({ openingHook: !openingHook }) },
                     { key: "optColdOpen", on: coldOpen, Icon: LuFastForward, label: t("optColdOpen"), act: () => setPref({ coldOpen: !coldOpen }) },
+                    { key: "optFlash", on: flashForward, Icon: LuZap, label: t("optFlash"), act: () => setPref({ flashForward: !flashForward }) },
                     { key: "optJumpCut", on: jumpCut, Icon: LuFastForward, label: t("optJumpCut"), act: () => setPref({ jumpCut: !jumpCut }) },
+                    { key: "optAlign", on: preciseAlign, Icon: LuCrosshair, label: t("optAlign"), act: () => setPref({ preciseAlign: !preciseAlign }) },
                     { key: "optCleanFillers", on: cleanFillers, Icon: LuEraser, label: t("optCleanFillers"), act: () => setPref({ cleanFillers: !cleanFillers }) },
                     { key: "optCutRetakes", on: cutRetakes, Icon: LuRepeat2, label: t("optCutRetakes"), act: () => setPref({ cutRetakes: !cutRetakes }) },
                     { key: "optAutoZoom", on: autoZoom && vertical, disabled: !vertical, Icon: LuScan, label: t("optAutoZoom"), act: () => setPref({ autoZoom: !autoZoom }) },
@@ -1053,7 +1066,7 @@ export function HighlightsView({
                   void getApi()
                     .recordReview(filePath ?? "", summarize(candidates.filter((c) => selected.has(c.id))), summarize(candidates.filter((c) => !selected.has(c.id))))
                     .catch(() => {});
-                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, cleanFillers, cutRetakes, autoZoom, sfx, bgmPath: bgmPath || undefined, genreId, trimUi, titleCard, openingHook, coldOpen, alsoLandscape, normalizeLoudness, denoise, compilation, brand: activeBrandStyle(brandState), translate: translate ? { targetLang, llm: config } : undefined, publishCopy: publishCopy ? { llm: config } : undefined, subtitleFile, timeline, aigcLabel, publishPack: publishPack && packPlatforms.length > 0 ? packPlatforms : undefined, variants: variants > 1 ? { count: variants, llm: config } : undefined, outDir, quality });
+                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, cleanFillers, cutRetakes, autoZoom, sfx, bgmPath: bgmPath || undefined, genreId, preciseAlign, trimUi, titleCard, openingHook, coldOpen, flashForward, alsoLandscape, normalizeLoudness, denoise, compilation, brand: activeBrandStyle(brandState), translate: translate ? { targetLang, llm: config } : undefined, publishCopy: publishCopy ? { llm: config } : undefined, subtitleFile, timeline, aigcLabel, publishPack: publishPack && packPlatforms.length > 0 ? packPlatforms : undefined, variants: variants > 1 ? { count: variants, llm: config } : undefined, outDir, quality });
                 }}
                 className="btn-flame inline-flex shrink-0 items-center gap-1.5 rounded-lg px-6 py-2.5 text-[14px] font-bold whitespace-nowrap text-white disabled:opacity-40"
               >

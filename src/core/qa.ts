@@ -42,6 +42,8 @@ export interface ClipQaReport {
   contentHits: LintHit[] | null;
   /** 最长「无视觉变化」间隔(秒);没做节奏评估(有字幕/运镜兜底)为 null。 */
   pacingGapSec: number | null;
+  /** 钩子/标题承诺了、片中转写却没出现的数字类实体;没评估为 null。 */
+  hookPayoffMissing: string[] | null;
   /** 自动修复记录(qa 修复循环执行过才有);见 repair.ts。 */
   repair?: QaRepairRecord;
 }
@@ -74,6 +76,28 @@ const BOUNDARY_TOLERANCE_SEC = EDGE_FADE_SEC + 0.02;
  * 提醒,不对风格化的慢节奏指手画脚。
  */
 export const PACING_MAX_GAP_SEC = 5;
+
+/**
+ * 钩子兑付校验:钩子/悬念句/标题里承诺的**数字类实体**(价格/百分比/数量)
+ * 必须真实出现在切片转写里——制造的信息缺口不兑付,完播率崩、算法降权、
+ * 长期掉粉(2026 调研「标题党但不欺骗」的边界)。只核对 ≥2 位的数字串:
+ * 单个数字常被转写成汉字(三个方法/3个方法),核对必然误报,宁漏勿误。
+ * 返回未兑付的承诺清单(空 = 通过或无可核对项)。纯函数。
+ */
+export function missingHookPayoffs(hookText: string | undefined, transcriptText: string | undefined): string[] {
+  const hook = (hookText ?? "").trim();
+  if (!hook || !transcriptText) return [];
+  const claims = hook.match(/\d[\d.,]*[%％折万亿]?/g) ?? [];
+  // 转写归一:去掉分隔符后按「数字核」查含(「1,999」→「1999」;30% 查「30」尾随%或％)
+  const text = transcriptText.replace(/[,，\s]/g, "");
+  const missing: string[] = [];
+  for (const claim of [...new Set(claims)]) {
+    const core = claim.replace(/[^\d.]/g, "").replace(/\.$/, "");
+    if (core.replace(/\./g, "").length < 2) continue; // 单位数不核对
+    if (!text.includes(core)) missing.push(claim);
+  }
+  return missing;
+}
 
 /**
  * 视觉事件序列(拼接缝/跳剪缝/高潮前置接缝等,输出时间轴)→ 最长无变化
@@ -175,6 +199,8 @@ export interface QaAssessment {
   contentHits?: LintHit[] | null;
   /** 最长无视觉变化间隔(maxVisualGapSec 算好传入);缺省 = 不评估节奏。 */
   pacingGapSec?: number | null;
+  /** 未兑付的钩子承诺(missingHookPayoffs 算好传入);缺省 = 不评估。 */
+  hookPayoffMissing?: string[] | null;
 }
 
 const fmtSec = (v: number): string => v.toFixed(1);
@@ -211,6 +237,11 @@ export function assessClipQa(input: QaAssessment): ClipQaReport {
       `画面 ${fmtSec(input.pacingGapSec!)}s 无视觉变化(节奏偏慢,建议开启自动运镜或字幕)`
     );
   }
+  if ((input.hookPayoffMissing?.length ?? 0) > 0) {
+    issues.push(
+      `钩子/标题承诺的「${input.hookPayoffMissing!.join("、")}」未在片中出现(不兑付=标题党,完播率与账号权重双降,建议改钩子或换切点)`
+    );
+  }
   const lintIssue = formatLintIssue(input.contentHits ?? []);
   if (lintIssue) issues.push(lintIssue);
   return {
@@ -226,6 +257,7 @@ export function assessClipQa(input: QaAssessment): ClipQaReport {
     midWordCuts: input.midWordCuts,
     contentHits: input.contentHits ?? null,
     pacingGapSec: input.pacingGapSec ?? null,
+    hookPayoffMissing: input.hookPayoffMissing ?? null,
   };
 }
 
@@ -271,6 +303,8 @@ export interface RunClipQaOptions {
   contentHits?: LintHit[] | null;
   /** 最长无视觉变化间隔(调用方按剪辑计划算好);缺省 = 不评估节奏。 */
   pacingGapSec?: number | null;
+  /** 未兑付的钩子承诺(missingHookPayoffs 算好传入);缺省 = 不评估。 */
+  hookPayoffMissing?: string[] | null;
   signal?: AbortSignal;
 }
 
@@ -287,5 +321,6 @@ export async function runClipQa(path: string, opts: RunClipQaOptions): Promise<C
     midWordCuts: opts.words && opts.segments ? countMidWordCuts(opts.words, opts.segments) : null,
     contentHits: opts.contentHits,
     pacingGapSec: opts.pacingGapSec,
+    hookPayoffMissing: opts.hookPayoffMissing,
   });
 }

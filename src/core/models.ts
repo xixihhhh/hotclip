@@ -407,13 +407,21 @@ export async function ensureModel(
 export async function extractPcmF32le16k(
   ffmpegPath: string,
   inputPath: string,
-  outputPath: string
+  outputPath: string,
+  range?: { startSec: number; durationSec: number }
 ): Promise<void> {
   await mkdir(dirname(outputPath), { recursive: true });
   const tmp = `${outputPath}.tmp.f32le`;
   await execFileAsync(
     ffmpegPath,
-    ["-hide_banner", "-y", "-i", inputPath, "-vn", "-ac", "1", "-ar", "16000", "-f", "f32le", "-c:a", "pcm_f32le", tmp],
+    [
+      "-hide_banner", "-y",
+      // 范围抽取(精对齐只解码候选段):-ss 在 -i 前快速跳转,-t 截取时长
+      ...(range ? ["-ss", String(Math.max(0, range.startSec))] : []),
+      "-i", inputPath,
+      ...(range ? ["-t", String(Math.max(0.1, range.durationSec))] : []),
+      "-vn", "-ac", "1", "-ar", "16000", "-f", "f32le", "-c:a", "pcm_f32le", tmp,
+    ],
     { maxBuffer: 32 * 1024 * 1024 }
   );
   await rename(tmp, outputPath);

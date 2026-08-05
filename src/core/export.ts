@@ -12,7 +12,7 @@ import { resolveFfmpegPath } from "./binaries";
 
 const execFileAsync = promisify(execFile);
 import { cutClip, cutJumpClip, concatClips } from "./cut";
-import { planColdOpen } from "./coldopen";
+import { planColdOpen, planFlashForward, FLASH_SKIP_NEAR_START_SEC } from "./coldopen";
 import { computeJumpCut } from "./gaps";
 import { clampTranslationLines, remapTranslationLines, type TranslationLine } from "./translate";
 import { postTextFile, type PublishCopy } from "./publish";
@@ -46,7 +46,7 @@ import { detectShotBoundaries, snapClipToShots, SNAP_MAX_OUT_SEC } from "./shots
 import { buildCaptionAss, VERTICAL_LAYOUT, HORIZONTAL_LAYOUT, type CaptionStyle } from "./subtitle";
 import { buildOverlayPayload, isWebCaptionStyle, type OverlayRenderFn, type WebCaptionStyle } from "./caption-overlay/payload";
 import { probeMedia } from "./probe";
-import { runClipQa, maxVisualGapSec, type ClipQaReport } from "./qa";
+import { runClipQa, maxVisualGapSec, missingHookPayoffs, type ClipQaReport } from "./qa";
 import { lintClipContent } from "./content-lint";
 import { planRepair, applyRepair } from "./repair";
 import { applyBrandToLayout } from "./brand";
@@ -172,12 +172,16 @@ export interface ClipRenderOutcome {
   denoised: boolean;
   /** 高潮前置迷你片时长(秒);没开/钩子定位失败/被守卫跳过为 null。 */
   coldOpenSec: number | null;
+  /** True 表示前置的迷你片是「爆点闪现」(0.3-1s 画面钩子)而非钩子句。 */
+  flashForward: boolean;
   /** True when the AI teaser was burned in as an opening hook. */
   openingHookBurned: boolean;
   /** 实际烧进画面的译文行数;没开双语/翻译失败为 0。 */
   translatedLines: number;
   /** 切点吸附到镜头边界的实际位移(秒);没吸附(或检测失败)为 null。 */
   shotSnap: { startDeltaSec: number; endDeltaSec: number } | null;
+  /** True 表示词表经 Paraformer 二遍对齐修正过(精准切点)。 */
+  preciseAligned: boolean;
   /** 实际打进成片的音效数(0 = 没开/无处可打/混音失败回退)。 */
   sfxCues: number;
   /** True 表示 BGM 混入成功(含人声闪避)。 */
@@ -205,6 +209,14 @@ export interface ExportRenderOptions {
   bgmPath?: string;
   /** 直播品类 id(core/genre.ts):决定跳剪静音阈值分档;缺省走默认档。 */
   genreId?: string;
+  /**
+   * 精准切点(可选注入,见 align.ts createClipAligner):候选段用 Paraformer
+   * 二遍解码修正词级时间戳;返回 null 表示对不上(回退原词表)。
+   */
+  alignWords?: (
+    filePath: string,
+    clip: { startSec: number; endSec: number; pieces?: ClipPiece[]; words: TranscriptWord[] }
+  ) => Promise<TranscriptWord[] | null>;
   /** Auto-detect & crop static screen-recording chrome (status bars, app UI). */
   trimUi?: boolean;
   /** Face-tracking vertical reframe (needs modelsRoot); falls back to center. */
@@ -225,6 +237,12 @@ export interface ExportRenderOptions {
   compilation?: boolean;
   /** 高潮前置:钩子句剪成迷你片拼到切片开头再接完整正片(cold-open)。 */
   coldOpen?: boolean;
+  /**
+   * 爆点闪现(flash-forward):把全片情绪峰值的 0.3-1s 画面闪现到开头再切回
+   * ——视觉钩子版的高潮前置。与 coldOpen 同开时优先闪现,闪不出(全程无
+   * 显著峰)回退钩子句前置。
+   */
+  flashForward?: boolean;
   /** 多画幅:竖屏之外再出一版横屏原画幅(落 `横屏/` 子目录,竖版发抖音横版发B站)。 */
   alsoLandscape?: boolean;
   /** 切点吸附镜头边界(TransNetV2,需 modelsRoot);检测失败静默回退不吸附。 */
@@ -392,6 +410,23 @@ export async function exportClips(
       const pieces = normalizePieces(clip.pieces ?? []);
       const stitched = pieces.length > 1;
       if (stitched) piecesByClip.set(clip.id, pieces);
+
+      // 精准切点(二遍对齐):必须在镜头吸附/跳剪/字幕之前修好词表——
+      // 下游所有阶段都消费 clip.words 的时间。失败/低匹配率回退原词表。
+      let preciseAligned = false;
+      if (options.alignWords && clip.words && clip.words.length > 0) {
+        const refined = await options
+          .alignWords(inputPath, { startSec: clip.startSec, endSec: clip.endSec, pieces: clip.pieces, words: clip.words })
+          .catch((e) => {
+            if (signal?.aborted) throw e;
+            console.error(`precise align failed for clip ${clip.id}, kept original words:`, e);
+            return null;
+          });
+        if (refined && refined.length > 0) {
+          clip = { ...clip, words: refined };
+          preciseAligned = true;
+        }
+      }
 
       // 切点吸附:起止点吸到最近的镜头边界(词边界守卫,检测失败回退不吸附)。
       // 必须在跳剪/字幕/取景之前调整——下游全部消费 clip.startSec/endSec。
@@ -563,14 +598,20 @@ export async function exportClips(
       // 峰值事件(输出时间轴):运镜强调与音效打点共用一份——响度峰≈情绪
       // 高点,与智能封面同一声学代理;跳剪时映射到压缩时间轴。提取失败/
       // 拼接跨度超限按「无事件」fail-open。
-      if ((options.autoZoom || options.sfx) && !clipPeaks && !peakSpanTooLong(clip)) {
+      if ((options.autoZoom || options.sfx || options.flashForward) && !clipPeaks && !peakSpanTooLong(clip)) {
         clipPeaks = await extractPeaks(inputPath, clip.startSec, clip.endSec).catch(() => undefined);
       }
-      const peakEventsOut = clipPeaks
+      // (源时间, 输出时间) 成对保留:运镜强调/音效打点吃输出时间,
+      // 爆点闪现要回源片切那一刀、吃源时间
+      const peakEventPairs = clipPeaks
         ? findPeakEvents(clipPeaks)
-            .map((e) => (plan ? mapToOutputTime(e.atSec, plan.segments, clip.startSec) : e.atSec - clip.startSec))
-            .filter((t): t is number => t !== null && t >= 0 && t <= clipDuration)
+            .map((e) => ({
+              srcSec: e.atSec,
+              outSec: plan ? mapToOutputTime(e.atSec, plan.segments, clip.startSec) : e.atSec - clip.startSec,
+            }))
+            .filter((p): p is { srcSec: number; outSec: number } => p.outSec !== null && p.outSec >= 0 && p.outSec <= clipDuration)
         : [];
+      const peakEventsOut = peakEventPairs.map((p) => p.outSec);
       // 自动运镜:只对竖屏画面有意义(音频波形图和横屏原片不做);
       // 帧率未知就不开——zoompan 会把素材重采样到 25fps。
       // 强调时刻 = 最响的几个峰值事件——「推近必须绑定真实事件」,纯呼吸
@@ -664,14 +705,31 @@ export async function exportClips(
       // 到原位置原样重复是直播切片圈通行做法;任一步失败回退原片,绝不拖垮该条
       let coldOpenSec: number | null = null;
       let coldOpenPlan: ReturnType<typeof planColdOpen> = null;
+      // 迷你片是「爆点闪现」而非钩子句时为 true(回执要区分两种开场形态)
+      let flashForwardUsed = false;
       // 钩子文本在 meta.hook(证据链字段),不在顶层——读错位置会让高潮前置永远不触发
       const coldOpenHook = clip.meta?.hook?.trim();
-      if (options.coldOpen && !audioOnly && !webStyle && coldOpenHook && clip.words && clip.words.length > 0) {
-        coldOpenPlan = planColdOpen(clip.words, coldOpenHook, clip.startSec);
-        // 拼接片:迷你片是从源片单独切一刀,必须整个落在某一段内,
-        // 否则会把被剪掉的空隙内容当作钩子重新放进成片
-        if (coldOpenPlan && stitched && !withinOnePiece(pieces, coldOpenPlan.startSec, coldOpenPlan.endSec)) {
-          coldOpenPlan = null;
+      if (!audioOnly && !webStyle && (options.flashForward || options.coldOpen)) {
+        // 爆点闪现优先:两个开关同开时,视觉钩子是更强的差异化(全网仅
+        // 0.04% 切片有 visual hook);闪不出来(全程无显著峰)回退钩子句
+        if (options.flashForward) {
+          const farEnough = peakEventPairs
+            .filter((p) => p.outSec >= FLASH_SKIP_NEAR_START_SEC)
+            .map((p) => p.srcSec);
+          coldOpenPlan = planFlashForward(
+            farEnough,
+            plan ? plan.segments : [{ startSec: clip.startSec, endSec: clip.endSec }]
+          );
+          flashForwardUsed = coldOpenPlan !== null;
+        }
+        if (!coldOpenPlan && options.coldOpen && coldOpenHook && clip.words && clip.words.length > 0) {
+          coldOpenPlan = planColdOpen(clip.words, coldOpenHook, clip.startSec);
+          // 拼接片:迷你片是从源片单独切一刀,必须整个落在某一段内,
+          // 否则会把被剪掉的空隙内容当作钩子重新放进成片
+          // (爆点闪现从保留段里挑窗,天然满足,无需再验)
+          if (coldOpenPlan && stitched && !withinOnePiece(pieces, coldOpenPlan.startSec, coldOpenPlan.endSec)) {
+            coldOpenPlan = null;
+          }
         }
         const coPlan = coldOpenPlan;
         if (coPlan) {
@@ -787,6 +845,15 @@ export async function exportClips(
           publish: clip.publish ?? null,
           captionText: clip.words?.map((w) => w.text).join(""),
         });
+        // 钩子兑付校验:标题/钩子/悬念句承诺的数字实体必须真实出现在片中
+        // 转写里——不兑付的信息缺口 = 标题党,完播率崩且账号降权(2026 调研)
+        const hookPayoffMissing =
+          clip.words && clip.words.length > 0
+            ? missingHookPayoffs(
+                [clip.title, clip.meta?.hook, clip.meta?.teaser].filter(Boolean).join(" "),
+                clip.words.map((w) => w.text).join("")
+              )
+            : null;
         // 节奏评估:字幕逐块上屏/自动运镜/音频波形图本身就是持续视觉变化,
         // 有其一就不评;其余按剪辑计划(跳剪缝/拼接缝/高潮前置接缝)算最长
         // 无视觉变化间隔,超 5s 在 qa 里告警(见 qa.ts PACING_MAX_GAP_SEC)
@@ -803,6 +870,7 @@ export async function exportClips(
           segments: plan ? plan.segments : [{ startSec: clip.startSec, endSec: clip.endSec }],
           contentHits,
           pacingGapSec,
+          hookPayoffMissing,
           signal,
         };
         const expected = clipDuration + (coldOpenSec ?? 0);
@@ -941,9 +1009,11 @@ export async function exportClips(
         loudnessNormalized: Boolean(options.normalizeLoudness),
         denoised: Boolean(options.denoise),
         coldOpenSec,
+        flashForward: flashForwardUsed,
         openingHookBurned: Boolean(openingHook),
         translatedLines: transLines.length,
         shotSnap,
+        preciseAligned,
         sfxCues: sfxApplied.length,
         bgmMixed,
       });
@@ -1035,8 +1105,10 @@ export async function exportClips(
         normalizeLoudness: Boolean(options.normalizeLoudness),
         denoise: Boolean(options.denoise),
         coldOpen: Boolean(options.coldOpen),
+        flashForward: Boolean(options.flashForward),
         compilation: compilationFile,
         snapToShots: Boolean(options.snapToShots),
+        preciseAlign: Boolean(options.alignWords),
         // 双语字幕回执:目标语言;实际每条烧了几行见 clips[].render.translatedLines
         translateLang: options.translateLang ?? null,
         subtitleFile: Boolean(options.subtitleFile),

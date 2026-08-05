@@ -14,6 +14,7 @@ const baseReport = (over: Partial<ClipQaReport> = {}): ClipQaReport => ({
   midWordCuts: 0,
   contentHits: null,
   pacingGapSec: null,
+  hookPayoffMissing: null,
   ...over,
 });
 

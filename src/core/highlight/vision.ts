@@ -34,6 +34,8 @@ const MIN_SCORED_FRAMES = 3;
 export interface VisionConfig {
   baseUrl: string;
   model: string;
+  /** 云端端点的 API Key;本地 Ollama 缺省(会补 "ollama" 占位)。 */
+  apiKey?: string;
 }
 
 export interface VisionStats {
@@ -235,7 +237,7 @@ export async function collectVisionSignal(opts: {
   } = opts;
   const times = planFrameTimes(durationSec, signals);
   if (times.length === 0) return null;
-  const llm: LlmConfig = { baseUrl: config.baseUrl, apiKey: "ollama", model: config.model };
+  const llm: LlmConfig = { baseUrl: config.baseUrl, apiKey: config.apiKey || "ollama", model: config.model };
   const deadline = Date.now() + budgetMs;
   const scored: Array<{ t: number; energy: number }> = [];
   for (const group of chunkCells(times)) {

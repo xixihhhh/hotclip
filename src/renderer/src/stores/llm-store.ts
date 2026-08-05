@@ -14,6 +14,8 @@ export interface PrefilterSettings {
   enabled: boolean;
   baseUrl: string;
   model: string;
+  /** 云端端点的 API Key(本地 Ollama 留空即可)。 */
+  apiKey?: string;
 }
 
 export const PREFILTER_DEFAULTS: PrefilterSettings = {
@@ -38,6 +40,7 @@ function loadLocalEndpoint(key: string, defaults: PrefilterSettings): PrefilterS
         enabled: p.enabled === true,
         baseUrl: typeof p.baseUrl === "string" && p.baseUrl ? p.baseUrl : defaults.baseUrl,
         model: typeof p.model === "string" && p.model ? p.model : defaults.model,
+        apiKey: typeof p.apiKey === "string" ? p.apiKey : undefined,
       };
     }
   } catch {

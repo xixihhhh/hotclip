@@ -27,6 +27,10 @@ export interface RenderPrefs {
   denoise: boolean;
   compilation: boolean;
   coldOpen: boolean;
+  /** 爆点闪现:峰值画面 0.3-1s 前置(视觉钩子)。 */
+  flashForward: boolean;
+  /** 精准切点:Paraformer 二遍对齐修正词级时间戳。 */
+  preciseAlign: boolean;
   alsoLandscape: boolean;
   translate: boolean;
   publishCopy: boolean;
@@ -67,6 +71,8 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   denoise: false, // 素材千差万别,降噪宁保守默认关
   compilation: false, // 合集是额外产物,默认关
   coldOpen: false, // 高潮前置改变成片结构,默认关由用户选择
+  flashForward: false, // 爆点闪现同理:强风格开场,默认关
+  preciseAlign: false, // 首次要下载 ~240MB 模型且每条多几秒解码,默认关
   alsoLandscape: false, // 多画幅导出时间翻倍,默认关
   translate: false,
   publishCopy: false,

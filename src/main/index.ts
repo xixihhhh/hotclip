@@ -10,6 +10,7 @@ import { stat, readFile, writeFile, readdir } from "fs/promises";
 import { createReadStream } from "fs";
 import { Readable } from "stream";
 import { extractPeaks } from "@core/audio-peaks";
+import { createClipAligner } from "@core/align";
 import { resolveByteRange } from "@core/media-range";
 import { sanitizeBrand } from "@core/brand";
 import { probeMedia } from "@core/probe";
@@ -24,6 +25,7 @@ import { ASR_CATALOG } from "../shared/asr-catalog";
 import { detectHighlights, chatComplete } from "@core/highlight/detect";
 import { listModels } from "@core/llm-models";
 import { collectVisionSignal } from "@core/highlight/vision";
+import { reviewCandidatesVision } from "@core/highlight/review-vision";
 import { composeContactSheetJpeg } from "@core/contact-sheet";
 import { collectEmotionSignal } from "@core/emotion";
 import { collectClipSegments, translateSegments, clipTranslationLines } from "@core/translate";
@@ -445,6 +447,8 @@ ipcMain.handle(
     // - 表情峰值:YuNet+FER+ 零配置自动跑(有画面就看,首次自动下载小模型);
     // - 视觉爆点:端侧 VL 抽帧(可选,需用户配置 Ollama 视觉模型)。
     let visionStats: VisionStats | undefined;
+    // 候选段画面复核用的视觉端点(与信号通道同一配置;hasVideo 时才会被赋值)
+    let reviewVisionCfg: { baseUrl: string; model: string; apiKey?: string } | null = null;
     let emotionStats: EmotionStats | undefined;
     let danmakuStats: DanmakuStats | undefined;
     let voiceStats: VoiceTagStats | undefined;
@@ -471,11 +475,12 @@ ipcMain.handle(
         ]).catch(() => null);
       }
       if (media && media.hasVideo && media.durationSec > 1) {
-        const vc = vision as { baseUrl?: unknown; model?: unknown } | null | undefined;
+        const vc = vision as { baseUrl?: unknown; model?: unknown; apiKey?: unknown } | null | undefined;
         const visionCfg =
           vc && typeof vc.baseUrl === "string" && vc.baseUrl.trim() && typeof vc.model === "string" && vc.model.trim()
-            ? { baseUrl: vc.baseUrl, model: vc.model }
+            ? { baseUrl: vc.baseUrl, model: vc.model, apiKey: typeof vc.apiKey === "string" && vc.apiKey.trim() ? vc.apiKey : undefined }
             : null;
+        reviewVisionCfg = visionCfg;
         const [emotionOutcome, visionOutcome] = await Promise.all([
           Promise.race([
             collectEmotionSignal({ videoPath: filePath, durationSec: media.durationSec, modelsRoot: modelsRoot(), signals }),
@@ -537,7 +542,28 @@ ipcMain.handle(
           }
         : undefined;
     const outcome = await detectHighlights(t, config, undefined, signals, localFilter, clipLength, productWords, reference, reviewMemory, genreArg);
-    return { candidates: outcome.candidates, transcript: labeled, funnel: outcome.funnel, vision: visionStats, emotion: emotionStats, danmaku: danmakuStats, voice: voiceStats, reference: reference ?? null, referenceError };
+    // 候选段画面复核(v0.12):每条候选一张接触表让 VL 看画面,画面分回流
+    // 排序、看点进 reason。fail-open:失败/超时沿用原候选。
+    let candidates = outcome.candidates;
+    if (reviewVisionCfg && candidates.length > 0 && typeof filePath === "string") {
+      const reviewed = await reviewCandidatesVision({
+        videoPath: filePath,
+        candidates,
+        config: reviewVisionCfg,
+        fontFile: app.isPackaged
+          ? join(process.resourcesPath, "fonts", "SourceHanSansSC-Bold.otf")
+          : join(app.getAppPath(), "resources", "fonts", "SourceHanSansSC-Bold.otf"),
+      }).catch(() => null);
+      if (reviewed) {
+        candidates = reviewed.candidates;
+        visionStats = {
+          ...(visionStats ?? { framesTotal: 0, framesScored: 0, peakCount: 0 }),
+          candidatesReviewed: reviewed.stats.reviewed,
+          candidatesAdjusted: reviewed.stats.boosted + reviewed.stats.demoted,
+        };
+      }
+    }
+    return { candidates, transcript: labeled, funnel: outcome.funnel, vision: visionStats, emotion: emotionStats, danmaku: danmakuStats, voice: voiceStats, reference: reference ?? null, referenceError };
   }
 );
 
@@ -620,6 +646,12 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
   }
   exportAbort = new AbortController();
   const abortSignal = exportAbort.signal;
+  // 精准切点:主转写不是 Paraformer 档时才有意义(它自己的 CIF 时间戳已是
+  // 最优);对齐器整批复用一个,模型首次使用才下载(用户显式开了才发生)
+  const alignWords =
+    opts.preciseAlign && needWords && opts.transcript && opts.transcript.engine !== "paraformer-local"
+      ? createClipAligner(modelsRoot(), abortSignal)
+      : undefined;
   try {
   const baseSpecs = list.map((c) => ({
       id: c.id,
@@ -670,6 +702,16 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       titleCard: Boolean(opts.titleCard),
       openingHook: Boolean(opts.openingHook),
       normalizeLoudness: Boolean(opts.normalizeLoudness),
+      // 修复:这四个开关此前从未传进导出层——UI 点了没效果,被 fail-open
+      // 语义掩盖(降噪/合集/横屏版/高潮前置在桌面端一直是死开关)
+      denoise: Boolean(opts.denoise),
+      compilation: Boolean(opts.compilation),
+      coldOpen: Boolean(opts.coldOpen),
+      alsoLandscape: Boolean(opts.alsoLandscape),
+      // 爆点闪现(v0.12):情绪峰画面 0.3-1s 前置,视觉钩子
+      flashForward: Boolean(opts.flashForward),
+      // 精准切点(v0.12):Paraformer 二遍对齐修正词级时间戳
+      alignWords,
       faceTrack: true,
       snapToShots: true,
       brand: sanitizeBrand(opts.brand),

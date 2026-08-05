@@ -102,6 +102,8 @@ export type ClipLength = "short" | "standard" | "long";
 export interface PrefilterConfig {
   baseUrl: string;
   model: string;
+  /** 云端端点的 API Key(本地 Ollama 缺省)。 */
+  apiKey?: string;
 }
 
 /** 漏斗省了多少:全文 vs 入围云端的部分(UI 展示与审计)。 */
@@ -117,6 +119,10 @@ export interface VisionStats {
   framesTotal: number;
   framesScored: number;
   peakCount: number;
+  /** 候选段画面复核:复核条数(v0.12;未跑复核缺省)。 */
+  candidatesReviewed?: number;
+  /** 候选段画面复核:被加分/降分的条数。 */
+  candidatesAdjusted?: number;
 }
 
 /** 表情峰值信号统计(零配置自动跑;UI 展示"看了几张脸、圈出几段")。 */
@@ -267,6 +273,8 @@ export interface ExportOptions {
   bgmPath?: string;
   /** 直播品类 id(genre.ts):导出侧用于跳剪静音阈值分档。 */
   genreId?: string;
+  /** 精准切点:候选段用 Paraformer 二遍对齐修正词级时间戳(首次需下载 ~240MB 模型)。 */
+  preciseAlign?: boolean;
   /** Auto-crop static screen-recording chrome (status bar, app UI, letterbox). */
   trimUi: boolean;
   /** Burn each clip's title into the top safe zone. */
@@ -281,6 +289,8 @@ export interface ExportOptions {
   compilation?: boolean;
   /** 高潮前置:钩子句剪成迷你片拼到切片开头再接完整正片(cold-open)。 */
   coldOpen?: boolean;
+  /** 爆点闪现:情绪峰值的 0.3-1s 画面闪到开头再切回(视觉钩子版高潮前置)。 */
+  flashForward?: boolean;
   /** 多画幅:竖屏之外再出一版横屏原画幅(竖版发抖音,横版发B站/YouTube)。 */
   alsoLandscape?: boolean;
   /** 品牌样式预设(高亮色/字号/位置/水印);缺省走内置默认。 */

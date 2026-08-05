@@ -187,6 +187,7 @@ GitHub Trending 看 **star 加速度**而非总量 → 把流量脉冲压进同�
 5. QA 新增节奏信号：视觉事件间隔 >5s 告警 → 建议 autozoom 补刀
 
 **v0.12「挑得准、开场炸」——选段升级（效果 P0，云端可选档首次接入）**
+> 进度 2026-08-05:✅ 爆点闪现(flash-forward,含与高潮前置的优先级协作)/✅ 钩子兑付校验进 QA/✅ **精准切点**(FunClip 拆解产出的新增项:候选段 Paraformer 二遍对齐修词级时间戳,真模型冒烟通过)/✅ **VLM 候选段复核**(highlight/review-vision.ts:每条候选一张接触表一次调用,画面分回流排序、看点进 reason、货不对板标警告;复用视觉信号同一 OpenAI 兼容端点,本地 Ollama 免费、视觉设置新增 API Key 字段即可切 Atlas 云端档——原计划的「云端付费档」以零新增基建方式落地)/✅ 顺手修复桌面端 denoise/coldOpen/compilation/alsoLandscape 四个死开关(从未接进导出 handler)。待做:开头/结尾独立选段(HIVE)、Seed-ASR 云端精转档;loop 结尾暂缓(音频可循环性难保证,收益存疑)。
 1. VLM 候选段复核：候选 30-90s 抽帧喂 MiMo V2.5/Qwen3-VL-Plus（几分钱/条），品类判别+画面描述回流选段——补齐弱语音品类（跳舞/萌宠/户外/游戏）
 2. flash-forward cold open 变体：0.3-1s 闪现最炸瞬间→切回（coldopen 扩展；全网仅 0.04% 切片有 visual hook，差异化机会）
 3. 开头/结尾独立选段（HIVE 范式）：opening/ending 作为独立信号进 prompt/管线
