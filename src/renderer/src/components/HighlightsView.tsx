@@ -61,7 +61,7 @@ import { BrandStyleModal } from "./BrandStyleModal";
 import type { Transcript, HighlightCandidate, RenderToggles, CaptionStyleChoice, FunnelStats, VisionStats, EmotionStats, DanmakuStats, VoiceTagStats, ClipLength, ReferenceInfo, ReviewedCandidate } from "../../../shared/api-types";
 
 /** Click-to-cycle order for the caption style chip. */
-const CAPTION_CYCLE: CaptionStyleChoice[] = ["karaoke", "keyword", "pop", "hormozi", "minimal", "bubble", "none"];
+const CAPTION_CYCLE: CaptionStyleChoice[] = ["keyword", "pop", "minimal", "hormozi", "bubble", "karaoke", "none"];
 const CAPTION_KEY: Record<CaptionStyleChoice, string> = {
   none: "captionNone",
   karaoke: "captionKaraoke",
@@ -350,7 +350,7 @@ export function HighlightsView({
     if (auto && onExport && publishable.length > 0 && !autoExported.current) {
       autoExported.current = true;
       // 托管出片同样吃品牌预设——一次配置,全自动也长自己的样子
-      onExport(publishable, { vertical: true, captionStyle: "karaoke", jumpCut: true, cleanFillers: true, trimUi: true, titleCard: true, openingHook: true, normalizeLoudness: true, brand: activeBrandStyle(brandState) });
+      onExport(publishable, { vertical: true, captionStyle: "keyword", jumpCut: true, cleanFillers: true, trimUi: true, titleCard: true, openingHook: true, normalizeLoudness: true, brand: activeBrandStyle(brandState) });
     }
   }, [auto, candidates, onExport, brandState]);
 

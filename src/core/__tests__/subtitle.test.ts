@@ -6,6 +6,7 @@ import {
   buildKaraokeAss,
   buildCaptionAss,
   keywordText,
+  popText,
   mergeKeywordWords,
   wrapTitle,
   VERTICAL_LAYOUT,
@@ -272,14 +273,32 @@ describe("buildCaptionAss styles", () => {
     expect(ass).toContain("{\\c&H0D6EFF&\\fscx108\\fscy108}三四");
   });
 
-  it("pop style: one dialogue per 2-4 char chunk with a bounce intro, bigger font", () => {
+  it("pop style: one dialogue per 2-4 char chunk with a damped intro, bigger font", () => {
     const ass = buildCaptionAss(words, 0, VERTICAL_LAYOUT, "pop");
     const dialogues = ass.match(/^Dialogue:/gm) ?? [];
     expect(dialogues.length).toBe(2); // 8 CJK chars = 16 units → two 8-unit chunks
-    expect(ass).toContain("\\t(0,90,\\fscx135\\fscy135)");
+    // 阻尼弹入:0.8→1.04→1.0,不再夸张过冲
+    expect(ass).toContain("\\t(0,90,\\fscx104\\fscy104)");
+    expect(ass).not.toContain("\\fscx135");
     expect(ass).toContain(`,${Math.round(VERTICAL_LAYOUT.fontSize * 1.45)},`);
     // chunk 2 starts when its first word starts
     expect(ass).toContain("Dialogue: 0,0:00:04.00,");
+  });
+
+  it("pop style: 块内当前词换色——首词即亮,提前 80ms 接棒,末词按词尾归白", () => {
+    const unit = [w("一", 10, 11), w("二", 11, 12)];
+    const s = popText(unit, 10);
+    // 首词提前量夹回 0,起始即高亮;1000-80=920ms 时二词接棒切白
+    expect(s).toContain("{\\c&H0D6EFF&\\t(920,920,\\c&HFFFFFF&)}一");
+    // 二词:920ms 点亮,词尾 2000ms 归白
+    expect(s).toContain("{\\c&HFFFFFF&\\t(920,920,\\c&H0D6EFF&)\\t(2000,2000,\\c&HFFFFFF&)}二");
+  });
+
+  it("popText: 品牌高亮色覆盖默认橙,拉丁词间保留空格", () => {
+    const unit = [w("go", 0, 0.5), w("now", 0.5, 1)];
+    const s = popText(unit, 0, "#00ff00");
+    expect(s).toContain("\\c&H00FF00&"); // BGR
+    expect(s).toContain("go ");
   });
 
   it("hormozi style: 短块 + 卡拉OK点亮 + 特大字/厚描边/硬阴影/60% 高度线", () => {

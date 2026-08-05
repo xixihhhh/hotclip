@@ -84,6 +84,25 @@
 
 **借鉴清单**:①精对齐第二遍(候选段 Paraformer 重解码修时间戳,不换主 ASR——SenseVoice 的情绪/事件标签是第七八路证据来源不能丢)→ **已落地为「精准切点」**;②「用文字剪视频」交互(划选转写文本直接出片)/③切点微调滑块(±500-1000ms)/④按说话人一键选段——三项均低成本待排期;⑤雷达项:Fun-ASR-Nano GGUF(0.8B/Apache-2.0/llama.cpp 纯 CPU,官方称支持热词,但时间戳标 TODO——若落地即为 Electron 解码期热词第一条可行路径)。**不抄**:LLM 选段 prompt(整份 SRT→正则抠时间戳,落后一代)、moviepy 管线(全程重编码)、Pegasus 云端视频理解(与本地定位冲突)。
 
+## 五点六、字幕渲染栈与样式趋势（2026-08-05 补充,用户点名调研 Remotion）
+
+用户反馈「卡拉OK字幕卖点很 low,现在很少人用」并问及 Remotion 热潮。三路调研(Remotion 许可与架构 / 替代品与样式趋势 / 自家离屏引擎摸底)结论:
+
+**术语陷阱先澄清**:英文圈说的「karaoke captions」在 2026 指**逐词高亮**(一屏 1-5 词,当前词换色/弹出)——流行的是它;过时的恰是我们默认的「整句提前可见+扫色填充」老卡拉OK。用户手感与数据完全一致(word-by-word 提升观看时长 12-25%,多来源)。
+
+**Remotion 判定:不引框架,只偷思路**:
+1. 许可是源码可见非开源:个人/≤3 人公司免费可商用可打包 Electron 分发(Terms v5.0 有专门 Native application distribution 条款,要求终端用户与 Remotion 间有抽象层);**团队到 4 人即落 Automators 档「$0.01/render、$100/月起」,终端用户本机每出一条片都计费**,且按渲染计费档遥测强制(上报含终端用户 IP)——对本地优先免费分发的桌面工具是成本与价值观双重冲突。历史多次改条款(5.0 起承包商也计人头)。
+2. 性能:截图式渲染,生产用户实测**渲染耗时≈视频时长 2-4 倍**,比 libass 慢一个数量级;Electron 打包要解 asar、不支持 mac universal。新 web-renderer 摆脱 headless Chrome 但只支持 CSS 子集(canvas 重建 DOM),花式字幕正是命门。
+3. **值得拿的**:@remotion/captions 是独立 MIT 纯数据库——`createTikTokStyleCaptions` 的逐词 token 按时间窗聚合分页算法;Mediabunny(MPL-2.0,前 @remotion/media-parser 的接棒者)可做未来 WebCodecs 快速导出,不碰 Remotion 许可。
+4. 替代品全有阴影:revideo 已易主 midrender(商业产品底座,最新更改不保证回流开源仓);Motion Canvas 原作者淡出、社区 fork Canvas Commons 接棒;editly/FFCreator 半休眠。**没有任何 2026 方案值得换栈——自家「离屏 Chromium 确定性逐帧引擎」本质就是本地版 Remotion**(bubble 模板已实现逐词 spring 弹出+词背景块+关键词渐变),缺的只是模板数量。
+
+**样式趋势与默认位判定**(已落地 v0.12):
+- 中文主流 = **一屏一短句 + 关键词换色/放大**(剪映模板生态清一色如此,剪映甚至没有原生逐字变色)→ **默认样式 karaoke→keyword**;
+- 英文主流 = 1-3 词逐词 pop + 当前词换色 → **pop 样式升级**:夸张过冲(0.6→1.35)改阻尼弹入(0.8→1.04→1.0,165ms,拟合 Remotion 模板 spring damping 200/5 帧手感),新增块内**当前词品牌色点亮**(零时长 \t 瞬时换色,提前 80ms「跟手」,libass 实测帧验证通过);
+- 换色 > 背景块 > 放大(多来源一致:换色最自然干扰最小);高亮提前量 50-100ms、整页比音频早 100-200ms;
+- 老卡拉OK扫色**保留为倒数第二档选项**(歌词场景本源用途+无障碍诉求),对外文案全部撤「卡拉OK」改「动态字幕」。
+- 可再抄的参数存档:Remotion TikTok 模板翻页 1200ms/描边≈字号 1/6+`paintOrder:stroke`/距底 350px@1920/高亮 #39E508;vshukla7/remotion-captions-themes 的 11 主题分类学可当未来样式菜单蓝本。
+
 ## 六、前沿技术跟踪清单（选段长期升级路径）
 
 - **TripleSumm**（ICLR 2026，HF 可下载）：Mr.HiSum 三模态版——训自己的爆点打分头替代手工加权的现成数据。

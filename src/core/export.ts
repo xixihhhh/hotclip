@@ -510,7 +510,7 @@ export async function exportClips(
       const webStyle = isWebCaptionStyle(options.captionStyle) && wantCaptions && options.renderOverlay
         ? options.captionStyle
         : undefined;
-      const assStyle: CaptionStyle = isWebCaptionStyle(options.captionStyle) ? "karaoke" : (options.captionStyle ?? "karaoke");
+      const assStyle: CaptionStyle = isWebCaptionStyle(options.captionStyle) ? "keyword" : (options.captionStyle ?? "keyword");
       // Opening hook: burn the AI teaser (悬念句) big in the upper third for the
       // clip's first seconds — this is what the teaser was generated for.
       const teaser = clip.meta?.teaser?.trim();

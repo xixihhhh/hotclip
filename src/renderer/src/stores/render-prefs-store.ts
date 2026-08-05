@@ -57,7 +57,7 @@ export interface RenderPrefs {
 /** 与出厂默认一致:开箱即出竖屏卡拉OK跳剪片;花钱/额外文件的默认关。 */
 export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   vertical: true,
-  captionStyle: "karaoke",
+  captionStyle: "keyword",
   jumpCut: true,
   cleanFillers: true,
   cutRetakes: false, // 剪掉的是完整一句话,误伤代价高——默认关,由用户按素材开
@@ -109,7 +109,7 @@ function load(): RenderPrefs {
       if (![1, 2, 3].includes(out.variants)) out.variants = 1;
       if (!["short", "standard", "long"].includes(out.clipLength)) out.clipLength = "standard";
       if (!["high", "standard", "compact"].includes(out.quality)) out.quality = "high";
-      if (!["karaoke", "keyword", "pop", "hormozi", "minimal", "bubble", "none"].includes(out.captionStyle)) out.captionStyle = "karaoke";
+      if (!["keyword", "pop", "minimal", "hormozi", "bubble", "karaoke", "none"].includes(out.captionStyle)) out.captionStyle = "keyword";
       return out;
     }
   } catch {

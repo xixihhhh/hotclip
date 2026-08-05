@@ -168,7 +168,7 @@ export async function autoClip(videoPath: string, cfg: AutoClipConfig): Promise<
     outDir,
     {
       vertical,
-      captionStyle: captions ? "karaoke" : undefined,
+      captionStyle: captions ? "keyword" : undefined,
       jumpCut: true,
       cleanFillers: true,
       titleCard: true,

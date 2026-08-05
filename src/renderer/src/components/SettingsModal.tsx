@@ -22,7 +22,7 @@ import { useRenderPrefs } from "../stores/render-prefs-store";
 import type { CaptionStyleChoice, ExportQuality, ModelsInfo } from "../../../shared/api-types";
 
 const QUALITY_ORDER: ExportQuality[] = ["high", "standard", "compact"];
-const CAPTION_ORDER: CaptionStyleChoice[] = ["karaoke", "keyword", "pop", "hormozi", "minimal", "bubble", "none"];
+const CAPTION_ORDER: CaptionStyleChoice[] = ["keyword", "pop", "minimal", "hormozi", "bubble", "karaoke", "none"];
 const CAPTION_KEY: Record<CaptionStyleChoice, string> = {
   none: "captionNone",
   karaoke: "captionKaraoke",

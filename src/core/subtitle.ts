@@ -279,7 +279,8 @@ const WHITE_INLINE = "&HFFFFFF&";
  * Caption style presets (2026 short-video canon):
  *  - karaoke: whole line visible, words light up as spoken
  *  - keyword: whole line visible, LLM-picked keywords tinted & slightly larger
- *  - pop: 2-4 character chunks appear one at a time with a bounce
+ *  - pop: 2-4 character chunks appear one at a time with a damped bounce,
+ *    current word lit in the highlight color (word-by-word emphasis)
  *  - hormozi: 大字爆点——短块、特大加粗、硬阴影、居中偏上,逐词卡拉OK点亮,
  *    拉丁词全大写(海外带货/营销短视频通行的 Hormozi 风格)
  *  - minimal: 动态极简——2026 年 Hormozi 疲劳后的主流:短块卡点上屏、白字
@@ -434,11 +435,40 @@ export function keywordText(line: TranscriptWord[], keywords: string[], highligh
   return parts.join("");
 }
 
-/** Pop bounce: start small, overshoot, settle — three-stage \t chain. */
-const POP_INTRO = "{\\fscx60\\fscy60\\t(0,90,\\fscx135\\fscy135)\\t(90,200,\\fscx100\\fscy100)}";
+/** Pop 阻尼弹入:0.8→1.04→1.0 共 165ms——弹而不贱(拟合重阻尼 spring 手感)。 */
+const POP_INTRO = "{\\fscx80\\fscy80\\t(0,90,\\fscx104\\fscy104)\\t(90,165,\\fscx100\\fscy100)}";
 
 /** Pop chunks: 2-4 CJK chars (or 1-2 latin words) shown one at a time. */
 const POP_MAX_UNITS = 8;
+
+/** 当前词提前点亮的毫秒数:高亮先于语音 50-100ms 时「跟手感」最好。 */
+const POP_HIGHLIGHT_LEAD_MS = 80;
+
+/**
+ * Pop 块文本:块内「当前词」品牌色点亮,下一词接棒时切回白。
+ * 逐词换色是当下逐词字幕的主流强调方式(优于整句扫色/背景块/放大)。
+ * \t 零时长即瞬时切换;时间相对块事件起点(=块首词起点)。纯函数,可单测。
+ */
+export function popText(unit: TranscriptWord[], chunkStartSec: number, highlightHex?: string): string {
+  const highlightInline = (highlightHex && hexToAssInline(highlightHex)) || EMBER_INLINE;
+  const onAt = (j: number): number =>
+    Math.max(0, Math.round((unit[j].startSec - chunkStartSec) * 1000) - POP_HIGHLIGHT_LEAD_MS);
+  const parts: string[] = [];
+  for (let j = 0; j < unit.length; j++) {
+    const on = onAt(j);
+    const off = Math.max(
+      on + 1,
+      j + 1 < unit.length ? onAt(j + 1) : Math.round((unit[j].endSec - chunkStartSec) * 1000)
+    );
+    const tags =
+      on > 0
+        ? `{\\c${WHITE_INLINE}\\t(${on},${on},\\c${highlightInline})\\t(${off},${off},\\c${WHITE_INLINE})}`
+        : `{\\c${highlightInline}\\t(${off},${off},\\c${WHITE_INLINE})}`;
+    parts.push(tags + escapeAssText(unit[j].text));
+    if (needsSpaceAfter(unit[j].text, unit[j + 1]?.text)) parts.push(" ");
+  }
+  return parts.join("");
+}
 
 /** Hormozi punch-in:快速顶入定格(比 pop 的弹跳更硬更利落)。 */
 const HORMOZI_INTRO = "{\\fscx82\\fscy82\\t(0,70,\\fscx100\\fscy100)}";
@@ -580,10 +610,8 @@ export function buildCaptionAss(
         // 动态极简:短块轻顶入,块内至多 1 处品牌色高亮(关键词/数字优先)
         events.push(dialogue(start, end, MINIMAL_INTRO + minimalText(unit, options.keywords ?? [], highlightHex)));
       } else {
-        const text = unit
-          .map((w, j) => escapeAssText(w.text) + (needsSpaceAfter(w.text, unit[j + 1]?.text) ? " " : ""))
-          .join("");
-        events.push(dialogue(start, end, POP_INTRO + text));
+        // pop:阻尼弹入 + 块内当前词换色(品牌高亮色跟手点亮)
+        events.push(dialogue(start, end, POP_INTRO + popText(unit, unit[0].startSec, highlightHex)));
       }
     }
   } else {
