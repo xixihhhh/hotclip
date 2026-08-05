@@ -209,7 +209,7 @@ export interface ReviewedCandidate {
 }
 
 /** Burned-in caption style choices (none = no captions; bubble = web-rendered). */
-export type CaptionStyleChoice = "none" | "karaoke" | "keyword" | "pop" | "hormozi" | "bubble";
+export type CaptionStyleChoice = "none" | "karaoke" | "keyword" | "pop" | "hormozi" | "minimal" | "bubble";
 
 /** 水印配置:PNG 烧进画面一角。 */
 export interface BrandWatermark {
@@ -261,6 +261,12 @@ export interface ExportOptions {
   cutRetakes?: boolean;
   /** 自动运镜:竖屏成片叠一层缓慢推拉镜头,固定机位不再死板。 */
   autoZoom?: boolean;
+  /** 音效打点:whoosh 卡拼接缝/ding 卡情绪峰/pop 卡开场钩子,每条 ≤3 个。 */
+  sfx?: boolean;
+  /** BGM 文件路径:循环铺满全片、对人声闪避混入;空/缺省 = 不加。 */
+  bgmPath?: string;
+  /** 直播品类 id(genre.ts):导出侧用于跳剪静音阈值分档。 */
+  genreId?: string;
   /** Auto-crop static screen-recording chrome (status bar, app UI, letterbox). */
   trimUi: boolean;
   /** Burn each clip's title into the top safe zone. */
@@ -289,6 +295,10 @@ export interface ExportOptions {
   timeline?: boolean;
   /** AIGC 标识:画面显式标识 + 元数据隐式标识(发布平台要求 AIGC 声明时开启)。 */
   aigcLabel?: boolean;
+  /** 平台发布包:选中的平台 id 清单(platform-specs.ts);每平台落一个齐套文件夹。 */
+  publishPack?: string[];
+  /** 一片多版:同一切片出 count 版差异化包装(含原版,2 或 3);需要 LLM。 */
+  variants?: { count: number; llm: LlmConfig };
   /** 成片导出根目录(成片仍落其下的 <片名>/ 子目录);空/缺省 = 系统默认 ~/影片/HotClip。 */
   outDir?: string;
   /** 导出画质档;缺省 high——与历史默认(CRF 18)一致,升级不改变成片。 */
@@ -420,6 +430,8 @@ export interface HotClipApi {
   mediaUrl: (filePath: string) => string;
   /** 选择一张图片(水印 logo 用);取消返回 null。 */
   selectImage: () => Promise<string | null>;
+  /** 选择一个音频文件(BGM 用);取消返回 null。 */
+  selectAudio: () => Promise<string | null>;
   /** 取 [startSec, endSec] 的音频峰值轨——审阅台时间轴的波形。 */
   getAudioPeaks: (filePath: string, startSec: number, endSec: number) => Promise<AudioPeaks>;
   /** 候选片段的 3×3 接触表(画面速览):返回 data URL;失败/不支持返回空串。 */

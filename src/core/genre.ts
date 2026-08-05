@@ -393,6 +393,35 @@ export function normalizeGenreId(id: string | undefined): string | undefined {
   return LEGACY_GENRE_IDS[id] ?? id;
 }
 
+/**
+ * 各品类的跳剪静音阈值(秒):超过该时长的词间空隙才被剪。
+ * 2026 调研口径(RESEARCH-2026-08-CLIP-QUALITY.md 第三节):快节奏解说 ~0.3s、
+ * 单人口播 0.5-0.7s、双人对谈 0.8-1.2s——对谈的呼吸感被剪光会像机关枪。
+ * 未列出的品类走默认 0.6(与历史 GAP_THRESHOLD_SEC 一致,升级不改变成片)。
+ */
+const GENRE_PAUSE_GAP_SEC: Partial<Record<GenreId, number>> = {
+  esports: 0.4, // 解说语速最快,空隙就是拖沓
+  game: 0.45,
+  sports: 0.5,
+  shopping: 0.55, // 带货话术密集,停顿多为憋单
+  looks: 0.7, // 连麦一来一回,留一点接话气口
+  vtuber: 0.7,
+  talk: 0.8, // 杂谈/脱口秀:停顿常是节目效果
+  radio: 0.8,
+  outdoor: 0.7, // 户外反应滞后,收音又差
+  knowledge: 0.7, // 教学停顿是留给观众消化的
+  interview: 0.9, // 对谈:问答之间的沉默有信息量
+};
+
+/** 跳剪静音阈值的默认档(与 gaps.ts 的历史默认一致)。 */
+export const DEFAULT_PAUSE_GAP_SEC = 0.6;
+
+/** 按品类取跳剪静音阈值;未知/未配置回落默认档。纯函数。 */
+export function genrePauseGapSec(id: string | undefined): number {
+  const norm = normalizeGenreId(id) as GenreId | undefined;
+  return (norm && GENRE_PAUSE_GAP_SEC[norm]) || DEFAULT_PAUSE_GAP_SEC;
+}
+
 /** 用户自定义判据的长度上限(防止塞爆提示词)。 */
 export const GENRE_CUSTOM_MAX_CHARS = 1200;
 

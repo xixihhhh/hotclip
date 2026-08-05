@@ -13,6 +13,7 @@ const baseReport = (over: Partial<ClipQaReport> = {}): ClipQaReport => ({
   loudness: { integratedLufs: -14, truePeakDb: -1.5 },
   midWordCuts: 0,
   contentHits: null,
+  pacingGapSec: null,
   ...over,
 });
 

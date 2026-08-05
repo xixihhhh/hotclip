@@ -33,6 +33,13 @@ export interface JumpCutOptions {
   forceCutSpans?: KeptSegment[];
   /** Word-gap cut threshold; pass Infinity to disable gap cuts entirely. */
   gapThresholdSec?: number;
+  /**
+   * 禁删区间(绝对源时间):情绪事件(笑声/怒吼/掌声峰)前后的停顿是节目
+   * 效果——抖包袱前的憋、爆发后的余韵——删掉它们等于删掉喜剧节奏。
+   * 待删空隙与任一禁删区间相交时,这个 gap 不剪(仅约束 gap 剪,不影响
+   * forceCutSpans——语气词/重录/拼接是明确要删的内容)。
+   */
+  protectedSpans?: KeptSegment[];
 }
 
 /** Subtract cut spans from kept segments (interval difference). Pure. */
@@ -108,7 +115,7 @@ export function computeJumpCut(
   clipEndSec: number,
   options: JumpCutOptions = {}
 ): JumpCutPlan {
-  const { peaks, silenceThreshold = SILENCE_PEAK_THRESHOLD, forceCutSpans = [], gapThresholdSec = GAP_THRESHOLD_SEC } = options;
+  const { peaks, silenceThreshold = SILENCE_PEAK_THRESHOLD, forceCutSpans = [], gapThresholdSec = GAP_THRESHOLD_SEC, protectedSpans = [] } = options;
   const inClip = words.filter((w) => w.endSec > clipStartSec && w.startSec < clipEndSec);
   if (inClip.length === 0) {
     const full = { startSec: clipStartSec, endSec: clipEndSec };
@@ -127,7 +134,9 @@ export function computeJumpCut(
       const removedTo = w.startSec - PAD_BEFORE_SEC;
       const quiet =
         !peaks || removedTo <= removedFrom || peakInRange(peaks, removedFrom, removedTo) < silenceThreshold;
-      if (quiet) {
+      // 情绪守卫:待删空隙撞上禁删区间(情绪事件 ±保护半径)就不剪
+      const protectedGap = protectedSpans.some((p) => p.startSec < removedTo && p.endSec > removedFrom);
+      if (quiet && !protectedGap) {
         segments.push({ startSec: segStart, endSec: Math.min(prevEnd + PAD_AFTER_SEC, clipEndSec) });
         segStart = Math.max(w.startSec - PAD_BEFORE_SEC, prevEnd + PAD_AFTER_SEC);
       }

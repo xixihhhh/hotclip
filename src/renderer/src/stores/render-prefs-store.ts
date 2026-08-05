@@ -5,6 +5,7 @@
  */
 import { create } from "zustand";
 import type { CaptionStyleChoice, ClipLength, ExportQuality } from "../../../shared/api-types";
+import { validPlatformIds } from "../../../shared/platform-specs";
 
 const STORAGE_KEY = "hotclip-render-prefs";
 
@@ -15,6 +16,10 @@ export interface RenderPrefs {
   cleanFillers: boolean;
   cutRetakes: boolean;
   autoZoom: boolean;
+  /** 音效打点:whoosh 卡拼接缝/ding 卡情绪峰/pop 卡开场钩子。 */
+  sfx: boolean;
+  /** BGM 文件路径;空串 = 不加 BGM。 */
+  bgmPath: string;
   trimUi: boolean;
   titleCard: boolean;
   openingHook: boolean;
@@ -28,6 +33,12 @@ export interface RenderPrefs {
   subtitleFile: boolean;
   timeline: boolean;
   aigcLabel: boolean;
+  /** 平台发布包:每平台一个「拿起来就能发」的齐套文件夹。 */
+  publishPack: boolean;
+  /** 发布包选中的平台 id(platform-specs.ts)。 */
+  packPlatforms: string[];
+  /** 一片多版:总版本数(1=关,2/3=同一切片出几版差异化包装)。 */
+  variants: number;
   clipLength: ClipLength;
   /** 直播品类判据(见 core/genre.ts);custom 时用 genreCustom 的文本。 */
   genreId: string;
@@ -47,6 +58,8 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   cleanFillers: true,
   cutRetakes: false, // 剪掉的是完整一句话,误伤代价高——默认关,由用户按素材开
   autoZoom: false, // 运镜是风格化选择(素材本身有运动时会打架),默认关
+  sfx: false, // 音效改变成片听感,默认关由用户选择(打点规则见 sound-design.ts)
+  bgmPath: "", // BGM 是强风格选择且涉及用户自备素材,默认不加
   trimUi: true,
   titleCard: true,
   openingHook: true,
@@ -60,6 +73,9 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   subtitleFile: false,
   timeline: false,
   aigcLabel: false,
+  publishPack: false, // 发布包产生一堆文件夹,默认关由用户按需开
+  packPlatforms: ["douyin", "xiaohongshu", "channels"], // 中文矩阵最常见的三件套
+  variants: 1, // 多版=多倍导出时间+一次 LLM 调用,默认关
   clipLength: "standard",
   genreId: "auto", // 出厂不指定品类:通用提示词里已让模型先自判内容类型
   genreCustom: "",
@@ -80,9 +96,14 @@ function load(): RenderPrefs {
           (out as Record<string, unknown>)[key] = v;
         }
       }
+      // 数组/枚举字段 typeof 校验不够严,逐个补严校验
+      out.packPlatforms = Array.isArray(out.packPlatforms)
+        ? validPlatformIds(out.packPlatforms.filter((x): x is string => typeof x === "string"))
+        : [...RENDER_PREF_DEFAULTS.packPlatforms];
+      if (![1, 2, 3].includes(out.variants)) out.variants = 1;
       if (!["short", "standard", "long"].includes(out.clipLength)) out.clipLength = "standard";
       if (!["high", "standard", "compact"].includes(out.quality)) out.quality = "high";
-      if (!["karaoke", "keyword", "pop", "hormozi", "bubble", "none"].includes(out.captionStyle)) out.captionStyle = "karaoke";
+      if (!["karaoke", "keyword", "pop", "hormozi", "minimal", "bubble", "none"].includes(out.captionStyle)) out.captionStyle = "karaoke";
       return out;
     }
   } catch {

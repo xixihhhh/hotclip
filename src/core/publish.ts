@@ -80,6 +80,34 @@ export function publishUserPrompt(sources: PublishSource[]): string {
     .join("\n\n");
 }
 
+/**
+ * 从一个 LLM 输出对象里解析文案字段(title 必填,其余按约定校验)。
+ * 发布文案与一片多版(variants.ts)共用同一套字段口径。
+ */
+export function parsePostFields(p: unknown): PublishCopy | null {
+  const rec = p as {
+    title?: unknown; hashtags?: unknown; description?: unknown;
+    angle?: unknown; cta?: unknown; ctaType?: unknown;
+  } | null;
+  if (!rec || typeof rec.title !== "string" || !rec.title.trim()) return null;
+  const hashtags = Array.isArray(rec.hashtags)
+    ? rec.hashtags
+        .filter((h): h is string => typeof h === "string" && h.trim().length > 1)
+        .map((h) => (h.trim().startsWith("#") ? h.trim() : `#${h.trim()}`))
+        .slice(0, MAX_HASHTAGS)
+    : [];
+  // 角度/CTA 类型:菜单外的值直接丢弃(fail-open 成"没标"),不猜不改写
+  const cta = typeof rec.cta === "string" && rec.cta.trim() ? rec.cta.trim() : undefined;
+  return {
+    title: rec.title.trim(),
+    hashtags,
+    description: typeof rec.description === "string" ? rec.description.trim() : "",
+    ...(isHookAngle(rec.angle) ? { angle: rec.angle } : {}),
+    ...(cta ? { cta } : {}),
+    ...(cta && isCtaType(rec.ctaType) ? { ctaType: rec.ctaType } : {}),
+  };
+}
+
 /** 解析生成输出 → id→文案;垃圾输出返回空 Map(fail-open 到"没有文案")。 */
 export function parsePublishCopies(content: string, validIds: Set<number>): Map<number, PublishCopy> {
   const out = new Map<number, PublishCopy>();
@@ -95,29 +123,11 @@ export function parsePublishCopies(content: string, validIds: Set<number>): Map<
   const posts = (obj as { posts?: unknown }).posts;
   if (!Array.isArray(posts)) return out;
   for (const p of posts) {
-    const rec = p as {
-      id?: unknown; title?: unknown; hashtags?: unknown; description?: unknown;
-      angle?: unknown; cta?: unknown; ctaType?: unknown;
-    };
+    const rec = p as { id?: unknown };
     const id = Number(rec.id);
     if (!Number.isInteger(id) || !validIds.has(id)) continue;
-    if (typeof rec.title !== "string" || !rec.title.trim()) continue;
-    const hashtags = Array.isArray(rec.hashtags)
-      ? rec.hashtags
-          .filter((h): h is string => typeof h === "string" && h.trim().length > 1)
-          .map((h) => (h.trim().startsWith("#") ? h.trim() : `#${h.trim()}`))
-          .slice(0, MAX_HASHTAGS)
-      : [];
-    // 角度/CTA 类型:菜单外的值直接丢弃(fail-open 成"没标"),不猜不改写
-    const cta = typeof rec.cta === "string" && rec.cta.trim() ? rec.cta.trim() : undefined;
-    out.set(id, {
-      title: rec.title.trim(),
-      hashtags,
-      description: typeof rec.description === "string" ? rec.description.trim() : "",
-      ...(isHookAngle(rec.angle) ? { angle: rec.angle } : {}),
-      ...(cta ? { cta } : {}),
-      ...(cta && isCtaType(rec.ctaType) ? { ctaType: rec.ctaType } : {}),
-    });
+    const copy = parsePostFields(p);
+    if (copy) out.set(id, copy);
   }
   return out;
 }

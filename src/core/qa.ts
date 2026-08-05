@@ -40,6 +40,8 @@ export interface ClipQaReport {
   midWordCuts: number | null;
   /** 平台违禁词命中(标题/钩子/文案/字幕);没跑 lint 为 null。 */
   contentHits: LintHit[] | null;
+  /** 最长「无视觉变化」间隔(秒);没做节奏评估(有字幕/运镜兜底)为 null。 */
+  pacingGapSec: number | null;
   /** 自动修复记录(qa 修复循环执行过才有);见 repair.ts。 */
   repair?: QaRepairRecord;
 }
@@ -66,6 +68,26 @@ const TRUE_PEAK_CEILING_DB = -1;
 const DURATION_TOLERANCE_SEC = 0.75;
 /** 切点离词边界的容差:淡化时长再放宽一点,压线不算切进词里。 */
 const BOUNDARY_TOLERANCE_SEC = EDGE_FADE_SEC + 0.02;
+/**
+ * 画面节奏告警线(秒):2026 调研口径「有意义的视觉变化间隔 ≤3s,硬顶 5s」
+ * (RESEARCH-2026-08-CLIP-QUALITY.md 第三节)。这里取硬顶——只在明显偏慢时
+ * 提醒,不对风格化的慢节奏指手画脚。
+ */
+export const PACING_MAX_GAP_SEC = 5;
+
+/**
+ * 视觉事件序列(拼接缝/跳剪缝/高潮前置接缝等,输出时间轴)→ 最长无变化
+ * 间隔。片头片尾各算一个天然事件。纯函数;调用方在有字幕/自动运镜兜底时
+ * 不必调用(连续的视觉变化已覆盖节奏)。
+ */
+export function maxVisualGapSec(eventsSec: number[], durationSec: number): number {
+  const pts = [...new Set([0, ...eventsSec.filter((t) => t > 0 && t < durationSec), durationSec])].sort(
+    (a, b) => a - b
+  );
+  let maxGap = 0;
+  for (let i = 1; i < pts.length; i++) maxGap = Math.max(maxGap, pts[i] - pts[i - 1]);
+  return Number(maxGap.toFixed(2));
+}
 
 /** blackdetect 输出解析:`black_start:1.2 black_end:2.0 ...`(同行成对)。 */
 export function parseBlackSpans(stderr: string): QaSpan[] {
@@ -151,6 +173,8 @@ export interface QaAssessment {
   midWordCuts: number | null;
   /** 平台违禁词命中(调用方用 content-lint 扫好传入);缺省 = 没扫。 */
   contentHits?: LintHit[] | null;
+  /** 最长无视觉变化间隔(maxVisualGapSec 算好传入);缺省 = 不评估节奏。 */
+  pacingGapSec?: number | null;
 }
 
 const fmtSec = (v: number): string => v.toFixed(1);
@@ -182,6 +206,11 @@ export function assessClipQa(input: QaAssessment): ClipQaReport {
   if ((input.midWordCuts ?? 0) > 0) {
     issues.push(`${input.midWordCuts} 处切点落在词中间(可能出现半词,建议回放核对)`);
   }
+  if ((input.pacingGapSec ?? 0) > PACING_MAX_GAP_SEC) {
+    issues.push(
+      `画面 ${fmtSec(input.pacingGapSec!)}s 无视觉变化(节奏偏慢,建议开启自动运镜或字幕)`
+    );
+  }
   const lintIssue = formatLintIssue(input.contentHits ?? []);
   if (lintIssue) issues.push(lintIssue);
   return {
@@ -196,6 +225,7 @@ export function assessClipQa(input: QaAssessment): ClipQaReport {
       : null,
     midWordCuts: input.midWordCuts,
     contentHits: input.contentHits ?? null,
+    pacingGapSec: input.pacingGapSec ?? null,
   };
 }
 
@@ -239,6 +269,8 @@ export interface RunClipQaOptions {
   segments?: QaSpan[];
   /** 平台违禁词命中(content-lint 扫标题/钩子/文案/字幕的结果)。 */
   contentHits?: LintHit[] | null;
+  /** 最长无视觉变化间隔(调用方按剪辑计划算好);缺省 = 不评估节奏。 */
+  pacingGapSec?: number | null;
   signal?: AbortSignal;
 }
 
@@ -254,5 +286,6 @@ export async function runClipQa(path: string, opts: RunClipQaOptions): Promise<C
     loudnessNormalized: opts.loudnessNormalized,
     midWordCuts: opts.words && opts.segments ? countMidWordCuts(opts.words, opts.segments) : null,
     contentHits: opts.contentHits,
+    pacingGapSec: opts.pacingGapSec,
   });
 }

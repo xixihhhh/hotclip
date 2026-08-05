@@ -59,6 +59,59 @@ export function peakInRange(track: PeakTrack, fromSec: number, toSec: number): n
   return peak;
 }
 
+/** 一次峰值事件:一段连续的「显著响」区间(笑声/怒吼/掌声的声学代理)。 */
+export interface PeakEvent {
+  /** 事件内最响一块的时刻(绝对源时间,秒)——打点/运镜强调用它。 */
+  atSec: number;
+  startSec: number;
+  endSec: number;
+  /** 事件峰值(0..1)。 */
+  peak: number;
+}
+
+/** 相邻响块间隔小于该值时并成同一事件(笑声中间的换气不该把事件劈两半)。 */
+const EVENT_MERGE_GAP_SEC = 0.35;
+
+/**
+ * 从峰值轨提取「峰值事件」:高于全轨最高峰 floorRatio 的块聚类成区间,
+ * 按事件峰值从高到低返回前 maxEvents 个。全轨近静音(最高峰 < minPeak)
+ * 返回空——没有情绪高点可言。纯函数。
+ *
+ * 阈值取相对值而非绝对 dB:源素材没归一过响度,绝对阈值在小声素材上会漏、
+ * 大声素材上会全命中;「相对本片最响的那一下」才是稳定的情绪峰代理。
+ */
+export function findPeakEvents(
+  track: PeakTrack,
+  options: { floorRatio?: number; maxEvents?: number; minPeak?: number } = {}
+): PeakEvent[] {
+  const { floorRatio = 0.75, maxEvents = 6, minPeak = 0.1 } = options;
+  let maxPeak = 0;
+  for (const v of track.values) if (v > maxPeak) maxPeak = v;
+  if (maxPeak < minPeak) return [];
+  const floor = maxPeak * floorRatio;
+
+  const events: PeakEvent[] = [];
+  let cur: PeakEvent | null = null;
+  for (let i = 0; i < track.values.length; i++) {
+    const v = track.values[i];
+    const t = track.startSec + i * track.hopSec;
+    if (v >= floor) {
+      if (cur && t - cur.endSec <= EVENT_MERGE_GAP_SEC) {
+        cur.endSec = t + track.hopSec;
+        if (v > cur.peak) {
+          cur.peak = v;
+          cur.atSec = t;
+        }
+      } else {
+        if (cur) events.push(cur);
+        cur = { atSec: t, startSec: t, endSec: t + track.hopSec, peak: v };
+      }
+    }
+  }
+  if (cur) events.push(cur);
+  return events.sort((a, b) => b.peak - a.peak).slice(0, maxEvents);
+}
+
 /** Decode [startSec, endSec] to mono 16k PCM and fold into a peak track. */
 export async function extractPeaks(
   filePath: string,

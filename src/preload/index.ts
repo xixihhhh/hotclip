@@ -28,6 +28,7 @@ const api: HotClipApi = {
   // 路径整体编码进 pathname,主进程协议按同样规则解回
   mediaUrl: (filePath) => `hotclip-media://local/${encodeURIComponent(filePath)}`,
   selectImage: () => ipcRenderer.invoke("hotclip:select-image"),
+  selectAudio: () => ipcRenderer.invoke("hotclip:select-audio"),
   getAudioPeaks: (filePath, startSec, endSec) =>
     ipcRenderer.invoke("hotclip:audio-peaks", filePath, startSec, endSec),
   contactSheet: (filePath, startSec, endSec) =>

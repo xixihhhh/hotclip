@@ -282,8 +282,11 @@ const WHITE_INLINE = "&HFFFFFF&";
  *  - pop: 2-4 character chunks appear one at a time with a bounce
  *  - hormozi: 大字爆点——短块、特大加粗、硬阴影、居中偏上,逐词卡拉OK点亮,
  *    拉丁词全大写(海外带货/营销短视频通行的 Hormozi 风格)
+ *  - minimal: 动态极简——2026 年 Hormozi 疲劳后的主流:短块卡点上屏、白字
+ *    细描边软阴影、不全大写、每块至多 1 个词高亮成品牌色(数字/关键词优先),
+ *    克制的 96%→100% 顶入(调研出处:RESEARCH-2026-08-CLIP-QUALITY.md 第二节)
  */
-export type CaptionStyle = "karaoke" | "keyword" | "pop" | "hormozi";
+export type CaptionStyle = "karaoke" | "keyword" | "pop" | "hormozi" | "minimal";
 
 export interface CaptionOptions {
   fontName?: string;
@@ -337,11 +340,16 @@ function assHeader(style: CaptionStyle, layout: AssLayout, fontName: string, hig
   const fontSize =
     style === "pop" ? Math.round(layout.fontSize * 1.45)
     : style === "hormozi" ? Math.round(layout.fontSize * 1.5)
+    : style === "minimal" ? Math.round(layout.fontSize * 1.12)
     : layout.fontSize;
   // hormozi:更厚的描边 + 硬阴影撑住大字;位置抬到 60% 高度线(比底部字幕
   // 醒目、又避开中心人脸)——固定占位,不随品牌位置档位走
-  const outline = style === "hormozi" ? layout.outline + 3 : layout.outline;
-  const shadow = style === "hormozi" ? 3 : 0;
+  // minimal:细描边 + 一点软阴影——「白字柔和阴影」的动态极简质感
+  const outline =
+    style === "hormozi" ? layout.outline + 3
+    : style === "minimal" ? Math.max(2, layout.outline - 2)
+    : layout.outline;
+  const shadow = style === "hormozi" ? 3 : style === "minimal" ? 1 : 0;
   const captionMarginV = style === "hormozi" ? Math.round(layout.playResY * 0.4) : layout.marginV;
   const titleSize = Math.round(layout.fontSize * 0.82);
   const hookSize = Math.round(layout.fontSize * 1.25);
@@ -438,6 +446,71 @@ const HORMOZI_INTRO = "{\\fscx82\\fscy82\\t(0,70,\\fscx100\\fscy100)}";
 /** Hormozi 短块宽度:约 5 个汉字/2-3 个英文词一屏。 */
 const HORMOZI_MAX_UNITS = 10;
 
+/** 动态极简的顶入:96%→100%,80ms——有生气但不抢戏。 */
+const MINIMAL_INTRO = "{\\fad(80,0)\\fscx96\\fscy96\\t(0,80,\\fscx100\\fscy100)}";
+
+/** 动态极简短块宽度:与 Hormozi 同档(约 5 汉字),字号小一号所以更透气。 */
+const MINIMAL_MAX_UNITS = 10;
+
+/** 数字类 token(含百分号/价格):没有关键词命中时的高亮兜底。 */
+const DIGIT_TOKEN_RE = /[0-9][0-9.,]*%?/;
+
+/**
+ * 动态极简的块文本:每块至多高亮 1 个词(调研口径「每句最多 1 词,数字/
+ * 关键词优先」)。优先级:关键词命中的第一段连续区 > 第一个含数字的 token;
+ * 都没有就全白。高亮 = 品牌色 + 8% 放大(与 keyword 风格同款强调语汇)。
+ * 纯函数,可单测。
+ */
+export function minimalText(line: TranscriptWord[], keywords: string[], highlightHex?: string): string {
+  const highlightInline = (highlightHex && hexToAssInline(highlightHex)) || EMBER_INLINE;
+  // 关键词覆盖判定(与 keywordText 同一套拼接/匹配规则)
+  const spans: Array<{ from: number; to: number }> = [];
+  let joined = "";
+  for (let i = 0; i < line.length; i++) {
+    const from = joined.length;
+    joined += line[i].text;
+    spans.push({ from, to: joined.length });
+    if (needsSpaceAfter(line[i].text, line[i + 1]?.text)) joined += " ";
+  }
+  const haystack = joined.toLowerCase();
+  const covered = new Array<boolean>(line.length).fill(false);
+  for (const kw of [...new Set(keywords)].sort((a, b) => b.length - a.length)) {
+    const needle = kw.trim().toLowerCase();
+    if (!needle) continue;
+    for (let at = haystack.indexOf(needle); at !== -1; at = haystack.indexOf(needle, at + 1)) {
+      const to = at + needle.length;
+      spans.forEach((s, i) => {
+        if (s.from < to && s.to > at) covered[i] = true;
+      });
+    }
+  }
+  // 只保留第一段连续命中,其余降回白字——「每块 ≤1 处高亮」
+  let inFirstRun = false;
+  let runDone = false;
+  for (let i = 0; i < line.length; i++) {
+    if (covered[i] && !runDone) {
+      inFirstRun = true;
+    } else if (inFirstRun) {
+      runDone = true;
+      inFirstRun = false;
+    }
+    if (runDone) covered[i] = false;
+  }
+  // 关键词一处都没有:高亮第一个数字 token(价格/百分比是天然强调点)
+  if (!covered.some(Boolean)) {
+    const di = line.findIndex((w) => DIGIT_TOKEN_RE.test(w.text));
+    if (di >= 0) covered[di] = true;
+  }
+  const parts: string[] = [];
+  for (let i = 0; i < line.length; i++) {
+    if (covered[i] && (i === 0 || !covered[i - 1])) parts.push(`{\\c${highlightInline}\\fscx108\\fscy108}`);
+    if (!covered[i] && i > 0 && covered[i - 1]) parts.push(`{\\c${WHITE_INLINE}\\fscx100\\fscy100}`);
+    parts.push(escapeAssText(line[i].text));
+    if (needsSpaceAfter(line[i].text, line[i + 1]?.text)) parts.push(" ");
+  }
+  return parts.join("");
+}
+
 /**
  * Build a complete ASS document for one clip in the given style. Word
  * timestamps are absolute (source time); `clipStartSec` shifts them.
@@ -487,8 +560,12 @@ export function buildCaptionAss(
   }
 
   const forcedBreaks = options.forcedBreaks ?? [];
-  if (style === "pop" || style === "hormozi") {
-    const units = groupWordsIntoLines(words, style === "pop" ? POP_MAX_UNITS : HORMOZI_MAX_UNITS, forcedBreaks);
+  if (style === "pop" || style === "hormozi" || style === "minimal") {
+    const maxUnits =
+      style === "pop" ? POP_MAX_UNITS : style === "hormozi" ? HORMOZI_MAX_UNITS : MINIMAL_MAX_UNITS;
+    // 动态极简与 keyword 同款:先把关键词连成一个词,断块永远不劈开高亮词
+    const chunkWords = style === "minimal" ? mergeKeywordWords(words, options.keywords ?? []) : words;
+    const units = groupWordsIntoLines(chunkWords, maxUnits, forcedBreaks);
     for (let i = 0; i < units.length; i++) {
       const unit = units[i];
       const start = unit[0].startSec - clipStartSec;
@@ -499,6 +576,9 @@ export function buildCaptionAss(
         // 大字爆点:短块顶入 + 块内逐词卡拉OK点亮;拉丁词全大写(CJK 不受影响)
         const caps = unit.map((w) => ({ ...w, text: w.text.toUpperCase() }));
         events.push(dialogue(start, end, HORMOZI_INTRO + karaokeText(caps)));
+      } else if (style === "minimal") {
+        // 动态极简:短块轻顶入,块内至多 1 处品牌色高亮(关键词/数字优先)
+        events.push(dialogue(start, end, MINIMAL_INTRO + minimalText(unit, options.keywords ?? [], highlightHex)));
       } else {
         const text = unit
           .map((w, j) => escapeAssText(w.text) + (needsSpaceAfter(w.text, unit[j + 1]?.text) ? " " : ""))

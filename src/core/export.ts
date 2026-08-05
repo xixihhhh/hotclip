@@ -16,6 +16,7 @@ import { planColdOpen } from "./coldopen";
 import { computeJumpCut } from "./gaps";
 import { clampTranslationLines, remapTranslationLines, type TranslationLine } from "./translate";
 import { postTextFile, type PublishCopy } from "./publish";
+import { buildPublishPacks, coverFilter, type PackSummary } from "./publish-pack";
 import { buildSrt, srtLinesFromWords } from "./srt";
 import { buildEdl, type EdlClip } from "./edl";
 import { runAudiogram, audiogramSpec } from "./audiogram";
@@ -30,14 +31,22 @@ import {
   withinOnePiece,
   type ClipPiece,
 } from "../shared/pieces";
-import { extractPeaks } from "./audio-peaks";
+import { extractPeaks, findPeakEvents } from "./audio-peaks";
+import { genrePauseGapSec } from "./genre";
+import {
+  planSfxCues,
+  ensureSfxAssets,
+  applySoundDesign,
+  hasSoundDesignWork,
+  type SfxCue,
+} from "./sound-design";
 import { detectUiCrop, type UiCrop } from "./uicrop";
 import { generateCropPlan, renderCropXExpr, mapToOutputTime } from "./reframe";
 import { detectShotBoundaries, snapClipToShots, SNAP_MAX_OUT_SEC } from "./shots";
 import { buildCaptionAss, VERTICAL_LAYOUT, HORIZONTAL_LAYOUT, type CaptionStyle } from "./subtitle";
 import { buildOverlayPayload, isWebCaptionStyle, type OverlayRenderFn, type WebCaptionStyle } from "./caption-overlay/payload";
 import { probeMedia } from "./probe";
-import { runClipQa, type ClipQaReport } from "./qa";
+import { runClipQa, maxVisualGapSec, type ClipQaReport } from "./qa";
 import { lintClipContent } from "./content-lint";
 import { planRepair, applyRepair } from "./repair";
 import { applyBrandToLayout } from "./brand";
@@ -66,6 +75,12 @@ export interface ExportClipSpec {
   translation?: TranslationLine[];
   /** 发布文案(主进程预先生成传入),落 .post.txt 并进 clips.json。 */
   publish?: PublishCopy;
+  /** 一片多版:本条是哪条原版的变体(原版 spec 的 id);原版缺省。 */
+  variantOf?: number;
+  /** 版本序号(原版是 1,变体从 2 起);原版缺省。 */
+  variant?: number;
+  /** 封面抓第几高的响度峰(0=最高,与历史一致);变体封面靠它错开帧。 */
+  coverRank?: number;
   /** Evidence-chain fields carried into clips.json for CMS/matrix pipelines. */
   meta?: {
     hook: string;
@@ -163,6 +178,10 @@ export interface ClipRenderOutcome {
   translatedLines: number;
   /** 切点吸附到镜头边界的实际位移(秒);没吸附(或检测失败)为 null。 */
   shotSnap: { startDeltaSec: number; endDeltaSec: number } | null;
+  /** 实际打进成片的音效数(0 = 没开/无处可打/混音失败回退)。 */
+  sfxCues: number;
+  /** True 表示 BGM 混入成功(含人声闪避)。 */
+  bgmMixed: boolean;
 }
 
 export interface ExportRenderOptions {
@@ -180,6 +199,12 @@ export interface ExportRenderOptions {
   cutRetakes?: boolean;
   /** 自动运镜:竖屏成片叠一层缓慢推拉镜头(见 autozoom.ts)。 */
   autoZoom?: boolean;
+  /** 音效打点:whoosh 卡拼接缝/ding 卡情绪峰/pop 卡开场钩子(见 sound-design.ts)。 */
+  sfx?: boolean;
+  /** BGM 文件路径:循环铺满全片,对人声 sidechain 闪避后混入。 */
+  bgmPath?: string;
+  /** 直播品类 id(core/genre.ts):决定跳剪静音阈值分档;缺省走默认档。 */
+  genreId?: string;
   /** Auto-detect & crop static screen-recording chrome (status bars, app UI). */
   trimUi?: boolean;
   /** Face-tracking vertical reframe (needs modelsRoot); falls back to center. */
@@ -216,6 +241,8 @@ export interface ExportRenderOptions {
   timeline?: boolean;
   /** AIGC 标识:左上角「AI 生成」显式标识 + 容器元数据隐式标识(《标识办法》)。 */
   aigcLabel?: boolean;
+  /** 平台发布包:按平台规格整理齐套素材到 `发布包/<平台>/`(见 publish-pack.ts)。 */
+  publishPack?: string[];
   /**
    * 出片自我质检(默认开):每条成片渲染后解码扫描黑屏/长静音/响度/时长
    * 偏差,复核切点是否压在词中间,并扫标题/钩子/文案/字幕的平台违禁词;
@@ -305,6 +332,12 @@ export async function exportClips(
     Boolean(options.captionStyle) || Boolean(options.titleCard) || Boolean(options.openingHook) ||
     Boolean(options.aigcLabel) || clips.some((c) => (c.translation?.length ?? 0) > 0);
   const assDir = needAss ? await mkdtemp(join(tmpdir(), "hotclip-ass-")) : null;
+  // 音效素材目录:首次要用时才建(mkdtemp + ffmpeg 合成三个 wav,幂等)
+  let sfxDir: string | null = null;
+  const ensureSfxDir = async (): Promise<string> => {
+    if (!sfxDir) sfxDir = await ensureSfxAssets(await mkdtemp(join(tmpdir(), "hotclip-sfx-")), signal);
+    return sfxDir;
+  };
   // 品牌预设:字号/位置作用于布局,高亮色传给字幕构建,水印挂进 filter 链
   const layout = applyBrandToLayout(options.vertical ? VERTICAL_LAYOUT : HORIZONTAL_LAYOUT, options.brand);
   const watermark: WatermarkSpec | undefined = options.brand?.watermark
@@ -411,12 +444,19 @@ export async function exportClips(
         clipPeaks = peaks;
         // filler/retake-only mode with nothing found → leave the clip untouched
         if (options.jumpCut || stitched || fillerHits.length > 0 || retakeHits.length > 0) {
+          // 情绪守卫:峰值事件(笑声/怒吼/掌声)前后 1s 的停顿是节目效果,禁剪——
+          // 抖包袱前的憋是喜剧节奏,机器不该「优化」掉它
+          const protectedSpans = peaks
+            ? findPeakEvents(peaks).map((e) => ({ startSec: e.startSec - 1.0, endSec: e.endSec + 1.0 }))
+            : [];
           plan = computeJumpCut(planWords, clip.startSec, clip.endSec, {
             peaks,
             forceCutSpans: [...stitchSpans, ...fillerCutSpans(fillerHits), ...retakeCutSpans(retakeHits)].sort(
               (a, b) => a.startSec - b.startSec
             ),
-            gapThresholdSec: options.jumpCut ? undefined : Infinity,
+            // 静音阈值按品类分档:解说 0.4s、口播 0.6s、对谈 0.9s(genre.ts)
+            gapThresholdSec: options.jumpCut ? genrePauseGapSec(options.genreId) : Infinity,
+            protectedSpans,
           });
         }
       }
@@ -520,11 +560,28 @@ export async function exportClips(
       const aigcMeta = options.aigcLabel
         ? { comment: `AIGC=true; Label=AI-assisted-editing; Tool=HotClip; ContentId=${basename(outPath)}` }
         : undefined;
+      // 峰值事件(输出时间轴):运镜强调与音效打点共用一份——响度峰≈情绪
+      // 高点,与智能封面同一声学代理;跳剪时映射到压缩时间轴。提取失败/
+      // 拼接跨度超限按「无事件」fail-open。
+      if ((options.autoZoom || options.sfx) && !clipPeaks && !peakSpanTooLong(clip)) {
+        clipPeaks = await extractPeaks(inputPath, clip.startSec, clip.endSec).catch(() => undefined);
+      }
+      const peakEventsOut = clipPeaks
+        ? findPeakEvents(clipPeaks)
+            .map((e) => (plan ? mapToOutputTime(e.atSec, plan.segments, clip.startSec) : e.atSec - clip.startSec))
+            .filter((t): t is number => t !== null && t >= 0 && t <= clipDuration)
+        : [];
       // 自动运镜:只对竖屏画面有意义(音频波形图和横屏原片不做);
-      // 帧率未知就不开——zoompan 会把素材重采样到 25fps
+      // 帧率未知就不开——zoompan 会把素材重采样到 25fps。
+      // 强调时刻 = 最响的几个峰值事件——「推近必须绑定真实事件」,纯呼吸
+      // 之外镜头语言要和内容对上(autozoom.ts 本就支持,这里把信号接通)
       const autoZoom =
         options.autoZoom && options.vertical && !audioOnly && srcInfo && srcInfo.fps > 0
-          ? { durationSec: clipDuration, fps: srcInfo.fps }
+          ? {
+              durationSec: clipDuration,
+              fps: srcInfo.fps,
+              emphasisAtSec: peakEventsOut.slice(0, 4).sort((a, b) => a - b),
+            }
           : undefined;
       const cutOptions = trackPlan
         ? { trackPlan, autoZoom, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, watermark, metadata: aigcMeta, crf: options.crf }
@@ -668,6 +725,52 @@ export async function exportClips(
         }
       }
 
+      // 声音设计(音效打点 + BGM 闪避):成片完全组装好之后做一遍音频后处理
+      // (视频流复制零画质损失),质检在其后照常复核最终混音。失败保留原片
+      // ——音效是锦上添花,绝不拖垮出片。
+      let sfxApplied: SfxCue[] = [];
+      let bgmMixed = false;
+      if (options.sfx || options.bgmPath) {
+        const shift = coldOpenSec ?? 0;
+        const soundDur = clipDuration + shift;
+        // 拼接缝(输出时间轴):whoosh 卡在观众必然感知到的内容跳变处
+        const stitchSeamsOut =
+          stitched && plan
+            ? pieces
+                .slice(1)
+                .map((p) => mapToOutputTime(p.startSec, plan.segments, clip.startSec))
+                .filter((t): t is number => t !== null && t > 0.05)
+            : [];
+        const cues = options.sfx
+          ? planSfxCues({
+              durationSec: soundDur,
+              seamsSec: [...stitchSeamsOut.map((t) => t + shift), ...(coldOpenSec ? [coldOpenSec] : [])],
+              hookAtSec: openingHook ? 0.05 : null,
+              peakEventsSec: peakEventsOut.map((t) => t + shift),
+            })
+          : [];
+        if (hasSoundDesignWork({ cues, bgmPath: options.bgmPath })) {
+          try {
+            await applySoundDesign(
+              outPath,
+              {
+                cues,
+                sfxDir: cues.length > 0 ? await ensureSfxDir() : undefined,
+                bgmPath: options.bgmPath,
+                durationSec: soundDur,
+                normalizeLoudness: options.normalizeLoudness,
+              },
+              signal
+            );
+            sfxApplied = cues;
+            bgmMixed = Boolean(options.bgmPath);
+          } catch (e) {
+            if (signal?.aborted) throw e;
+            console.error(`sound design failed for clip ${clip.id}, kept original:`, e);
+          }
+        }
+      }
+
       const s = await stat(outPath);
 
       // 出片自我质检 + 平台违禁词 lint:解码扫描黑屏/长静音/响度/时长偏差,
@@ -684,11 +787,22 @@ export async function exportClips(
           publish: clip.publish ?? null,
           captionText: clip.words?.map((w) => w.text).join(""),
         });
+        // 节奏评估:字幕逐块上屏/自动运镜/音频波形图本身就是持续视觉变化,
+        // 有其一就不评;其余按剪辑计划(跳剪缝/拼接缝/高潮前置接缝)算最长
+        // 无视觉变化间隔,超 5s 在 qa 里告警(见 qa.ts PACING_MAX_GAP_SEC)
+        const pacingCovered = Boolean(autoZoom) || (wantCaptions && !webRenderFailed) || audioOnly;
+        const pacingGapSec = pacingCovered
+          ? null
+          : maxVisualGapSec(
+              [...(plan?.breaks ?? []).map((b) => b + (coldOpenSec ?? 0)), ...(coldOpenSec ? [coldOpenSec] : [])],
+              clipDuration + (coldOpenSec ?? 0)
+            );
         const qaOptsBase = {
           loudnessNormalized: Boolean(options.normalizeLoudness),
           words: clip.words,
           segments: plan ? plan.segments : [{ startSec: clip.startSec, endSec: clip.endSec }],
           contentHits,
+          pacingGapSec,
           signal,
         };
         const expected = clipDuration + (coldOpenSec ?? 0);
@@ -740,7 +854,8 @@ export async function exportClips(
         pickCoverTime(
           clipPeaks,
           plan ? plan.segments : [{ startSec: clip.startSec, endSec: clip.endSec }],
-          clipDuration
+          clipDuration,
+          clip.coverRank ?? 0 // 变体封面抓下一个响度峰,和原版错开帧
         ) + (coldOpenSec ?? 0) - headTrimSec;
       const coverAt = Math.min(Math.max(0.2, coverAtRaw), Math.max(0.2, finalDurationSec - 0.2));
       const coverOk = await execFileAsync(
@@ -805,10 +920,13 @@ export async function exportClips(
       if (fillerHits.length > 0) {
         removedFillersByClip.set(clip.id, fillerHits.map((h) => h.text.trim()));
       }
-      edlClips.push({
-        title: clip.title,
-        segments: plan ? plan.segments : [{ startSec: clip.startSec, endSec: clip.endSec }],
-      });
+      // 变体与原版切点完全相同,EDL 里只记原版(重复三遍是噪声)
+      if (!clip.variantOf) {
+        edlClips.push({
+          title: clip.title,
+          segments: plan ? plan.segments : [{ startSec: clip.startSec, endSec: clip.endSec }],
+        });
+      }
       // 剪掉多少的基准:拼接片按「各段之和」算(跨度里那几十分钟本来就不该
       // 进成片,拿它当分母会报出「剪掉了 97%」这种毫无意义的数)
       const origDur = stitched ? piecesDurationSec(pieces) : clip.endSec - clip.startSec;
@@ -826,6 +944,8 @@ export async function exportClips(
         openingHookBurned: Boolean(openingHook),
         translatedLines: transLines.length,
         shotSnap,
+        sfxCues: sfxApplied.length,
+        bgmMixed,
       });
       onProgress?.({ current: i + 1, total: totalUnits, clipId: clip.id, stage: "done" });
     }
@@ -833,10 +953,12 @@ export async function exportClips(
     // 精华合集:同批切片编码参数一致,流复制拼接秒级完成零画质损失;
     // 合集惯例硬切不加转场;失败静默跳过,绝不拖垮已导出的单条切片
     let compilationFile: string | null = null;
-    if (options.compilation && results.length > 1) {
+    // 合集只收原版:变体是同一段内容的另一套包装,拼进合集就是重复播三遍
+    const compResults = results.filter((r) => !clips.find((c) => c.id === r.id)?.variantOf);
+    if (options.compilation && compResults.length > 1) {
       const compPath = join(outDir, "00-精华合集.mp4");
-      const totalSec = results.reduce((a, r) => a + r.durationSec, 0);
-      const ok = await concatClips(results.map((r) => r.path), compPath, signal)
+      const totalSec = compResults.reduce((a, r) => a + r.durationSec, 0);
+      const ok = await concatClips(compResults.map((r) => r.path), compPath, signal)
         .then(() => true)
         .catch((e) => {
           // 用户取消要向上抛(与单条切片同一语义),其余失败静默
@@ -849,7 +971,7 @@ export async function exportClips(
         // 章节时间戳:YouTube 章节/B站简介粘贴即用,B站还可照此拆分P
         await writeFile(
           compPath.replace(/\.mp4$/, ".chapters.txt"),
-          buildChapters(results.map((r) => ({ title: r.title, durationSec: r.durationSec }))),
+          buildChapters(compResults.map((r) => ({ title: r.title, durationSec: r.durationSec }))),
           "utf8"
         ).catch(() => {});
         results.push({
@@ -874,6 +996,26 @@ export async function exportClips(
       await writeFile(join(outDir, "timeline.edl"), edl, "utf8").catch(() => {});
     }
 
+    // 平台发布包:每平台一个文件夹,视频硬链+按平台画幅裁的封面+按平台上限
+    // 适配的文案,拿起来就能发。只打包切片本体(合集另论);fail-open。
+    let packSummaries: PackSummary[] = [];
+    if (options.publishPack && options.publishPack.length > 0 && results.length > 0) {
+      const packInputs = results
+        .filter((r) => clips.some((c) => c.id === r.id))
+        .map((r) => {
+          const spec = clips.find((c) => c.id === r.id)!;
+          return { file: r.path, coverFile: r.coverPath, title: r.title, publish: spec.publish };
+        });
+      packSummaries = await buildPublishPacks(outDir, packInputs, options.publishPack, async (src, dest, spec) => {
+        // 封面适配:裁到平台画幅(上偏 1/3 保人脸)再缩放到推荐像素
+        return execFileAsync(
+          resolveFfmpegPath(),
+          ["-hide_banner", "-v", "error", "-i", src, "-vf", coverFilter(spec), "-frames:v", "1", "-q:v", "2", "-y", dest],
+          { maxBuffer: 8 * 1024 * 1024 }
+        ).then(() => true, () => false);
+      }).catch(() => []);
+    }
+
     // clips.json: machine-readable evidence chain for CMS / matrix pipelines.
     const metadata = {
       source: inputPath,
@@ -885,6 +1027,8 @@ export async function exportClips(
         cleanFillers: Boolean(options.cleanFillers),
         cutRetakes: Boolean(options.cutRetakes),
         autoZoom: Boolean(options.autoZoom),
+        sfx: Boolean(options.sfx),
+        bgm: Boolean(options.bgmPath),
         trimUi: Boolean(options.trimUi),
         titleCard: Boolean(options.titleCard),
         openingHook: Boolean(options.openingHook),
@@ -911,6 +1055,11 @@ export async function exportClips(
                 : null,
             }
           : null,
+        // 发布包回执:打了哪些平台的包、各有几条标题被截断
+        publishPack:
+          packSummaries.length > 0
+            ? packSummaries.map((p) => ({ platform: p.platform, name: p.name, clipCount: p.clipCount, truncatedTitles: p.truncatedTitles }))
+            : null,
       },
       clips: results.map((r) => {
         const spec = clips.find((c) => c.id === r.id);
@@ -929,6 +1078,9 @@ export async function exportClips(
               endSec: Number(p.endSec.toFixed(3)),
             })) ?? null,
           keywords: spec?.keywords ?? [],
+          // 一片多版:变体标注它是哪条原版的第几版(原版两个字段都是 null)
+          variantOf: spec?.variantOf ?? null,
+          variant: spec?.variant ?? null,
           removedFillers: removedFillersByClip.get(r.id) ?? [],
           render: renderByClip.get(r.id) ?? null,
           // 出片质检报告:pass/warn + 告警清单(黑屏/静音/响度/时长/半词)
@@ -951,7 +1103,8 @@ export async function exportClips(
         join(outDir, "横屏"),
         // 标题贴片/悬念句大字是竖屏短视频形态,横屏版去掉(标题交给平台标题字段);
         // 字幕沿用横屏布局(底部小号),封面/回执/SRT 在子目录各自成套
-        { ...options, vertical: false, alsoLandscape: false, faceTrack: false, compilation: false, timeline: false, titleCard: false, openingHook: false },
+        // publishPack 只在主目录打一次(横屏版在包 manifest 的备注里指路)
+        { ...options, vertical: false, alsoLandscape: false, faceTrack: false, compilation: false, timeline: false, titleCard: false, openingHook: false, publishPack: undefined },
         onProgress
           ? (p) => onProgress({ ...p, current: p.current + clips.length, total: totalUnits })
           : undefined,
@@ -969,5 +1122,6 @@ export async function exportClips(
     return results;
   } finally {
     if (assDir) await rm(assDir, { recursive: true, force: true }).catch(() => {});
+    if (sfxDir) await rm(sfxDir, { recursive: true, force: true }).catch(() => {});
   }
 }

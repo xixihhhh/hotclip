@@ -28,6 +28,8 @@ import { composeContactSheetJpeg } from "@core/contact-sheet";
 import { collectEmotionSignal } from "@core/emotion";
 import { collectClipSegments, translateSegments, clipTranslationLines } from "@core/translate";
 import { generatePublishCopies } from "@core/publish";
+import { generateVariantPlans, expandClipSpecs, VARIANT_TOTAL_MAX } from "@core/variants";
+import { validPlatformIds } from "../shared/platform-specs";
 import { FolderWatcher, isVideoFile, isSeen, type SeenMap, type WatchedFile } from "@core/watch";
 import { startWebhookServer, type WebhookServerHandle } from "@core/webhook";
 import { collectDanmakuSignal } from "@core/danmaku";
@@ -180,6 +182,16 @@ ipcMain.on("hotclip:open-folder", (_event, dir: unknown) => {
 // 录播监听的目录选择
 ipcMain.handle("hotclip:select-dir", async () => {
   const result = await dialog.showOpenDialog({ properties: ["openDirectory", "createDirectory"] });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
+});
+
+// BGM 文件选择(声音设计)
+ipcMain.handle("hotclip:select-audio", async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ["openFile"],
+    filters: [{ name: "Audio", extensions: ["mp3", "m4a", "aac", "wav", "flac", "ogg"] }],
+  });
   if (result.canceled || result.filePaths.length === 0) return null;
   return result.filePaths[0];
 });
@@ -586,19 +598,30 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
     translations = await translateSegments(translatable, tr.targetLang, tr.llm, chatComplete).catch(() => null);
   }
   // 发布文案(可选):一次 LLM 批量为所有切片生成标题+话题+简介(fail-open)。
+  const zh = !(opts.transcript?.language ?? "zh").startsWith("en");
+  const copySources = list.map((c) => ({ id: c.id, title: c.title, hook: c.hook, text: c.text, keywords: c.keywords }));
   let publishCopies: Map<number, import("@core/publish").PublishCopy> | null = null;
   const pub = opts.publishCopy;
   if (pub?.llm?.baseUrl && pub.llm.model) {
-    const zh = !(opts.transcript?.language ?? "zh").startsWith("en");
-    const sources = list.map((c) => ({ id: c.id, title: c.title, hook: c.hook, text: c.text, keywords: c.keywords }));
-    publishCopies = await generatePublishCopies(sources, zh, pub.llm, chatComplete).catch(() => null);
+    publishCopies = await generatePublishCopies(copySources, zh, pub.llm, chatComplete).catch(() => null);
+  }
+  // 一片多版(可选):一次 LLM 为整批切片生成差异化包装计划(fail-open——
+  // 失败只是没有变体,原版照常导出)。
+  let variantPlans: Map<number, import("@core/variants").VariantPackaging[]> | null = null;
+  const varOpt = opts.variants;
+  if (varOpt?.llm?.baseUrl && varOpt.llm.model && Number(varOpt.count) >= 2) {
+    variantPlans = await generateVariantPlans(
+      copySources,
+      Math.min(Number(varOpt.count), VARIANT_TOTAL_MAX),
+      zh,
+      varOpt.llm,
+      chatComplete
+    ).catch(() => null);
   }
   exportAbort = new AbortController();
   const abortSignal = exportAbort.signal;
   try {
-  return await exportClips(
-    filePath,
-    list.map((c) => ({
+  const baseSpecs = list.map((c) => ({
       id: c.id,
       title: c.title,
       startSec: c.startSec,
@@ -626,7 +649,11 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
         scoreDims: c.scoreDims,
         teaser: c.teaser,
       },
-    })),
+    }));
+  return await exportClips(
+    filePath,
+    // 一片多版:变体克隆原 spec(换标题/悬念句/文案/封面峰),紧跟原版排列
+    variantPlans ? expandClipSpecs(baseSpecs, variantPlans, Boolean(pub?.llm?.baseUrl && pub.llm.model)) : baseSpecs,
     outDir,
     {
       vertical: Boolean(opts.vertical),
@@ -635,6 +662,10 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       cleanFillers,
       cutRetakes,
       autoZoom: Boolean(opts.autoZoom),
+      // 音效/BGM/品类分档:声音设计层(见 core/sound-design.ts 与 genre.ts)
+      sfx: Boolean(opts.sfx),
+      bgmPath: typeof opts.bgmPath === "string" && opts.bgmPath.trim() ? opts.bgmPath : undefined,
+      genreId: typeof opts.genreId === "string" ? opts.genreId : undefined,
       trimUi: Boolean(opts.trimUi),
       titleCard: Boolean(opts.titleCard),
       openingHook: Boolean(opts.openingHook),
@@ -648,6 +679,8 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       subtitleFile: Boolean(opts.subtitleFile),
       timeline: Boolean(opts.timeline),
       aigcLabel: Boolean(opts.aigcLabel),
+      // 平台发布包:未知平台 id 直接过滤(不猜),空清单等于没开
+      publishPack: Array.isArray(opts.publishPack) ? validPlatformIds(opts.publishPack.filter((p): p is string => typeof p === "string")) : undefined,
       modelsRoot: modelsRoot(),
       fontsDir,
       renderOverlay: renderCaptionOverlay,

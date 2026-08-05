@@ -42,6 +42,10 @@ import {
   LuBadgeCheck,
   LuTarget,
   LuFolderOpen,
+  LuPackage,
+  LuLayers,
+  LuBell,
+  LuMusic,
 } from "react-icons/lu";
 import { useT, useLocaleStore } from "../i18n/store";
 import { GENRE_PRESETS, GENRE_CUSTOM_MAX_CHARS } from "../../../core/genre";
@@ -51,18 +55,20 @@ import { useBrandStore, activeBrandStyle } from "../stores/brand-store";
 import { useRenderPrefs } from "../stores/render-prefs-store";
 import { adjustCandidateBoundary } from "../../../shared/boundary";
 import { clipDurationSec, isStitched } from "../../../shared/pieces";
+import { PLATFORM_SPECS } from "../../../shared/platform-specs";
 import { ClipReviewModal } from "./ClipReviewModal";
 import { BrandStyleModal } from "./BrandStyleModal";
 import type { Transcript, HighlightCandidate, RenderToggles, CaptionStyleChoice, FunnelStats, VisionStats, EmotionStats, DanmakuStats, VoiceTagStats, ClipLength, ReferenceInfo, ReviewedCandidate } from "../../../shared/api-types";
 
 /** Click-to-cycle order for the caption style chip. */
-const CAPTION_CYCLE: CaptionStyleChoice[] = ["karaoke", "keyword", "pop", "hormozi", "bubble", "none"];
+const CAPTION_CYCLE: CaptionStyleChoice[] = ["karaoke", "keyword", "pop", "hormozi", "minimal", "bubble", "none"];
 const CAPTION_KEY: Record<CaptionStyleChoice, string> = {
   none: "captionNone",
   karaoke: "captionKaraoke",
   keyword: "captionKeyword",
   pop: "captionPop",
   hormozi: "captionHormozi",
+  minimal: "captionMinimal",
   bubble: "captionBubble",
 };
 
@@ -161,7 +167,7 @@ export function HighlightsView({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   // 出片偏好持久化:上次的开关组合下次直接生效(解构保持下方 JSX 引用不变)
   const { prefs, setPref } = useRenderPrefs();
-  const { vertical, captionStyle, jumpCut, cleanFillers, cutRetakes, autoZoom, trimUi, titleCard, openingHook, coldOpen, alsoLandscape, normalizeLoudness, denoise, compilation, translate, publishCopy, subtitleFile, timeline, aigcLabel, outDir, quality } = prefs;
+  const { vertical, captionStyle, jumpCut, cleanFillers, cutRetakes, autoZoom, sfx, bgmPath, trimUi, titleCard, openingHook, coldOpen, alsoLandscape, normalizeLoudness, denoise, compilation, translate, publishCopy, subtitleFile, timeline, aigcLabel, publishPack, packPlatforms, variants, outDir, quality } = prefs;
   /** 出厂导出根目录(主进程才知道 ~/影片 在哪);用户没自选时显示它。 */
   const [defaultOutDir, setDefaultOutDir] = useState("");
   useEffect(() => {
@@ -171,6 +177,16 @@ export function HighlightsView({
     const dir = await getApi().selectDir();
     if (dir) setPref({ outDir: dir });
   }, [setPref]);
+  // BGM 开关即选择器:没设过点开选文件,设过再点即清除(chip 标签显示文件名)
+  const pickBgm = useCallback(async (): Promise<void> => {
+    if (bgmPath) {
+      setPref({ bgmPath: "" });
+      return;
+    }
+    const p = await getApi().selectAudio();
+    if (p) setPref({ bgmPath: p });
+  }, [bgmPath, setPref]);
+  const bgmName = bgmPath ? bgmPath.split(/[\\/]/).pop() ?? bgmPath : "";
   const [diarize, setDiarize] = useState(false);
   // 中文源译英,其余译中——短视频出海/引进的两个主方向
   const targetLang = (transcript.language || "").startsWith("zh") ? "en" : "zh";
@@ -936,12 +952,23 @@ export function HighlightsView({
                     { key: "optAutoZoom", on: autoZoom && vertical, disabled: !vertical, Icon: LuScan, label: t("optAutoZoom"), act: () => setPref({ autoZoom: !autoZoom }) },
                     { key: "optLoudness", on: normalizeLoudness, Icon: LuVolume2, label: t("optLoudness"), act: () => setPref({ normalizeLoudness: !normalizeLoudness }) },
                     { key: "optDenoise", on: denoise, Icon: LuAudioWaveform, label: t("optDenoise"), act: () => setPref({ denoise: !denoise }) },
+                    { key: "optSfx", on: sfx, Icon: LuBell, label: t("optSfx"), act: () => setPref({ sfx: !sfx }) },
+                    { key: "optBgm", on: Boolean(bgmPath), Icon: LuMusic, label: bgmName ? t("optBgmOn", { name: bgmName }) : t("optBgm"), act: () => void pickBgm() },
                     { key: "optTranslate", on: translate, Icon: LuLanguages, label: t(targetLang === "en" ? "optTranslateEn" : "optTranslateZh"), act: () => setPref({ translate: !translate }) },
                     { key: "optPublish", on: publishCopy, Icon: LuMegaphone, label: t("optPublish"), act: () => setPref({ publishCopy: !publishCopy }) },
                     { key: "optSrt", on: subtitleFile, Icon: LuFileText, label: t("optSrt"), act: () => setPref({ subtitleFile: !subtitleFile }) },
                     { key: "optTimeline", on: timeline, Icon: LuFilm, label: t("optTimeline"), act: () => setPref({ timeline: !timeline }) },
                     { key: "optCompilation", on: compilation, Icon: LuListVideo, label: t("optCompilation"), act: () => setPref({ compilation: !compilation }) },
                     { key: "optAigc", on: aigcLabel, Icon: LuBadgeCheck, label: t("optAigc"), act: () => setPref({ aigcLabel: !aigcLabel }) },
+                    // 一片多版:点一下循环 关→2版→3版(标签实时显示档位)
+                    {
+                      key: "optVariants",
+                      on: variants > 1,
+                      Icon: LuLayers,
+                      label: variants > 1 ? t("optVariantsN", { n: variants }) : t("optVariants"),
+                      act: () => setPref({ variants: variants >= 3 ? 1 : variants + 1 }),
+                    },
+                    { key: "optPack", on: publishPack, Icon: LuPackage, label: t("optPack"), act: () => setPref({ publishPack: !publishPack }) },
                     {
                       key: "captionStyle",
                       on: captionStyle !== "none",
@@ -962,6 +989,30 @@ export function HighlightsView({
                   />
                 ))}
               </div>
+              {/* 发布包平台多选:开了发布包才展开;每个平台 hover 有规格备注 */}
+              {publishPack && (
+                <div className="flex flex-wrap items-center gap-1.5 border-t border-dashed border-line pt-2.5">
+                  <span className="text-[11px] font-semibold text-mut">{t("packPlatformsLabel")}</span>
+                  {PLATFORM_SPECS.map((p) => {
+                    const on = packPlatforms.includes(p.id);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        title={p.noteZh}
+                        onClick={() =>
+                          setPref({ packPlatforms: on ? packPlatforms.filter((x) => x !== p.id) : [...packPlatforms, p.id] })
+                        }
+                        className={`chip rounded-md px-2 py-0.5 text-[12px] font-semibold transition-colors ${
+                          on ? "border-ember/60 bg-ember/10 text-fg" : "text-mut hover:text-fg"
+                        }`}
+                      >
+                        {lang === "zh" ? p.name.zh : p.name.en}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-dashed border-line pt-3">
                 <div className="min-w-0">
                   <span className="text-[13px] font-semibold text-mut">{t("selectedCount", { n: selected.size })}</span>
@@ -1002,7 +1053,7 @@ export function HighlightsView({
                   void getApi()
                     .recordReview(filePath ?? "", summarize(candidates.filter((c) => selected.has(c.id))), summarize(candidates.filter((c) => !selected.has(c.id))))
                     .catch(() => {});
-                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, cleanFillers, cutRetakes, autoZoom, trimUi, titleCard, openingHook, coldOpen, alsoLandscape, normalizeLoudness, denoise, compilation, brand: activeBrandStyle(brandState), translate: translate ? { targetLang, llm: config } : undefined, publishCopy: publishCopy ? { llm: config } : undefined, subtitleFile, timeline, aigcLabel, outDir, quality });
+                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, cleanFillers, cutRetakes, autoZoom, sfx, bgmPath: bgmPath || undefined, genreId, trimUi, titleCard, openingHook, coldOpen, alsoLandscape, normalizeLoudness, denoise, compilation, brand: activeBrandStyle(brandState), translate: translate ? { targetLang, llm: config } : undefined, publishCopy: publishCopy ? { llm: config } : undefined, subtitleFile, timeline, aigcLabel, publishPack: publishPack && packPlatforms.length > 0 ? packPlatforms : undefined, variants: variants > 1 ? { count: variants, llm: config } : undefined, outDir, quality });
                 }}
                 className="btn-flame inline-flex shrink-0 items-center gap-1.5 rounded-lg px-6 py-2.5 text-[14px] font-bold whitespace-nowrap text-white disabled:opacity-40"
               >
