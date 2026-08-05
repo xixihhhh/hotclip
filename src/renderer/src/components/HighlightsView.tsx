@@ -203,6 +203,12 @@ export function HighlightsView({
     setModelError(res.error ?? "");
     setModelLoading(false);
   }, [config.baseUrl, config.apiKey]);
+  /** 打开供应商面板那一刻的连接配置——确认时用来判断「换过没有」。 */
+  const gateOpenedWith = useRef<string>("");
+  const openLlmGate = useCallback((): void => {
+    gateOpenedWith.current = `${config.baseUrl}|${config.model}`;
+    setShowGate(true);
+  }, [config.baseUrl, config.model]);
   /** 品牌样式模板弹窗。 */
   const [showBrand, setShowBrand] = useState(false);
   const brandState = useBrandStore();
@@ -520,7 +526,12 @@ export function HighlightsView({
             <button
               type="button"
               disabled={!isLlmReady(config)}
-              onClick={() => setShowGate(false)}
+              onClick={() => {
+                setShowGate(false);
+                // 换了供应商/模型还留着上一家的结果没意义——直接按新配置重跑
+                const changed = gateOpenedWith.current !== "" && gateOpenedWith.current !== `${config.baseUrl}|${config.model}`;
+                if (changed && candidates) void run(diarize);
+              }}
               className="btn-flame rounded-lg px-6 py-2.5 text-[14px] font-bold text-white disabled:opacity-40"
             >
               {t("llmStart")}
@@ -544,7 +555,7 @@ export function HighlightsView({
           <div className="mt-4 flex items-center justify-center gap-3">
             <button
               type="button"
-              onClick={() => setShowGate(true)}
+              onClick={openLlmGate}
               className="rounded-lg border border-line px-4 py-2 text-sm text-mut transition-colors hover:border-mut hover:text-fg"
             >
               {t("llmTitle")}
@@ -625,6 +636,18 @@ export function HighlightsView({
               )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {/* AI 模型入口:此前只有「检测报错」那一条分支能打开供应商面板——
+                  配过一次之后就再也换不了供应商/模型了。常驻在这里,顺便把当前
+                  用的模型写在按钮上(出了坏结果时,第一件事就是想知道用的是谁) */}
+              <button
+                type="button"
+                title={t("llmSwitchHint", { url: config.baseUrl })}
+                onClick={openLlmGate}
+                className="inline-flex max-w-[13rem] shrink-0 items-center gap-1.5 rounded-lg border border-line px-3.5 py-2 text-xs font-semibold whitespace-nowrap text-mut transition-colors hover:border-mut hover:text-fg"
+              >
+                <LuKeyRound className="h-3.5 w-3.5" />
+                <span className="truncate">{config.model || t("llmSwitch")}</span>
+              </button>
               <button
                 type="button"
                 title={referencePath ? t("refHintOn", { name: referencePath.split(/[\\/]/).pop() ?? "" }) : t("refHint")}

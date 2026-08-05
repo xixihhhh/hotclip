@@ -386,6 +386,13 @@ export const EVIDENCE_LABELS: Record<string, { zh: string; en: string }> = {
   danmaku: { zh: "弹幕峰值", en: "live-chat spike" },
 };
 
+/**
+ * 每个时刻附带的参考原话截断长度。这段文字提示词里已明说「只是参考」,
+ * 而这类素材的转写往往是噪声(户外收音差/唱跳只有零散词),整段贴进去
+ * 只会淹没证据行——实测会把模型逼回模板输出。
+ */
+export const MOMENT_TEXT_MAX_CHARS = 120;
+
 export interface PromptMoment {
   id: number;
   startSec: number;
@@ -400,7 +407,8 @@ export function buildMomentPrompt(moments: PromptMoment[], maxClips: number, zh:
     .map((m) => {
       const ev = m.evidence.map((e) => EVIDENCE_LABELS[e]?.[zh ? "zh" : "en"] ?? e).join(zh ? "、" : ", ");
       const dur = Math.round(m.endSec - m.startSec);
-      const text = m.text.trim();
+      const raw = m.text.trim().replace(/\s+/g, " ");
+      const text = raw.length > MOMENT_TEXT_MAX_CHARS ? `${raw.slice(0, MOMENT_TEXT_MAX_CHARS)}…` : raw;
       return zh
         ? `[${m.id}] ${fmtClock(m.startSec)}-${fmtClock(m.endSec)}(${dur}秒)\n  证据:${ev || "(无)"}\n  该时段原话:${text || "(没有台词)"}`
         : `[${m.id}] ${fmtClock(m.startSec)}-${fmtClock(m.endSec)} (${dur}s)\n  Evidence: ${ev || "(none)"}\n  Transcript here: ${text || "(no dialogue)"}`;

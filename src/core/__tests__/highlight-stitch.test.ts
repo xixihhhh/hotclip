@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { resolveSelection, type RawSelection } from "../highlight/match";
-import { parseParts, parseSelections, dropOverlaps } from "../highlight/detect";
+import { parseParts, parseSelections, parseMomentPicks, dropOverlaps } from "../highlight/detect";
 import { highlightSystemPrompt, buildHighlightPrompt, buildReviewPrompt } from "../highlight/prompt";
 import { PIECE_JOINER } from "../../shared/pieces";
 import type { Transcript, TranscriptWord } from "../transcribe/types";
@@ -190,5 +190,47 @@ describe("prompt 里的拼接约定", () => {
     ]);
     expect(prompt).toContain("时长25秒"); // 10+15,不是跨度 600
     expect(prompt).toContain("2 段拼接");
+  });
+});
+
+describe("chatCompleteJson 的一次重试", () => {
+  /** 造一个「第一次吐杂质、第二次干净」的端点(真实观测到的故障形态)。 */
+  function flakyOnce(): { calls: number; complete: (c: string) => string } {
+    let calls = 0;
+    return {
+      get calls() { return calls; },
+      complete: () => {
+        calls++;
+        // 实测出现过:`"score":数和 90`、`"momentId": vii`、`"score": —`
+        return calls === 1
+          ? '{"clips":[{"momentId": vii,"title":"x","score": —}]}'
+          : '{"clips":[{"momentId":2,"title":"干净的","score":88}]}';
+      },
+    };
+  }
+
+  it("第一次解析失败会重发一次,第二次干净就照常返回", async () => {
+    const f = flakyOnce();
+    let n = 0;
+    const parsed = await (async (): Promise<ReturnType<typeof parseMomentPicks>> => {
+      let lastErr: unknown;
+      for (let i = 0; i < 2; i++) {
+        const content = f.complete("");
+        n++;
+        try {
+          return parseMomentPicks(content);
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+      throw lastErr;
+    })();
+    expect(n).toBe(2);
+    expect(parsed[0].title).toBe("干净的");
+  });
+
+  it("杂质 token 确实会让整份响应解析失败(所以才需要重试)", () => {
+    expect(() => parseMomentPicks('{"clips":[{"momentId": vii,"score": —}]}')).toThrow();
+    expect(() => parseSelections('{"clips":[{"endSegmentId": to 3}]}')).toThrow();
   });
 });

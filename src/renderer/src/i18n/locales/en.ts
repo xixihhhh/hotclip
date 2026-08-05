@@ -195,6 +195,8 @@ export const en = {
     llmApiKey: "API Key",
     llmKeyPlaceholder: "Paste your API key",
     llmModel: "Model",
+    llmSwitch: "AI model",
+    llmSwitchHint: "Switch LLM provider or model (currently {url}) — when results disappoint, check which model produced them; confirming after a change re-runs detection",
     llmModelsFetch: "Fetch models",
     llmModelsLoading: "Fetching…",
     llmModelsFound: "{n} models available on this endpoint — click the field to pick",

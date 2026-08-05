@@ -9,6 +9,7 @@ import {
   MOMENT_WEIGHTS,
   MOMENT_SATURATION,
   SPARSE_SPEECH_RATIO,
+  topMoments,
 } from "../highlight/moments";
 import { momentsToCandidates, parseMomentPicks, textInRange } from "../highlight/detect";
 import type { MediaSignals } from "../signals";
@@ -210,5 +211,27 @@ describe("textInRange", () => {
     const tx = sparseTranscript(600);
     expect(textInRange(tx, 0, 20)).toBe("大家好呀");
     expect(textInRange(tx, 100, 200)).toBe("");
+  });
+});
+
+describe("topMoments", () => {
+  it("不超上限时原样返回", () => {
+    const ms = [
+      { id: 1, startSec: 0, endSec: 10, heat: 5, evidence: [] as never[] },
+      { id: 2, startSec: 20, endSec: 30, heat: 9, evidence: [] as never[] },
+    ];
+    expect(topMoments(ms, 8)).toEqual(ms);
+  });
+
+  it("超额按热度取前 N,再按时间排回并重新编号", () => {
+    const ms = [1, 2, 3, 4, 5].map((i) => ({
+      id: i, startSec: i * 100, endSec: i * 100 + 20, heat: i === 2 ? 1 : 10 + i, evidence: [] as never[],
+    }));
+    const out = topMoments(ms, 3);
+    expect(out).toHaveLength(3);
+    // 最冷的 id=2 被淘汰
+    expect(out.map((m) => m.startSec)).toEqual([300, 400, 500]);
+    // 编号必须重排成 1..n —— 提示词里的编号就是它,错位就会选错时刻
+    expect(out.map((m) => m.id)).toEqual([1, 2, 3]);
   });
 });

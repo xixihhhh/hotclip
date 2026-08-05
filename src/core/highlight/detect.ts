@@ -28,6 +28,7 @@ import {
   shouldRunMoments,
   speechRatio,
   MOMENT_WEIGHTS,
+  topMoments,
   type SignalMoment,
 } from "./moments";
 
@@ -89,6 +90,39 @@ export async function chatComplete(llm: LlmConfig, system: string, user: string,
   const content = data.choices?.[0]?.message?.content;
   if (!content) throw new Error("LLM 未返回内容 / empty LLM response");
   return content;
+}
+
+/** 要 JSON 的调用最多试几次(1 次重试)。 */
+export const JSON_ATTEMPTS = 2;
+
+/**
+ * 要 JSON 的调用:解析失败就重来一次。
+ *
+ * 为什么需要:实测主流服务商会**偶发在 JSON 中间吐出杂质 token**——
+ * `"score":数和 90`、`"endSegmentId": to 3`、`"momentId": vii`、`"score": —`
+ * 都真实出现过,整份响应因此不是合法 JSON。这不是提示词能修的(同一份提示词
+ * 重发一次就干净了),而不重试的代价是用户看到「找爆点失败」、整轮白跑。
+ *
+ * 只重试解析失败;网络/鉴权错误直接抛(重试也没用),用户取消立即中断。
+ */
+export async function chatCompleteJson<T>(
+  llm: LlmConfig,
+  system: string,
+  user: string,
+  parse: (content: string) => T,
+  signal?: AbortSignal
+): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < JSON_ATTEMPTS; i++) {
+    const content = await chatComplete(llm, system, user, signal);
+    try {
+      return parse(content);
+    } catch (e) {
+      if (signal?.aborted) throw e;
+      lastErr = e;
+    }
+  }
+  throw lastErr;
 }
 
 /**
@@ -416,13 +450,13 @@ export async function detectHighlights(
     }
   }
 
-  const content = await chatComplete(
+  const selections = await chatCompleteJson(
     llm,
     highlightSystemPrompt(promptTranscript, length, products ?? [], reference, reviewMemory, genre),
     buildHighlightPrompt(promptTranscript, 6, signals),
+    parseSelections,
     signal
   );
-  const selections = parseSelections(content);
 
   const { lo, hi } = clipLengthBounds(length);
   const candidates: HighlightCandidate[] = [];
@@ -485,13 +519,14 @@ export async function detectHighlights(
   const reviewable = kept.filter((c) => c.boundary !== "signal");
   if (reviewable.length === 0) return { candidates: normalizeScores(kept), funnel };
   try {
-    const reviewContent = await chatComplete(
+    const reviews = await chatCompleteJson(
       llm,
       reviewSystemPrompt(transcript),
       buildReviewPrompt(transcript, reviewable),
+      parseReviews,
       signal
     );
-    return { candidates: normalizeScores(applyReviews(kept, parseReviews(reviewContent))), funnel };
+    return { candidates: normalizeScores(applyReviews(kept, reviews)), funnel };
   } catch {
     return { candidates: kept, funnel };
   }
@@ -512,15 +547,18 @@ export async function detectMoments(
   const range = CLIP_LENGTH_RANGES[length ?? "standard"];
   // words 类走到这里说明是"说话太少/文本通道没产出"触发的,按 reaction 权重兜底
   const weights = MOMENT_WEIGHTS[evidence === "visual" ? "visual" : "reaction"];
-  const moments = fuseMoments(signals, transcript.durationSec, {
-    weights,
-    minSec: range.minSec,
-    maxSec: range.maxSec,
-  });
+  // 融合出来的全量时刻按热度收敛到提示词上限——给太多选项反而让模型交白卷
+  const moments = topMoments(
+    fuseMoments(signals, transcript.durationSec, {
+      weights,
+      minSec: range.minSec,
+      maxSec: range.maxSec,
+    })
+  );
   if (moments.length === 0) return [];
 
   const zh = isChineseTranscript(transcript);
-  const content = await chatComplete(
+  const picks = await chatCompleteJson(
     llm,
     zh ? MOMENT_SYSTEM_PROMPT_ZH : MOMENT_SYSTEM_PROMPT_EN,
     buildMomentPrompt(
@@ -534,7 +572,8 @@ export async function detectMoments(
       4,
       zh
     ),
+    parseMomentPicks,
     signal
   );
-  return momentsToCandidates(transcript, moments, parseMomentPicks(content));
+  return momentsToCandidates(transcript, moments, picks);
 }

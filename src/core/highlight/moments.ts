@@ -48,8 +48,25 @@ export const MOMENT_WEIGHTS: Record<Exclude<EvidenceClass, "words">, MomentWeigh
 export const MOMENT_BIN_SEC = 1;
 /** 峰与峰之间至少隔这么久,避免同一个高潮被切成好几条。 */
 export const MOMENT_MIN_GAP_SEC = 8;
-/** 最多提名多少个时刻交给 LLM 挑(再多只是浪费 token)。 */
+/** 内部最多融合出多少个时刻。 */
 export const MOMENT_MAX_COUNT = 12;
+/**
+ * 真正塞进提示词的上限(按热度取前 N,再按时间排回)。
+ * 实测教训:12 条 × 每条 25 秒的噪声转写堆进提示词,模型会直接吐回未填写的
+ * 模板(`"momentId": x`);砍到 8 条并截短参考原话后一次成功。提示词本身也说
+ * 「真正值得剪的通常只有两三个」,给 12 个选项本来就自相矛盾。
+ */
+export const MOMENT_PROMPT_MAX = 8;
+
+/** 按热度取前 N,再按时间排回并重新编号(编号必须与提示词里一致)。 */
+export function topMoments(moments: SignalMoment[], max = MOMENT_PROMPT_MAX): SignalMoment[] {
+  if (moments.length <= max) return moments;
+  return [...moments]
+    .sort((a, b) => b.heat - a.heat)
+    .slice(0, max)
+    .sort((a, b) => a.startSec - b.startSec)
+    .map((m, i) => ({ ...m, id: i + 1 }));
+}
 /**
  * 单路信号覆盖超过这个比例就判为"一直在响",权重打折。
  * 这条是 SenseVoice 情绪饱和那次踩出来的:中性播音也判 HAPPY、脱口秀 62% 的

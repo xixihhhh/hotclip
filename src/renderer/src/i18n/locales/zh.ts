@@ -255,6 +255,8 @@ export const zh = {
     llmApiKey: "API Key",
     llmKeyPlaceholder: "粘贴你的 API Key",
     llmModel: "模型",
+    llmSwitch: "AI 模型",
+    llmSwitchHint: "换个 AI 供应商或模型(当前:{url})——结果不理想时先看看用的是谁;换完确认会按新模型重跑一次",
     llmModelsFetch: "拉取模型",
     llmModelsLoading: "拉取中…",
     llmModelsFound: "该端点当前提供 {n} 个模型,点输入框可选",
