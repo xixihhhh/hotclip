@@ -283,6 +283,7 @@ export const zh = {
     llmTitle: "连接 AI 模型",
     llmDesc: "找爆点需要一个大模型。推荐 Atlas Cloud——一个 Key 用齐中外主流模型;也可用本地 Ollama 或任意 OpenAI 兼容接口。",
     llmPreset: "服务",
+    llmOllamaHint: "本地档需要电脑上已安装并运行 Ollama(ollama.com),且已用 ollama pull 拉好模型——没装的话,选上面任意云端供应商,粘贴 API Key 即可直接用。",
     llmBaseUrl: "接口地址",
     llmApiKey: "API Key",
     llmKeyPlaceholder: "粘贴你的 API Key",

@@ -55,6 +55,7 @@ import { useLlmStore, isLlmReady, LLM_PRESETS, LLM_PRESET_LIST, presetForBaseUrl
 import { useBrandStore, activeBrandStyle } from "../stores/brand-store";
 import { useRenderPrefs } from "../stores/render-prefs-store";
 import { adjustCandidateBoundary } from "../../../shared/boundary";
+import { stripIpcError } from "../../../shared/transcribe-errors";
 import { clipDurationSec, isStitched } from "../../../shared/pieces";
 import { PLATFORM_SPECS } from "../../../shared/platform-specs";
 import { ClipReviewModal } from "./ClipReviewModal";
@@ -264,7 +265,8 @@ export function HighlightsView({
       // Lift the speaker-labeled transcript so export can color captions by speaker.
       if (result.transcript) onTranscriptLabeled?.(result.transcript);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      // IPC 包装串只会淹没真正有用的那句话——先剥壳再展示(issue #6)
+      setError(stripIpcError(e instanceof Error ? e.message : String(e)));
     } finally {
       setDetecting(false);
     }
@@ -419,6 +421,14 @@ export function HighlightsView({
               );
             })}
           </div>
+
+          {/* 本地档的隐形前提:Ollama 得真的在跑。issue #6 的用户就是在这里
+              没被拦住,直到检测才撞上 fetch failed——提示前移到选择时 */}
+          {presetForBaseUrl(config.baseUrl)?.id === "ollama" && (
+            <p className="mt-2.5 rounded-lg bg-amber-500/10 px-3 py-2 text-[11.5px] leading-relaxed text-amber-400/90">
+              {t("llmOllamaHint")}
+            </p>
+          )}
 
           <div className="mt-4 space-y-3">
             <label className="block">
@@ -608,7 +618,8 @@ export function HighlightsView({
       {/* ---- error ---- */}
       {!showGate && error && !detecting && (
         <div className="card mt-2 w-full rounded-2xl p-6 text-center">
-          <p className="text-sm break-all text-red-400">{t("failed", { msg: error })}</p>
+          {/* whitespace-pre-line:报错里的行动指引单独成行(连不上 LLM 时的下一步) */}
+          <p className="text-sm break-all whitespace-pre-line text-red-400">{t("failed", { msg: error })}</p>
           <div className="mt-4 flex items-center justify-center gap-3">
             <button
               type="button"

@@ -9,8 +9,25 @@ import {
   ERR_TAG_MODEL_LOAD,
   ERR_TAG_NO_AUDIO,
   parseTranscribeError,
+  stripIpcError,
   tagTranscribeError,
 } from "../../shared/transcribe-errors";
+
+describe("stripIpcError(通用剥壳,issue #6)", () => {
+  it("剥掉 Electron IPC 包装前缀", () => {
+    expect(stripIpcError("Error invoking remote method 'hotclip:detect-highlights': Error: 无法连接 LLM 服务")).toBe(
+      "无法连接 LLM 服务"
+    );
+  });
+
+  it("没有 Error: 二段前缀时也能剥", () => {
+    expect(stripIpcError("Error invoking remote method 'hotclip:x': boom")).toBe("boom");
+  });
+
+  it("裸错误文本原样返回", () => {
+    expect(stripIpcError("fetch failed")).toBe("fetch failed");
+  });
+});
 
 describe("tagTranscribeError", () => {
   it("素材确认无音轨 → 打 no-audio 标记(即便错误文本像别的失败)", () => {

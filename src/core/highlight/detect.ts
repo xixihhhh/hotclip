@@ -50,6 +50,11 @@ export function extraParams(baseUrl: string): Record<string, unknown> {
   return /pollinations\.ai/i.test(baseUrl) ? { reasoning_effort: "low" } : {};
 }
 
+/** 本地端点(Ollama 等):不需要 API Key,但需要服务真的在本机跑着。 */
+function isLocalEndpoint(baseUrl: string): boolean {
+  return /localhost|127\.0\.0\.1/.test(baseUrl);
+}
+
 /** Call an OpenAI-compatible chat endpoint. Throws with an actionable message. */
 export async function chatComplete(llm: LlmConfig, system: string, user: string, signal?: AbortSignal): Promise<string> {
   const url = `${llm.baseUrl.replace(/\/+$/, "")}/chat/completions`;
@@ -75,11 +80,20 @@ export async function chatComplete(llm: LlmConfig, system: string, user: string,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(`无法连接 LLM 服务 / cannot reach LLM endpoint (${llm.baseUrl}): ${msg}`);
+    // 连不上最常见的场景是「选了本地 Ollama 但没装/没启动」(issue #6)——
+    // 报错必须告诉用户下一步做什么,一句 fetch failed 只会把人留在原地
+    const hint = isLocalEndpoint(llm.baseUrl)
+      ? "本机 LLM 服务没有响应:若用 Ollama,请先到 ollama.com 安装并启动,再运行 ollama pull 拉取模型;或点「连接 AI 模型」换云端供应商,填 API Key 即用。/ Local LLM not responding: install & start Ollama (ollama.com) and pull the model, or switch to a cloud provider with an API key."
+      : "请检查网络连接,并确认 Base URL 填写正确。/ Check your network and verify the Base URL.";
+    throw new Error(`无法连接 LLM 服务 / cannot reach LLM endpoint (${llm.baseUrl}): ${msg}\n${hint}`);
   }
   const text = await res.text();
   if (!res.ok) {
-    throw new Error(`LLM 请求失败 / LLM request failed (HTTP ${res.status}): ${text.slice(0, 300)}`);
+    // Ollama 在跑但模型没拉:404 补一句拉取命令,免得用户以为软件坏了
+    const hint = isLocalEndpoint(llm.baseUrl) && res.status === 404
+      ? `\n本机可能还没拉取这个模型:先运行 ollama pull ${llm.model} / model likely not pulled yet: run ollama pull ${llm.model}`
+      : "";
+    throw new Error(`LLM 请求失败 / LLM request failed (HTTP ${res.status}): ${text.slice(0, 300)}${hint}`);
   }
   let data: { choices?: Array<{ message?: { content?: string } }> };
   try {

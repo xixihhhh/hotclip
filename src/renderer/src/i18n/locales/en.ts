@@ -207,6 +207,7 @@ export const en = {
     llmTitle: "Connect an AI model",
     llmDesc: "Highlight detection needs an LLM. Atlas Cloud is recommended — one key covers major Western and Chinese models; local Ollama or any OpenAI-compatible endpoint works too.",
     llmPreset: "Provider",
+    llmOllamaHint: "The local option needs Ollama installed and running (ollama.com) with the model pulled via ollama pull — no Ollama? Pick any cloud provider above and paste an API key.",
     llmBaseUrl: "Base URL",
     llmApiKey: "API Key",
     llmKeyPlaceholder: "Paste your API key",

@@ -28,12 +28,19 @@ export function tagTranscribeError(rawMessage: string, media: { hasAudio: boolea
 }
 
 /**
- * 渲染层侧:从 IPC 送回的错误文本里剥掉 Electron 的包装前缀
- * ("Error invoking remote method 'x': Error: ..."),识别标记归类,
+ * 通用:剥掉 Electron IPC 的包装前缀("Error invoking remote method 'x': Error: ...")。
+ * 任何要展示给用户的 IPC 错误都先过这一层——包装串只会淹没真正有用的那句话(issue #6)。
+ */
+export function stripIpcError(raw: string): string {
+  return raw.replace(/^Error invoking remote method '[^']*':\s*(?:Error:\s*)?/, "").trim();
+}
+
+/**
+ * 渲染层侧:从 IPC 送回的错误文本里剥掉 Electron 的包装前缀,识别标记归类,
  * 并留下可展示给用户的原始细节(报 issue 时贴出来才有诊断价值)。
  */
 export function parseTranscribeError(raw: string): { kind: TranscribeErrorKind; detail: string } {
-  let detail = raw.replace(/^Error invoking remote method '[^']*':\s*(?:Error:\s*)?/, "").trim();
+  let detail = stripIpcError(raw);
   let kind: TranscribeErrorKind = "generic";
   if (detail.includes(ERR_TAG_NO_AUDIO)) {
     kind = "no-audio";
