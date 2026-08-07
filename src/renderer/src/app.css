@@ -178,12 +178,17 @@ body {
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 
 .rise-in {
-  animation: rise-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  /* backwards 而不是 both:forwards 会把末帧 transform 以 identity matrix 的
+     形式永久留在元素上(哪怕末帧写 none,Chromium 填充的是换算后的矩阵),而
+     任何 transform 都是 fixed 后代的 containing block——留着它,容器里所有
+     弹窗(审阅台/品牌/文稿选段)的 inset-0 都不再相对视口。backwards 只管
+     延迟期的隐藏,动画结束即回归元素本身样式,transform 彻底消失 */
+  animation: rise-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
 }
 
 .rise-in-1 {

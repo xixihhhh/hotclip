@@ -24,6 +24,7 @@ import { pickCoverTime } from "./cover";
 import { findFillerWords, dropFillerWords, fillerCutSpans, type FillerHit } from "./fillers";
 import { findRetakes, dropRetakeWords, retakeCutSpans, type RetakeHit } from "./retakes";
 import {
+  mergePieces,
   normalizePieces,
   pieceCutSpans,
   piecesDurationSec,
@@ -406,8 +407,10 @@ export async function exportClips(
       if (signal?.aborted) throw new Error("export cancelled");
       onProgress?.({ current: i + 1, total: totalUnits, clipId: clip.id, stage: "cutting" });
 
-      // 多片段拼接:段清单在这里定型,后面所有阶段都以它为准
-      const pieces = normalizePieces(clip.pieces ?? []);
+      // 多片段拼接:段清单在这里定型,后面所有阶段都以它为准。
+      // 手动选段(manualBounds)只并重叠不砍段——「最多 4 段/最短 2 秒」是
+      // AI 拼接的护栏,用户亲手挑的句子一段都不许悄悄丢
+      const pieces = clip.manualBounds ? mergePieces(clip.pieces ?? [], 0) : normalizePieces(clip.pieces ?? []);
       const stitched = pieces.length > 1;
       if (stitched) piecesByClip.set(clip.id, pieces);
 

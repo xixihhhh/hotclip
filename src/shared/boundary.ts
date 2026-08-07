@@ -5,7 +5,7 @@
  * the renderer (interactive tweaking) and core can use it.
  */
 import type { Transcript, TranscriptSegment, ClipPiece } from "./api-types";
-import { normalizePieces, PIECE_JOINER } from "./pieces";
+import { mergePieces, PIECE_JOINER } from "./pieces";
 
 const EPS = 1e-3;
 /** Manual tweaking is allowed a wider range than auto-detection. */
@@ -92,7 +92,9 @@ export function adjustCandidateBoundary(
   const idx = edge === "start" ? 0 : pieces.length - 1;
   const moved = adjustClipBoundary(transcript, pieces[idx], edge, dir);
   if (!moved) return null;
-  const next = normalizePieces(
+  // mergePieces 而非 normalizePieces:这里只动了首/尾段的边,段数不该被
+  // 「最多 4 段/最短 2 秒」的检测侧规整悄悄改掉(手动选段可以超过 4 段)
+  const next = mergePieces(
     pieces.map((p, i) => (i === idx ? { startSec: moved.startSec, endSec: moved.endSec } : p))
   );
   if (next.length < 2) return null;

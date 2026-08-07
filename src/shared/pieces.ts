@@ -27,10 +27,10 @@ export const PIECE_PAD_BEFORE_SEC = 0.15;
 export const PIECE_JOINER = " …… ";
 
 /**
- * 规整片段清单:按时间排序 → 合并重叠/紧邻 → 丢掉过短碎片 → 超额时保留最长
- * 的几段(仍按时间排回)。返回长度 <2 表示这条其实是单段,调用方按单段处理。
+ * 排序+合并:按时间排序,间隔小于 gapSec 的相邻段并成一段。不丢短段、不设
+ * 段数上限——手动选段(用户亲手挑的句子)走这条,人的决定原样保留。
  */
-export function normalizePieces(raw: ClipPiece[]): ClipPiece[] {
+export function mergePieces(raw: ClipPiece[], gapSec: number = PIECE_MERGE_GAP_SEC): ClipPiece[] {
   const valid = raw
     .filter((p) => Number.isFinite(p.startSec) && Number.isFinite(p.endSec) && p.endSec > p.startSec)
     .map((p) => ({ startSec: p.startSec, endSec: p.endSec }))
@@ -40,12 +40,23 @@ export function normalizePieces(raw: ClipPiece[]): ClipPiece[] {
   const merged: ClipPiece[] = [valid[0]];
   for (const p of valid.slice(1)) {
     const last = merged[merged.length - 1];
-    if (p.startSec - last.endSec < PIECE_MERGE_GAP_SEC) {
+    if (p.startSec - last.endSec < gapSec) {
       last.endSec = Math.max(last.endSec, p.endSec);
     } else {
       merged.push(p);
     }
   }
+  return merged;
+}
+
+/**
+ * 规整片段清单(AI 检测产物用):按时间排序 → 合并重叠/紧邻 → 丢掉过短碎片
+ * → 超额时保留最长的几段(仍按时间排回)。返回长度 <2 表示这条其实是单段,
+ * 调用方按单段处理。
+ */
+export function normalizePieces(raw: ClipPiece[]): ClipPiece[] {
+  const merged = mergePieces(raw);
+  if (merged.length === 0) return [];
 
   const long = merged.filter((p) => p.endSec - p.startSec >= MIN_PIECE_SEC);
   // 全都过短时别把这条整个抹掉——留最长的一段,让上游退化成单段

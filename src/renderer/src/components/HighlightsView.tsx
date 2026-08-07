@@ -46,6 +46,7 @@ import {
   LuLayers,
   LuBell,
   LuMusic,
+  LuTextSelect,
 } from "react-icons/lu";
 import { useT, useLocaleStore } from "../i18n/store";
 import { GENRE_PRESETS, GENRE_CUSTOM_MAX_CHARS } from "../../../core/genre";
@@ -58,7 +59,8 @@ import { clipDurationSec, isStitched } from "../../../shared/pieces";
 import { PLATFORM_SPECS } from "../../../shared/platform-specs";
 import { ClipReviewModal } from "./ClipReviewModal";
 import { BrandStyleModal } from "./BrandStyleModal";
-import type { Transcript, HighlightCandidate, RenderToggles, CaptionStyleChoice, FunnelStats, VisionStats, EmotionStats, DanmakuStats, VoiceTagStats, ClipLength, ReferenceInfo, ReviewedCandidate } from "../../../shared/api-types";
+import { TranscriptPickModal } from "./TranscriptPickModal";
+import type { Transcript, HighlightCandidate, RenderToggles, CaptionStyleChoice, FunnelStats, VisionStats, EmotionStats, DanmakuStats, VoiceTagStats, ClipLength, ReferenceInfo, ReviewedCandidate, ClipPiece } from "../../../shared/api-types";
 
 /** Click-to-cycle order for the caption style chip. */
 const CAPTION_CYCLE: CaptionStyleChoice[] = ["keyword", "pop", "minimal", "hormozi", "bubble", "karaoke", "none"];
@@ -227,6 +229,8 @@ export function HighlightsView({
   }, [config.baseUrl, config.model]);
   /** 品牌样式模板弹窗。 */
   const [showBrand, setShowBrand] = useState(false);
+  /** 文稿选段弹窗(文字剪视频)。 */
+  const [showPick, setShowPick] = useState(false);
   const brandState = useBrandStore();
   const startedRef = useRef(false);
 
@@ -335,6 +339,32 @@ export function HighlightsView({
       return next;
     });
   };
+
+  // 文稿选段成片:手动候选进同一条候选流(审阅台/微调/导出全都直接可用);
+  // score=0 + manualBounds 让卡片亮「手动」徽标而不是硬编一个爆款分
+  const addManualClip = useCallback((pieces: ClipPiece[], text: string, title: string): void => {
+    const id = (candidates ?? []).reduce((m, c) => Math.max(m, c.id), 0) + 1;
+    const cand: HighlightCandidate = {
+      id,
+      startSec: pieces[0].startSec,
+      endSec: pieces[pieces.length - 1].endSec,
+      pieces: pieces.length > 1 ? pieces : undefined,
+      text,
+      title,
+      hook: "",
+      score: 0,
+      reason: "",
+      boundary: "segment",
+      keywords: [],
+      recommended: true,
+      reviewNote: "",
+      manualBounds: true,
+    };
+    // 候选列表始终按时间排列(resultCount 的承诺),手动的也插进时间序里
+    setCandidates((prev) => [...(prev ?? []), cand].sort((a, b) => a.startSec - b.startSec));
+    setSelected((prev) => new Set(prev).add(id));
+    setShowPick(false);
+  }, [candidates]);
 
   useEffect(() => {
     if (!showGate && !startedRef.current) {
@@ -749,6 +779,15 @@ export function HighlightsView({
               </button>
               <button
                 type="button"
+                title={t("pickHint")}
+                onClick={() => setShowPick(true)}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-3.5 py-2 text-xs font-semibold whitespace-nowrap text-mut transition-colors hover:border-mut hover:text-fg"
+              >
+                <LuTextSelect className="h-3.5 w-3.5" />
+                {t("pickButton")}
+              </button>
+              <button
+                type="button"
                 onClick={onBack}
                 className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-3.5 py-2 text-xs whitespace-nowrap text-mut transition-colors hover:border-mut hover:text-fg"
               >
@@ -813,10 +852,18 @@ export function HighlightsView({
                       </h3>
                     )}
                   </div>
-                  <span className="flame-gradient flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-extrabold text-white">
-                    <LuFlame className="h-3 w-3" />
-                    {c.score}
-                  </span>
+                  {/* 手动选段没有爆款分——亮「手动」徽标,不硬编一个假分数 */}
+                  {c.score > 0 ? (
+                    <span className="flame-gradient flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-extrabold text-white">
+                      <LuFlame className="h-3 w-3" />
+                      {c.score}
+                    </span>
+                  ) : (
+                    <span className="chip flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-bold text-mut">
+                      <LuTextSelect className="h-3 w-3" />
+                      {t("manualChip")}
+                    </span>
+                  )}
                 </div>
 
                 {c.hook && (
@@ -1079,6 +1126,11 @@ export function HighlightsView({
 
           {/* ---- 品牌样式模板 ---- */}
           {showBrand && <BrandStyleModal onClose={() => setShowBrand(false)} />}
+
+          {/* ---- 文稿选段:整篇逐句稿点句成片(文字剪视频) ---- */}
+          {showPick && (
+            <TranscriptPickModal transcript={transcript} onAdd={addManualClip} onClose={() => setShowPick(false)} />
+          )}
 
           {/* ---- 审阅台:视频预览 + 波形时间轴,拖拽定切点 ---- */}
           {(() => {

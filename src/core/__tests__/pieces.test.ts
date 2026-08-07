@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  mergePieces,
   normalizePieces,
   piecesDurationSec,
   clipDurationSec,
@@ -55,6 +56,22 @@ describe("normalizePieces", () => {
 
   it("空输入返回空", () => {
     expect(normalizePieces([])).toEqual([]);
+  });
+});
+
+describe("mergePieces(手动选段用:不砍段、不丢短句)", () => {
+  it("gap=0 只并真重叠,微小间隔保留成两段", () => {
+    expect(mergePieces([p(10, 20), p(19, 26)], 0)).toEqual([p(10, 26)]);
+    expect(mergePieces([p(10, 20), p(20.3, 26)], 0)).toEqual([p(10, 20), p(20.3, 26)]);
+  });
+
+  it("超过 4 段不设上限,短段也保留——用户亲手挑的一段都不许丢", () => {
+    const six = [0, 1, 2, 3, 4, 5].map((i) => p(i * 10, i * 10 + 1));
+    expect(mergePieces(six, 0)).toHaveLength(6);
+  });
+
+  it("默认 gap 与 normalizePieces 的合并口径一致", () => {
+    expect(mergePieces([p(10, 20), p(20.5, 26)])).toEqual([p(10, 26)]);
   });
 });
 
