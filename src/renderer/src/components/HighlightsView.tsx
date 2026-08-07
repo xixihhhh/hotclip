@@ -56,6 +56,7 @@ import { useBrandStore, activeBrandStyle } from "../stores/brand-store";
 import { useRenderPrefs } from "../stores/render-prefs-store";
 import { adjustCandidateBoundary } from "../../../shared/boundary";
 import { stripIpcError } from "../../../shared/transcribe-errors";
+import { preflightVerdict, type PreflightVerdict } from "../../../shared/llm-preflight";
 import { clipDurationSec, isStitched } from "../../../shared/pieces";
 import { PLATFORM_SPECS } from "../../../shared/platform-specs";
 import { ClipReviewModal } from "./ClipReviewModal";
@@ -224,6 +225,13 @@ export function HighlightsView({
   }, [config.baseUrl, config.apiKey]);
   /** 打开供应商面板那一刻的连接配置——确认时用来判断「换过没有」。 */
   const gateOpenedWith = useRef<string>("");
+  /** 配置预检:点「开始」先探路,必败配置当场拦下给指引(issue #6)。 */
+  const [preflightBusy, setPreflightBusy] = useState(false);
+  const [preflightBlock, setPreflightBlock] = useState<PreflightVerdict | null>(null);
+  // 改了任何连接字段,上一次的拦截结论就作废
+  useEffect(() => {
+    setPreflightBlock(null);
+  }, [config.baseUrl, config.apiKey, config.model]);
   const openLlmGate = useCallback((): void => {
     gateOpenedWith.current = `${config.baseUrl}|${config.model}`;
     setShowGate(true);
@@ -580,6 +588,44 @@ export function HighlightsView({
             )}
           </div>
 
+          {/* 预检拦截:按败因给出下一步,并留「跳过检查」逃生口(探针也可能看走眼) */}
+          {preflightBlock && (
+            <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-[12px] leading-relaxed text-amber-400">
+              {preflightBlock.kind === "local-down" && t("preflightLocalDown")}
+              {preflightBlock.kind === "unreachable" && t("preflightUnreachable")}
+              {preflightBlock.kind === "auth" && t("preflightAuth")}
+              {preflightBlock.kind === "model-missing" && (
+                <>
+                  {t("preflightModelMissing", { model: config.model })}
+                  <span className="mt-1.5 flex flex-wrap gap-1.5">
+                    {preflightBlock.installed.slice(0, 8).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setConfig({ model: m })}
+                        className="chip rounded-md px-2 py-0.5 font-mono text-[11px] text-fg/90 transition-colors hover:text-fg"
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </span>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setPreflightBlock(null);
+                  setShowGate(false);
+                  const changed = gateOpenedWith.current !== "" && gateOpenedWith.current !== `${config.baseUrl}|${config.model}`;
+                  if (changed && candidates) void run(diarize);
+                }}
+                className="mt-2 block text-[11.5px] text-mut underline-offset-2 hover:text-fg hover:underline"
+              >
+                {t("preflightSkip")}
+              </button>
+            </div>
+          )}
+
           <div className="mt-5 flex items-center justify-between">
             <a
               href={presetForBaseUrl(config.baseUrl)?.keyUrl || LLM_PRESETS.atlas.keyUrl}
@@ -592,16 +638,29 @@ export function HighlightsView({
             </a>
             <button
               type="button"
-              disabled={!isLlmReady(config)}
+              disabled={!isLlmReady(config) || preflightBusy}
               onClick={() => {
-                setShowGate(false);
-                // 换了供应商/模型还留着上一家的结果没意义——直接按新配置重跑
-                const changed = gateOpenedWith.current !== "" && gateOpenedWith.current !== `${config.baseUrl}|${config.model}`;
-                if (changed && candidates) void run(diarize);
+                // 先探路再放行:必败配置(Ollama 没跑/Key 错/模型没拉)当场拦下,
+                // 探针说不清的(端点没实现 /models)照常放行——绝不拦住能跑的配置
+                void (async () => {
+                  setPreflightBusy(true);
+                  const res = await getApi().listLlmModels(config.baseUrl, config.apiKey ?? "");
+                  setPreflightBusy(false);
+                  if (res.ids.length > 0) setModelList(res.ids); // 顺手喂给模型下拉
+                  const verdict = preflightVerdict(res, config.baseUrl, config.model);
+                  if (verdict.kind !== "ok" && verdict.kind !== "unknown") {
+                    setPreflightBlock(verdict);
+                    return;
+                  }
+                  setShowGate(false);
+                  // 换了供应商/模型还留着上一家的结果没意义——直接按新配置重跑
+                  const changed = gateOpenedWith.current !== "" && gateOpenedWith.current !== `${config.baseUrl}|${config.model}`;
+                  if (changed && candidates) void run(diarize);
+                })();
               }}
               className="btn-flame rounded-lg px-6 py-2.5 text-[14px] font-bold text-white disabled:opacity-40"
             >
-              {t("llmStart")}
+              {preflightBusy ? t("preflightChecking") : t("llmStart")}
             </button>
           </div>
         </section>
