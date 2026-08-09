@@ -10,6 +10,7 @@ import {
   LuArrowLeft,
   LuClock3,
   LuShoppingCart,
+  LuBan,
   LuCrosshair,
   LuKeyRound,
   LuExternalLink,
@@ -200,6 +201,14 @@ export function HighlightsView({
   const clipLength = prefs.clipLength;
   const genreId = prefs.genreId;
   const genreCustom = prefs.genreCustom;
+  /** 用户点题(重点找/排除)与全场画面扫描档(v0.13)。 */
+  const briefFocus = prefs.briefFocus;
+  const briefExclude = prefs.briefExclude;
+  const fullScan = prefs.fullScan;
+  /** 点题输入行的展开状态(填过内容时默认展开)。 */
+  const [showBrief, setShowBrief] = useState(Boolean(prefs.briefFocus.trim() || prefs.briefExclude.trim()));
+  /** 质量门:AI 判弃片段的折叠区是否展开。 */
+  const [showDropped, setShowDropped] = useState(false);
   /** 商品讲解模式:商品词列表(带货直播按商品选段),持久化本机。 */
   const [products, setProducts] = useState<string[]>(() => {
     try {
@@ -243,10 +252,12 @@ export function HighlightsView({
   const brandState = useBrandStore();
   const startedRef = useRef(false);
 
-  const run = useCallback(async (useDiarize: boolean, lengthArg?: ClipLength, productsArg?: string[], referenceArg?: string | null): Promise<void> => {
+  const run = useCallback(async (useDiarize: boolean, lengthArg?: ClipLength, productsArg?: string[], referenceArg?: string | null, briefArg?: { focus: string; exclude: string }): Promise<void> => {
     setDetecting(true);
     setError(null);
     try {
+      const focus = (briefArg?.focus ?? briefFocus).trim();
+      const exclude = (briefArg?.exclude ?? briefExclude).trim();
       const result = await getApi().detectHighlights(
         transcript,
         config,
@@ -258,7 +269,11 @@ export function HighlightsView({
         productsArg ?? products,
         // undefined = 沿用当前参考;null = 显式清掉
         referenceArg === undefined ? referencePath : referenceArg,
-        { id: genreId, custom: genreCustom }
+        { id: genreId, custom: genreCustom },
+        // 用户点题:两段都空就不传(提示词零注入)
+        focus || exclude ? { focus: focus || undefined, exclude: exclude || undefined } : null,
+        // 全场扫描:开关开着且视觉端点已启用才生效
+        fullScan && vision.enabled
       );
       setCandidates(result.candidates);
       setFunnel(result.funnel ?? null);
@@ -278,7 +293,19 @@ export function HighlightsView({
     } finally {
       setDetecting(false);
     }
-  }, [transcript, config, filePath, onTranscriptLabeled, prefilter, vision, clipLength, products, referencePath]);
+  }, [transcript, config, filePath, onTranscriptLabeled, prefilter, vision, clipLength, products, referencePath, genreId, genreCustom, briefFocus, briefExclude, fullScan]);
+
+  // 点题提交:两个输入都失焦时按新点题重检(内容没变不动)
+  const commitBrief = useCallback(
+    (focus: string, exclude: string): void => {
+      const f = focus.trim().slice(0, 300);
+      const x = exclude.trim().slice(0, 300);
+      if (f === briefFocus && x === briefExclude) return;
+      setPref({ briefFocus: f, briefExclude: x });
+      void run(diarize, undefined, undefined, undefined, { focus: f, exclude: x });
+    },
+    [briefFocus, briefExclude, setPref, diarize, run]
+  );
 
   // 参考爆款:选一条对标视频带着它重新检测;已设置时再点即清除参考重检
   const toggleReference = useCallback(async (): Promise<void> => {
@@ -584,6 +611,38 @@ export function HighlightsView({
                     className="mt-1 w-full rounded-lg border border-line bg-panel-2 px-3 py-2 text-[13px] outline-none focus:border-ember/60"
                   />
                 </label>
+                {/* 全场画面扫描(v0.13):~30 秒一帧扫完整场,画面时刻线进选段证据。
+                    费用当面算清(UI 明示成本是云端档铁律);数学与 core 侧
+                    scanFrameBudget/SHEET_CELLS 保持一致(不直接 import——
+                    vision.ts 经 contact-sheet 连着 child_process,进不了渲染层) */}
+                <div className="col-span-2 rounded-lg border border-dashed border-line p-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setPref({ fullScan: !fullScan })}
+                    className="flex w-full items-center justify-between text-left"
+                  >
+                    <span className="text-[11.5px] font-bold">{t("scanTitle")}</span>
+                    <span
+                      className={`relative h-4.5 w-8 shrink-0 rounded-full transition-colors ${
+                        fullScan ? "flame-gradient" : "bg-line"
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 h-3.5 w-3.5 rounded-full bg-white shadow transition-all ${
+                          fullScan ? "left-4" : "left-0.5"
+                        }`}
+                      />
+                    </span>
+                  </button>
+                  <p className="mt-1 text-[11px] leading-relaxed text-mut">
+                    {t("scanDesc")}
+                    {fullScan &&
+                      (() => {
+                        const frames = Math.min(270, Math.max(9, Math.ceil((transcript.durationSec || 0) / 30)));
+                        return ` ${t("scanEstimate", { frames, calls: Math.ceil(frames / 9) })}`;
+                      })()}
+                  </p>
+                </div>
               </div>
             )}
           </div>
@@ -716,10 +775,16 @@ export function HighlightsView({
               )}
               {visionStats && (
                 <p className="mt-1 text-[11.5px] text-sky-400/90">
-                  {t("visionScanned", {
-                    frames: visionStats.framesScored,
-                    peaks: visionStats.peakCount,
-                  })}
+                  {visionStats.fullScan
+                    ? t("visionScanFull", {
+                        frames: visionStats.framesScored,
+                        peaks: visionStats.peakCount,
+                        notes: visionStats.notedMoments ?? 0,
+                      })
+                    : t("visionScanned", {
+                        frames: visionStats.framesScored,
+                        peaks: visionStats.peakCount,
+                      })}
                 </p>
               )}
               {emotionStats && emotionStats.peakCount > 0 && (
@@ -836,6 +901,18 @@ export function HighlightsView({
                   products.length > 0 ? "border-ember/60 bg-ember/10 text-fg" : "border-line bg-panel-2 text-mut"
                 }`}
               />
+              {/* 用户点题:自然语言「重点找/排除」,展开一行两个输入 */}
+              <button
+                type="button"
+                title={t("briefHint")}
+                onClick={() => setShowBrief((v) => !v)}
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-colors ${
+                  briefFocus.trim() || briefExclude.trim() ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:border-mut hover:text-fg"
+                }`}
+              >
+                <LuCrosshair className={`h-3.5 w-3.5 ${briefFocus.trim() || briefExclude.trim() ? "text-ember" : ""}`} />
+                {t("briefButton")}
+              </button>
               <button
                 type="button"
                 title={t("optDiarizeHint")}
@@ -867,16 +944,58 @@ export function HighlightsView({
             </div>
           </div>
 
+          {/* 点题输入行:重点找什么/明确排除什么,失焦提交即重检 */}
+          {showBrief && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <input
+                id="brief-focus"
+                defaultValue={briefFocus}
+                placeholder={t("briefFocusPlaceholder")}
+                title={t("briefHint")}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                }}
+                onBlur={(e) =>
+                  commitBrief(
+                    e.target.value,
+                    (document.getElementById("brief-exclude") as HTMLInputElement | null)?.value ?? briefExclude
+                  )
+                }
+                className="w-72 min-w-0 flex-1 rounded-lg border border-line bg-panel-2 px-3 py-2 text-xs outline-none transition-colors focus:border-ember/60"
+              />
+              <input
+                id="brief-exclude"
+                defaultValue={briefExclude}
+                placeholder={t("briefExcludePlaceholder")}
+                title={t("briefHint")}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                }}
+                onBlur={(e) =>
+                  commitBrief(
+                    (document.getElementById("brief-focus") as HTMLInputElement | null)?.value ?? briefFocus,
+                    e.target.value
+                  )
+                }
+                className="w-72 min-w-0 flex-1 rounded-lg border border-line bg-panel-2 px-3 py-2 text-xs outline-none transition-colors focus:border-ember/60"
+              />
+            </div>
+          )}
+
           {candidates.length === 0 && <p className="card mt-5 rounded-2xl p-6 text-center text-sm text-mut">{t("empty")}</p>}
 
           <div className="mt-5 space-y-3.5">
-            {candidates.map((c, i) => (
+            {/* 质量门:AI 判弃的候选折叠到列表末尾,展开才显示(可手动捞回) */}
+            {[
+              ...candidates.filter((c) => c.gate !== "drop"),
+              ...(showDropped ? candidates.filter((c) => c.gate === "drop") : []),
+            ].map((c, i) => (
               <article
                 key={c.id}
                 onClick={() => toggle(c.id)}
                 className={`card card-hover rise-in rise-in-${Math.min(i + 1, 3)} cursor-pointer rounded-2xl p-5 ${
                   selected.has(c.id) ? "!border-ember/50" : "opacity-60"
-                }`}
+                } ${c.gate === "drop" ? "!border-dashed !border-red-400/25" : ""}`}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex min-w-0 items-start gap-3">
@@ -922,18 +1041,39 @@ export function HighlightsView({
                       </h3>
                     )}
                   </div>
-                  {/* 手动选段没有爆款分——亮「手动」徽标,不硬编一个假分数 */}
-                  {c.score > 0 ? (
-                    <span className="flame-gradient flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-extrabold text-white">
-                      <LuFlame className="h-3 w-3" />
-                      {c.score}
-                    </span>
-                  ) : (
-                    <span className="chip flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-bold text-mut">
-                      <LuTextSelect className="h-3 w-3" />
-                      {t("manualChip")}
-                    </span>
-                  )}
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    {/* 质量门档位:需人审亮黄、判弃亮红;悬停看具体硬伤 */}
+                    {c.gate === "review" && (
+                      <span
+                        title={(c.gateNotes ?? []).join(";") || undefined}
+                        className="flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[11px] font-bold text-amber-400"
+                      >
+                        <LuTriangleAlert className="h-3 w-3" />
+                        {t("gateReviewChip")}
+                      </span>
+                    )}
+                    {c.gate === "drop" && (
+                      <span
+                        title={(c.gateNotes ?? []).join(";") || undefined}
+                        className="flex items-center gap-1 rounded-full border border-red-400/30 bg-red-500/10 px-2.5 py-1 text-[11px] font-bold text-red-400/90"
+                      >
+                        <LuBan className="h-3 w-3" />
+                        {t("gateDropChip")}
+                      </span>
+                    )}
+                    {/* 手动选段没有爆款分——亮「手动」徽标,不硬编一个假分数 */}
+                    {c.score > 0 ? (
+                      <span className="flame-gradient flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-extrabold text-white">
+                        <LuFlame className="h-3 w-3" />
+                        {c.score}
+                      </span>
+                    ) : (
+                      <span className="chip flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-bold text-mut">
+                        <LuTextSelect className="h-3 w-3" />
+                        {t("manualChip")}
+                      </span>
+                    )}
+                  </span>
                 </div>
 
                 {c.hook && (
@@ -987,11 +1127,15 @@ export function HighlightsView({
                     {c.teaser}
                   </p>
                 )}
-                {!c.recommended && (
-                  <p className="mt-2 flex items-start gap-2 rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-[12px] leading-relaxed text-amber-400">
+                {(!c.recommended || (c.gateNotes?.length ?? 0) > 0) && (
+                  <p
+                    className={`mt-2 flex items-start gap-2 rounded-lg px-2.5 py-1.5 text-[12px] leading-relaxed ${
+                      c.gate === "drop" ? "bg-red-500/10 text-red-400/90" : "bg-amber-500/10 text-amber-400"
+                    }`}
+                  >
                     <LuTriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    {t("reviewWeak")}
-                    {c.reviewNote ? `:${c.reviewNote}` : ""}
+                    {c.gate === "drop" ? t("gateDropNote") : c.gate === "review" ? t("gateReviewNote") : t("reviewWeak")}
+                    {c.gateNotes?.length ? `:${c.gateNotes.join(";")}` : c.reviewNote ? `:${c.reviewNote}` : ""}
                   </p>
                 )}
 
@@ -1059,6 +1203,19 @@ export function HighlightsView({
               </article>
             ))}
           </div>
+
+          {/* 弃片折叠开关:告诉用户 AI 扔了几条、为什么,而不是让废片默默消失 */}
+          {candidates.some((c) => c.gate === "drop") && (
+            <button
+              type="button"
+              onClick={() => setShowDropped((v) => !v)}
+              className="mt-3 w-full rounded-xl border border-dashed border-line px-4 py-2.5 text-center text-xs font-semibold text-mut transition-colors hover:border-mut hover:text-fg"
+            >
+              {showDropped
+                ? t("gateDroppedCollapse")
+                : t("gateDroppedToggle", { n: candidates.filter((c) => c.gate === "drop").length })}
+            </button>
+          )}
 
           {onExport && candidates.length > 0 && (
             <div className="card action-bar sticky bottom-4 mt-6 flex flex-col gap-3 rounded-2xl px-5 py-3.5 shadow-2xl backdrop-blur-xl">

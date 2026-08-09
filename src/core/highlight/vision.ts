@@ -31,6 +31,45 @@ const VISION_BUDGET_MS = 180_000;
 /** 成功研判帧数低于该值时证据太薄,宁可不给信号也不给噪声。 */
 const MIN_SCORED_FRAMES = 3;
 
+// ---- 全场扫描档(v0.13):把 27 帧快扫升级为「~30 秒一帧扫完整场」----
+// 三轮调研翻案:视频 token 价格塌方后「整场喂视觉模型」已是每场几毛到几块钱
+// 的常规操作。工程形态取「时间戳接触表 + 分段转写」:复用同一 OpenAI 兼容
+// 端点,本地 Ollama 免费、云端 qwen3-vl-flash 级别整场几毛钱,不引任何
+// 供应商专属的视频上传 API(原生视频输入留作后续升级路径)。
+/** 全场扫描抽帧间隔(秒)。 */
+export const SCAN_FRAME_INTERVAL_SEC = 30;
+/** 全场扫描抽帧上限(270 帧 = 30 张接触表,3 小时场刚好铺满)。 */
+export const SCAN_MAX_FRAMES = 270;
+/** 全场扫描的最小帧距(比快扫密,均匀覆盖优先)。 */
+export const SCAN_MIN_SPACING_SEC = 10;
+/** 全场扫描总预算(本地端点慢,给足;云端远用不满)。 */
+export const SCAN_BUDGET_MS = 600_000;
+/** 画面时刻线的能量门槛与条数上限(进提示词的只要真高能的)。 */
+export const SCAN_NOTE_ENERGY_MIN = 6;
+export const SCAN_NOTES_MAX = 20;
+
+/** 时长 → 全场扫描抽帧数(至少一张满格接触表,封顶 SCAN_MAX_FRAMES)。 */
+export function scanFrameBudget(durationSec: number): number {
+  if (!(durationSec > 1)) return 0;
+  return Math.min(SCAN_MAX_FRAMES, Math.max(9, Math.ceil(durationSec / SCAN_FRAME_INTERVAL_SEC)));
+}
+
+/**
+ * 从打分帧里挑「画面时刻线」:能量达标且带描述的帧,按能量取前 N、按时间排。
+ * 这是全场扫描回流给选段 LLM 的第九路证据(文字稿看不见的画面事件)。纯函数。
+ */
+export function pickVisualNotes(
+  scored: Array<{ t: number; energy: number; note: string }>,
+  energyMin = SCAN_NOTE_ENERGY_MIN,
+  max = SCAN_NOTES_MAX
+): Array<{ t: number; energy: number; note: string }> {
+  return scored
+    .filter((s) => s.energy >= energyMin)
+    .sort((a, b) => b.energy - a.energy)
+    .slice(0, max)
+    .sort((a, b) => a.t - b.t);
+}
+
 export interface VisionConfig {
   baseUrl: string;
   model: string;
@@ -45,10 +84,16 @@ export interface VisionStats {
   framesScored: number;
   /** 圈出的画面高能时段数。 */
   peakCount: number;
+  /** 本轮是全场扫描档。 */
+  fullScan?: boolean;
+  /** 带画面描述回流的时刻数(画面时刻线)。 */
+  notedMoments?: number;
 }
 
 export interface VisionOutcome {
   visualPeaks: TimeRange[];
+  /** 画面时刻线(全场扫描档才有内容;快扫档为空数组)。 */
+  visualNotes: Array<{ t: number; energy: number; note: string }>;
   stats: VisionStats;
 }
 
@@ -228,18 +273,23 @@ export async function collectVisionSignal(opts: {
   composeSheet?: SheetComposer;
   chat?: VisionChatFn;
   budgetMs?: number;
+  /** 全场扫描档(v0.13):~30 秒一帧扫完整场,并回流画面描述时刻线。 */
+  scan?: boolean;
 }): Promise<VisionOutcome | null> {
+  const scan = opts.scan === true;
   const {
     videoPath, durationSec, config, signals, signal,
     composeSheet = (v, ts) => composeContactSheetJpeg(v, ts, { fontFile: opts.fontFile }),
     chat = visionChatComplete,
-    budgetMs = VISION_BUDGET_MS,
+    budgetMs = scan ? SCAN_BUDGET_MS : VISION_BUDGET_MS,
   } = opts;
-  const times = planFrameTimes(durationSec, signals);
+  const times = scan
+    ? planFrameTimes(durationSec, signals, scanFrameBudget(durationSec), SCAN_MIN_SPACING_SEC)
+    : planFrameTimes(durationSec, signals);
   if (times.length === 0) return null;
   const llm: LlmConfig = { baseUrl: config.baseUrl, apiKey: config.apiKey || "ollama", model: config.model };
   const deadline = Date.now() + budgetMs;
-  const scored: Array<{ t: number; energy: number }> = [];
+  const scored: Array<{ t: number; energy: number; note: string }> = [];
   for (const group of chunkCells(times)) {
     if (signal?.aborted) throw new Error("aborted");
     if (Date.now() > deadline) break; // 预算耗尽,带着已得结果收工
@@ -251,7 +301,7 @@ export async function collectVisionSignal(opts: {
       const content = await chat(llm, visionSystemPrompt(group.length), sheetUserPrompt(group), sheet, combined);
       const verdicts = parseSheetVerdicts(content, group.length);
       if (verdicts) {
-        for (const v of verdicts) scored.push({ t: group[v.i - 1], energy: v.energy });
+        for (const v of verdicts) scored.push({ t: group[v.i - 1], energy: v.energy, note: v.note });
       }
     } catch (e) {
       if (signal?.aborted) throw e; // 上游主动取消要中断整个检测
@@ -260,8 +310,16 @@ export async function collectVisionSignal(opts: {
   }
   if (scored.length < MIN_SCORED_FRAMES) return null;
   const visualPeaks = visualPeakRanges(scored, durationSec);
+  // 画面时刻线只在全场扫描档回流——快扫 27 帧太稀,描述回流噪声大于信息
+  const visualNotes = scan ? pickVisualNotes(scored) : [];
   return {
     visualPeaks,
-    stats: { framesTotal: times.length, framesScored: scored.length, peakCount: visualPeaks.length },
+    visualNotes,
+    stats: {
+      framesTotal: times.length,
+      framesScored: scored.length,
+      peakCount: visualPeaks.length,
+      ...(scan ? { fullScan: true, notedMoments: visualNotes.length } : {}),
+    },
   };
 }

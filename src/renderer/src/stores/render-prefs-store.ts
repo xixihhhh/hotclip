@@ -48,6 +48,12 @@ export interface RenderPrefs {
   genreId: string;
   /** 用户改写的判据文本;非空时一律盖过内置预设。 */
   genreCustom: string;
+  /** 用户点题:本场重点找什么(自然语言,注入选段判据)。 */
+  briefFocus: string;
+  /** 用户点题:明确排除什么。 */
+  briefExclude: string;
+  /** 全场画面扫描:~30 秒一帧扫完整场(需已配置视觉端点;费时/云端计费)。 */
+  fullScan: boolean;
   /** 成片导出根目录;空串 = 跟随系统默认(~/影片/HotClip)。 */
   outDir: string;
   /** 导出画质档(CRF 18/23/28);出厂 high = 历史默认画质。 */
@@ -85,6 +91,9 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   clipLength: "standard",
   genreId: "auto", // 出厂不指定品类:通用提示词里已让模型先自判内容类型
   genreCustom: "",
+  briefFocus: "", // 点题出厂为空:不点题就按通用判据找
+  briefExclude: "",
+  fullScan: false, // 全场扫描费时(云端还计费),默认关由用户开
   outDir: "", // 出厂跟随系统默认目录,用户选过才存绝对路径
   quality: "high", // 与升级前的成片一致,换档是用户的主动选择
 };

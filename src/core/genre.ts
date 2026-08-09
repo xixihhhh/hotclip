@@ -87,12 +87,14 @@ export const GENRE_PRESETS: GenrePreset[] = [
       "②价格揭晓的那一下(\"原价X今天只要Y\"的落点) ③被追问成分/售后/真假时的回答 " +
       "④真实试用与对比演示 ⑤反常识的选购建议。" +
       "证据权重:以话里的信息为主,语气激动只作参考——带货主播全程亢奋是常态,不代表那里是爆点。" +
+      "同一商品的「痛点句/试用演示/价格机制」往往相隔很远:能凑齐两三段时优先用 parts 按「痛点→演示→价格」顺序拼成完整种草片(要素凑不齐不硬拼)。" +
       "一律不选:纯憋单拉互动(\"点赞到X万才上链接\",平台判违规会限流)、机械循环的价格话术、等人垫场的闲聊。",
     criteriaEn:
       "Live-selling stream. Priority: (1) a product behaving unexpectedly or a demo going wrong (most explosive), " +
       "(2) the moment the price lands, (3) answers when pressed on ingredients/returns/authenticity, " +
       "(4) genuine try-ons and comparisons, (5) counterintuitive buying advice. " +
       "Evidence weighting: go by what is said; excited tone means little here — these hosts are loud the whole way through. " +
+      "The pain-point line, the live demo and the price reveal for one product usually sit far apart — when two or three beats exist, prefer a parts stitch in pain→demo→price order (never force it when they don't). " +
       "Never pick: engagement-baiting stalls, looping price scripts, or idle filler chat.",
     evidence: "words",
   },

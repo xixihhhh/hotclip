@@ -30,6 +30,10 @@ export interface MediaSignals {
   audioEventPeaks?: TimeRange[];
   /** 弹幕热度峰值时段(同名 .xml 自动发现;可选,见 danmaku.ts)。 */
   danmakuPeaks?: TimeRange[];
+  /** 主播剪辑口令时刻(「这段剪下来/clip that」——主播自证的爆点,内容在口令之前;见 highlight/commands.ts)。 */
+  clipCommandMarks?: number[];
+  /** 全场扫描的画面时刻线(时刻+能量+一句话画面描述;可选,见 highlight/vision.ts 扫描档)。 */
+  visualNotes?: Array<{ t: number; energy: number; note: string }>;
 }
 
 /** Parse `ebur128` stderr lines: "t: 12.5 ... M: -18.2 ..." → [t, M] samples. */

@@ -21,6 +21,8 @@ import {
 } from "./prompt";
 import { resolveSelection, type RawSelection, type RawPart } from "./match";
 import { prefilterTranscript } from "./prefilter";
+import { detectClipCommands } from "./commands";
+import { applyRuleGate, type GateTier } from "./gate";
 import { clipDurationSec, MAX_PIECES, type ClipPiece } from "../../shared/pieces";
 import { genrePreset, normalizeGenreId, type EvidenceClass } from "../genre";
 import {
@@ -294,6 +296,8 @@ export interface ScoreDims {
 export interface ReviewVerdict {
   id: number;
   keep: boolean;
+  /** 质量门三档(v0.13)。老模型不吐 verdict 时由 keep 推导(true→publish,false→review 保守档)。 */
+  gate: GateTier;
   score: number;
   note: string;
   dims?: ScoreDims;
@@ -333,9 +337,19 @@ export function parseReviews(content: string): ReviewVerdict[] {
     const dims = hasDims
       ? { hook: clamp(v.hook), flow: clamp(v.flow), value: clamp(v.value), trend: clamp(v.trend) }
       : undefined;
+    // 三档判决:非法/缺省时由 keep 推导——keep=false 走保守的 review 档
+    // (老模型没见过 verdict 字段,不能把它的否决直接判成 drop)
+    const rawVerdict = String(v.verdict ?? "");
+    const gate: GateTier =
+      rawVerdict === "publish" || rawVerdict === "review" || rawVerdict === "drop"
+        ? rawVerdict
+        : v.keep !== false
+          ? "publish"
+          : "review";
     out.push({
       id,
-      keep: v.keep !== false,
+      keep: gate === "publish",
+      gate,
       score: dims ? compositeScore(dims) : clamp(v.score),
       note: String(v.note ?? "").trim(),
       dims,
@@ -364,6 +378,9 @@ export function applyReviews(candidates: HighlightCandidate[], reviews: ReviewVe
       score: r.score || c.score,
       recommended: r.keep,
       reviewNote: r.note,
+      // 质量门三档落进候选;drop 的理由必须让人看得见(UI 弃片折叠区展示)
+      gate: r.gate,
+      gateNotes: r.note ? [r.note] : undefined,
       scoreDims: r.dims,
       dimNotes: r.dimNotes,
       teaser: r.teaser || undefined,
@@ -443,9 +460,20 @@ export async function detectHighlights(
   reference?: ReferenceProfile,
   reviewMemory?: ReviewRecord[],
   /** 直播品类判据(内置预设 id + 用户自定义文本,见 core/genre.ts)。 */
-  genre?: { id?: string; custom?: string }
+  genre?: { id?: string; custom?: string },
+  /** 用户点题:重点找什么/明确排除什么(v0.13,见 prompt.briefSection)。 */
+  brief?: { focus?: string; exclude?: string }
 ): Promise<DetectOutcome> {
   if (transcript.segments.length === 0) return { candidates: [] };
+  const zh = isChineseTranscript(transcript);
+
+  // 主播口令打点(v0.13):「这段剪下来/clip that」是主播自证的爆点,纯文本
+  // 扫描零成本,所有调用方(桌面/watch/MCP)自动获得。滞后标记的用法交给
+  // 提示词交代(内容在口令之前)。
+  const commandMarks = detectClipCommands(transcript);
+  if (commandMarks.length > 0) {
+    signals = { loudPeaks: [], cutDense: [], ...signals, clipCommandMarks: commandMarks };
+  }
 
   // 两级漏斗第一级:本地小模型圈入围区间,云端只精读入围部分。
   // 任何失败静默回退全文(反查仍然用全量转写,所以下游完全无感)。
@@ -466,7 +494,7 @@ export async function detectHighlights(
 
   const selections = await chatCompleteJson(
     llm,
-    highlightSystemPrompt(promptTranscript, length, products ?? [], reference, reviewMemory, genre),
+    highlightSystemPrompt(promptTranscript, length, products ?? [], reference, reviewMemory, genre, brief),
     buildHighlightPrompt(promptTranscript, 6, signals),
     parseSelections,
     signal
@@ -530,8 +558,11 @@ export async function detectHighlights(
   // 信号候选**不送复评**:复评的四个维度(钩子/结构/价值/热点)全部按"读文本"
   // 打分,拿它去评一段跳舞或萌宠,必然全判死刑——那正是这条通道要救的品类。
   // applyReviews 对没评到的 id 本来就保持原样(fail-open),所以直接跳过即可。
+  // 质量门规则层收尾:无论复评走不走/成不成,确定性硬伤检查都要跑
+  // (只降档到 review、不 drop,fail-open 见 gate.ts)。
+  const gated = (list: HighlightCandidate[]): HighlightCandidate[] => applyRuleGate(transcript, list, zh);
   const reviewable = kept.filter((c) => c.boundary !== "signal");
-  if (reviewable.length === 0) return { candidates: normalizeScores(kept), funnel };
+  if (reviewable.length === 0) return { candidates: gated(normalizeScores(kept)), funnel };
   try {
     const reviews = await chatCompleteJson(
       llm,
@@ -540,9 +571,9 @@ export async function detectHighlights(
       parseReviews,
       signal
     );
-    return { candidates: normalizeScores(applyReviews(kept, reviews)), funnel };
+    return { candidates: gated(normalizeScores(applyReviews(kept, reviews))), funnel };
   } catch {
-    return { candidates: kept, funnel };
+    return { candidates: gated(kept), funnel };
   }
 }
 

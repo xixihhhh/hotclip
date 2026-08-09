@@ -98,6 +98,14 @@ export interface LlmConfig {
 /** 切片时长档:不同平台/账号定位的节奏(短=快节奏竖屏,长=B站/播客金句段)。 */
 export type ClipLength = "short" | "standard" | "long";
 
+/** 用户点题(v0.13):自然语言告诉 AI 本场重点找什么/明确不要什么。 */
+export interface DetectBrief {
+  /** 重点找:「只要讲到售后的部分」「重点找他聊创业失败的段落」。 */
+  focus?: string;
+  /** 明确排除:「不要抽奖和念弹幕」「排除开头暖场」。 */
+  exclude?: string;
+}
+
 /** 两级漏斗第一级:本地小模型端点(Ollama 等 OpenAI 兼容接口,通常免 Key)。 */
 export interface PrefilterConfig {
   baseUrl: string;
@@ -119,6 +127,10 @@ export interface VisionStats {
   framesTotal: number;
   framesScored: number;
   peakCount: number;
+  /** 本轮跑的是全场扫描档(v0.13;快扫档缺省)。 */
+  fullScan?: boolean;
+  /** 全场扫描带出画面描述的时刻数(画面时刻线进了选段证据)。 */
+  notedMoments?: number;
   /** 候选段画面复核:复核条数(v0.12;未跑复核缺省)。 */
   candidatesReviewed?: number;
   /** 候选段画面复核:被加分/降分的条数。 */
@@ -200,6 +212,13 @@ export interface HighlightCandidate {
   recommended: boolean;
   /** One-line reviewer note (why weak / why strong); may be empty. */
   reviewNote: string;
+  /**
+   * 质量门三档(v0.13):publish=建议发 / review=有硬伤需人工确认 / drop=不建议发。
+   * 缺省 = 没过质量门(信号候选/复评失败/老数据),UI 按普通候选对待。
+   */
+  gate?: "publish" | "review" | "drop";
+  /** 质量门原因清单(LLM 复评 + 规则层硬伤,给人看的证据链)。 */
+  gateNotes?: string[];
   /** 用户手动调过切点(审阅台/微调按钮):导出时跳过镜头吸附,尊重人的决定。 */
   manualBounds?: boolean;
 }
@@ -426,7 +445,11 @@ export interface HotClipApi {
     /** 对标爆款视频路径:实测其节奏画像,选段向对标节奏靠拢(偏好不是硬约束)。 */
     referencePath?: string | null,
     /** 直播品类判据:内置预设 id + 用户改写的自定义文本(自定义优先)。 */
-    genre?: { id?: string; custom?: string } | null
+    genre?: { id?: string; custom?: string } | null,
+    /** 用户点题:重点找什么/明确排除什么(自然语言,注入选段判据)。 */
+    brief?: DetectBrief | null,
+    /** 全场画面扫描:视觉端点已配置时按 ~30s 一帧扫完整场,画面时刻线进选段证据(费时/云端计费,默认关)。 */
+    scan?: boolean
   ) => Promise<DetectHighlightsResult>;
   /** Cut the selected highlights into mp4 files; resolves with the file list. */
   exportClips: (filePath: string, clips: HighlightCandidate[], options?: ExportOptions) => Promise<ExportedClip[]>;

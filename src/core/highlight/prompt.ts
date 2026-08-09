@@ -143,7 +143,8 @@ export function highlightSystemPrompt(
   products: string[] = [],
   reference?: ReferenceProfile,
   reviewMemory?: ReviewRecord[],
-  genre?: { id?: string; custom?: string }
+  genre?: { id?: string; custom?: string },
+  brief?: { focus?: string; exclude?: string }
 ): string {
   const zh = isChineseTranscript(transcript);
   let base = zh ? HIGHLIGHT_SYSTEM_PROMPT_ZH : HIGHLIGHT_SYSTEM_PROMPT_EN;
@@ -157,6 +158,8 @@ export function highlightSystemPrompt(
   // 品类判据:不同品类连"该信哪路证据"都不一样,放在通用判据之后覆盖它
   if (genre) base += genreSection(genre.id, zh, genre.custom);
   if (products.length > 0) base += productSection(products, zh);
+  // 用户点题:明确的人工意图,优先级压过通用判据(对齐 OpusClip Contextual Prompting)
+  base += briefSection(brief, zh);
   // 参考爆款画像:节奏偏好段(用户丢了对标切片时才有)
   if (reference) base += referencePromptSection(reference, zh);
   // 审阅偏好回流:本机历史采用/否决样例(空记忆返回 "")
@@ -178,15 +181,51 @@ export function productSection(products: string[], zh: boolean): string {
       `③价格与机制("原价X今天只要Y""买一送一""叠加优惠券") ④催单只保留紧邻讲解或上链接的部分("三二一,上链接"是天然收尾),不单独成片 ⑤答疑打消顾虑(尺码/成分/售后)。` +
       `讲解区间常以"接下来/下一个/X号链接给大家讲"开始、"我们看下一款"结束,可据此定位。` +
       `一律不选:与商品无关的闲聊寒暄、等人垫场、纯憋单拉互动("点赞到X万才上链接"——平台判违规,切出去会限流)、同一句机制话术机械循环、讲解被打断或商品不完整的碎片。` +
-      `每条候选的 keywords 必须包含它命中的商品词。`
+      `每条候选的 keywords 必须包含它命中的商品词。` +
+      `\n【带货三段式拼接】2026 年最能出单的带货切片结构是「痛点→演示→价格」三段:开头一句戳中为什么需要它,中间接试用/实测的眼见为实,结尾落在价格/机制给出下单理由。` +
+      `同一商品的这三类内容在直播里往往相隔很远——只要能凑齐其中两到三段,就优先用 parts 按「痛点→演示→价格」的顺序拼成一条完整种草片(每段完整不掐断,总时长仍守上限),并在 reason 里写明拼了哪几个要素;` +
+      `要素凑不齐就不硬拼,按单段选。拼接仍然不许改变原意——痛点和演示必须真的在说同一个商品。`
     );
   }
   return (
     `\n\n[Product mode] The user specified product keywords: ${list}. This is a live-selling stream — only pick segments directly about these products, ranked by conversion value: ` +
     `(1) try-on/live-demo moments (seeing is believing), (2) key selling-point explanations, (3) price & bundle mechanics, (4) call-to-action lines only when adjacent to a demo/link drop (never standalone), (5) objection-handling Q&A. ` +
     `Skip idle chat, stalling-for-engagement segments (platforms flag these as violations), repeated price-script loops, and fragments where the pitch is cut off. ` +
-    `Each candidate's keywords must include the product words it matches.`
+    `Each candidate's keywords must include the product words it matches.` +
+    `\n[Selling three-act stitch] The highest-converting selling clip in 2026 is a "pain point → demo → price" three-act cut: open on why the viewer needs it, show the live demo, land on the price/deal. ` +
+    `These three beats for one product usually sit far apart in the stream — whenever you can gather two or three of them, prefer a "parts" stitch in pain→demo→price order (each part complete, total length within the limit) and say in reason which beats you stitched; ` +
+    `if the beats aren't all there, don't force it — pick a single continuous segment instead. Stitching must never change meaning: the pain point and the demo must genuinely be about the same product.`
   );
+}
+
+/** 点题文本的长度上限(超长注入只会稀释判据)。 */
+export const BRIEF_MAX_CHARS = 300;
+
+/**
+ * 用户点题段(v0.13):用户用自然语言指定「重点找什么/明确不要什么」。
+ * 这是唯一一段真正的人工意图,优先级要压过所有自动判据——但排除不等于
+ * 无中生有:重点内容在素材里真不存在时宁可少给,不许硬凑。
+ */
+export function briefSection(brief: { focus?: string; exclude?: string } | undefined, zh: boolean): string {
+  const focus = brief?.focus?.trim().slice(0, BRIEF_MAX_CHARS) ?? "";
+  const exclude = brief?.exclude?.trim().slice(0, BRIEF_MAX_CHARS) ?? "";
+  if (!focus && !exclude) return "";
+  if (zh) {
+    const lines = [
+      "\n\n【用户点题】用户对本场切片提了明确要求,优先级高于上面的通用判据:",
+      ...(focus ? [`- 重点找:${focus}`] : []),
+      ...(exclude ? [`- 明确排除:${exclude}(这类内容再精彩也不要选)`] : []),
+      "点题只改变「找什么」,不改变质量标准——素材里真没有用户要的内容时,宁可少给或不给,绝不硬凑不相关的片段充数。",
+    ];
+    return lines.join("\n");
+  }
+  const lines = [
+    "\n\n[User brief] The user gave explicit instructions for this session — they override the general criteria above:",
+    ...(focus ? [`- Focus on: ${focus}`] : []),
+    ...(exclude ? [`- Explicitly exclude: ${exclude} (skip these even if they are strong)`] : []),
+    "The brief changes WHAT to hunt, not the quality bar — if the requested content simply isn't in the footage, return fewer clips rather than padding with unrelated picks.",
+  ];
+  return lines.join("\n");
 }
 
 /** True when the transcript carries diarization with more than one speaker. */
@@ -283,6 +322,25 @@ export function renderSignals(signals: MediaSignals | undefined, zh: boolean): s
   }
   if (signals.danmakuPeaks && signals.danmakuPeaks.length > 0) {
     lines.push(zh ? `- 弹幕热度峰值时段(观众实时高能反应,证据力最强): ${fmt(signals.danmakuPeaks)}` : `- Live-chat density peaks (real-time audience hype, strongest evidence): ${fmt(signals.danmakuPeaks)}`);
+  }
+  if (signals.clipCommandMarks && signals.clipCommandMarks.length > 0) {
+    const marks = signals.clipCommandMarks.map(fmtClock).join(", ");
+    // 口令与笑声同理是滞后标记:被认证的内容在口令之前——用法必须写死在提示词里
+    lines.push(
+      zh
+        ? `- 主播剪辑口令时刻(主播亲口说「这段剪下来/切片」——他本人实时认证的爆点,证据力最高): ${marks}\n  ⚠ 口令指的是它**之前**刚发生的内容:从口令时刻往前找到被指的那段完整内容来选,不要把口令本身当片段(必要时可把口令那句留作收尾)`
+        : `- Streamer clip commands (the host literally said "clip that" — self-certified highlights, highest-value evidence): ${marks}\n  ⚠ The command points at what JUST happened **before** it: walk back from the mark to the complete moment being referenced; never clip the command line itself (at most keep it as the tail)`
+    );
+  }
+  if (signals.visualNotes && signals.visualNotes.length > 0) {
+    const notes = signals.visualNotes
+      .map((n) => `${fmtClock(n.t)} ${n.note || (zh ? "画面高能" : "visual peak")}(${n.energy}/10)`)
+      .join(zh ? ";" : "; ");
+    lines.push(
+      zh
+        ? `- 全场画面时刻线(视觉模型逐段扫过整场后的画面描述——文字稿看不见的画面事件都在这里): ${notes}\n  与其中高分时刻重合的内容,画面上真的有东西;文字平平但画面描述炸裂的时刻值得选`
+        : `- Full-stream visual timeline (a vision model swept the whole stream — on-screen events the transcript cannot show): ${notes}\n  Moments overlapping high-energy notes really have something on screen; flat text + explosive visuals is still a pick`
+    );
   }
   if (lines.length === 0) return "";
   return zh
@@ -454,7 +512,11 @@ export const REVIEW_SYSTEM_PROMPT_ZH = `你是一位极其严格的短视频内�
 - value 价值:不看原视频,这条有没有信息量或情绪价值?值不值得看完?
 - trend 热点:话题/情绪贴不贴近当下平台上正在火的内容?
 另外给每条写一个 teaser:≤15 个字的悬念句,能印在视频开头当文字钩子,要勾人但不剧透。
-你要敢于否决:平庸、凑数、需要上下文才能懂的片段,一律 keep=false。这是发布前的最后一道质量门,放水的代价是账号发废片。`;
+每条还要做「零上下文可懂性」终判——假装你完全没看过这场直播,只看这条片段:能不能懂?结尾像不像一个结尾?据此给出 verdict 三档:
+- "publish":直接发没问题——单独看得懂、开头能停手指、结尾收得住
+- "review":有硬伤但救得回来,需要人工确认(开头像半截话/结尾没收住/需要一点上下文/拼接略牵强)——在 note 里写清具体是哪个硬伤
+- "drop":不值得发布——不完整的思想、凑数的平庸内容、断章取义、单独看根本看不懂
+你要敢于判 drop:AI 选段有三四成是废片是行业现实,发废片的代价是整个账号被限流。这是发布前的最后一道质量门。keep 字段继续填(publish 填 true,其余填 false)。`;
 
 export const REVIEW_SYSTEM_PROMPT_EN = `You are a ruthless short-form content reviewer. You receive pre-cut clip candidates and judge each one blind, as a stranger scrolling past, scoring FOUR dimensions (0-100 each) with a one-line reason per dimension:
 - hook: does the FIRST line stop the scroll within 3 seconds? Flat openings fail.
@@ -462,7 +524,11 @@ export const REVIEW_SYSTEM_PROMPT_EN = `You are a ruthless short-form content re
 - value: without the source video, is it informative or emotionally worth watching to the end?
 - trend: does the topic/emotion ride what is currently hot on the platforms?
 Also write a teaser per clip: a suspense line of ≤8 words that could be printed at the top of the video as a text hook — intriguing, no spoilers.
-Reject freely: mediocre, filler, or context-dependent clips get keep=false. You are the final quality gate before publishing — letting weak clips through burns the channel.`;
+Finish each clip with a ZERO-CONTEXT verdict — pretend you never saw the stream and only watch this clip: can you follow it, and does the ending land? Emit one of three tiers:
+- "publish": safe to post as-is — stands alone, the opening stops the scroll, the ending lands
+- "review": has a fixable flaw and needs a human look (opens mid-thought / ending doesn't land / needs a little context / stitch is slightly strained) — name the flaw in note
+- "drop": not worth publishing — incomplete thought, filler, quote-mined, or incomprehensible on its own
+Judge "drop" without mercy: 30-45% of AI picks being duds is the industry reality, and posting duds throttles the whole account. You are the final quality gate. Keep filling keep (true for publish, false otherwise).`;
 
 export function reviewSystemPrompt(transcript: Transcript): string {
   return isChineseTranscript(transcript) ? REVIEW_SYSTEM_PROMPT_ZH : REVIEW_SYSTEM_PROMPT_EN;
@@ -471,7 +537,7 @@ export function reviewSystemPrompt(transcript: Transcript): string {
 const REVIEW_SHAPE = `{
   "reviews": [
     {
-      "id": 1, "keep": true,
+      "id": 1, "keep": true, "verdict": "publish",
       "hook": 82, "hookNote": "...",
       "flow": 74, "flowNote": "...",
       "value": 88, "valueNote": "...",
@@ -520,6 +586,6 @@ export function buildReviewPrompt(transcript: Transcript, clips: ReviewableClip[
     })
     .join("\n\n");
   return zh
-    ? `逐条盲评下面的候选片段。hook/flow/value/trend 四维各 0-100 打分(横向比较)+ 各一句话理由;teaser=≤15字悬念句(勾人不剧透,逐句稿同款语言);keep=false 表示不建议发布;note=一句话总评(不推荐时必须说清原因)。\n\n${blocks}\n\n【输出格式】严格输出 JSON,不要任何多余文字:\n${REVIEW_SHAPE}`
-    : `Blind-review each candidate below. Score hook/flow/value/trend 0-100 each (relative) with a one-line reason per dimension; teaser = a ≤8-word suspense line (intriguing, no spoilers, transcript language); keep=false means do not publish; note = one-line overall verdict (mandatory when rejecting).\n\n${blocks}\n\n【Output format】STRICT JSON only:\n${REVIEW_SHAPE}`;
+    ? `逐条盲评下面的候选片段。hook/flow/value/trend 四维各 0-100 打分(横向比较)+ 各一句话理由;teaser=≤15字悬念句(勾人不剧透,逐句稿同款语言);verdict=质量门三档(publish/review/drop,判法见系统要求);keep 与 verdict 对应(publish=true,其余 false);note=一句话总评(review/drop 必须说清具体硬伤)。\n\n${blocks}\n\n【输出格式】严格输出 JSON,不要任何多余文字:\n${REVIEW_SHAPE}`
+    : `Blind-review each candidate below. Score hook/flow/value/trend 0-100 each (relative) with a one-line reason per dimension; teaser = a ≤8-word suspense line (intriguing, no spoilers, transcript language); verdict = the three-tier gate (publish/review/drop, per the system rules); keep mirrors verdict (true only for publish); note = one-line overall verdict (must name the flaw for review/drop).\n\n${blocks}\n\n【Output format】STRICT JSON only:\n${REVIEW_SHAPE}`;
 }

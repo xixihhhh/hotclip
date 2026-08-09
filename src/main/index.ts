@@ -400,7 +400,7 @@ ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: 
 
 ipcMain.handle(
   "hotclip:detect-highlights",
-  async (_event, transcript: unknown, llm: unknown, filePath: unknown, diarize: unknown, prefilter: unknown, vision: unknown, length: unknown, products: unknown, referencePath: unknown, genre: unknown) => {
+  async (_event, transcript: unknown, llm: unknown, filePath: unknown, diarize: unknown, prefilter: unknown, vision: unknown, length: unknown, products: unknown, referencePath: unknown, genre: unknown, brief: unknown, scan: unknown) => {
     let t = transcript as Transcript;
     const config = llm as LlmConfig;
     if (!t || !Array.isArray(t.segments)) throw new Error("detect-highlights requires a transcript");
@@ -492,6 +492,8 @@ ipcMain.handle(
                 durationSec: media.durationSec,
                 config: visionCfg,
                 signals,
+                // 全场扫描档(v0.13):用户显式开启才跑(费时;云端按量计费)
+                scan: scan === true,
                 // 接触表九宫格的序号标注字体(与字幕同一捆绑字体)
                 fontFile: app.isPackaged
                   ? join(process.resourcesPath, "fonts", "SourceHanSansSC-Bold.otf")
@@ -505,6 +507,8 @@ ipcMain.handle(
             cutDense: [],
             ...signals,
             ...(visionOutcome ? { visualPeaks: visionOutcome.visualPeaks } : {}),
+            // 画面时刻线(全场扫描档):画面描述回流选段证据
+            ...(visionOutcome && visionOutcome.visualNotes.length > 0 ? { visualNotes: visionOutcome.visualNotes } : {}),
             ...(emotionOutcome ? { emotionPeaks: emotionOutcome.emotionPeaks } : {}),
           };
           visionStats = visionOutcome?.stats;
@@ -541,7 +545,16 @@ ipcMain.handle(
             custom: typeof g.custom === "string" ? g.custom : undefined,
           }
         : undefined;
-    const outcome = await detectHighlights(t, config, undefined, signals, localFilter, clipLength, productWords, reference, reviewMemory, genreArg);
+    // 用户点题:白名单清洗(两段自由文本,截断由 core 侧 briefSection 兜)
+    const b = brief as { focus?: unknown; exclude?: unknown } | null | undefined;
+    const briefArg =
+      b && ((typeof b.focus === "string" && b.focus.trim()) || (typeof b.exclude === "string" && b.exclude.trim()))
+        ? {
+            focus: typeof b.focus === "string" ? b.focus.trim() : undefined,
+            exclude: typeof b.exclude === "string" ? b.exclude.trim() : undefined,
+          }
+        : undefined;
+    const outcome = await detectHighlights(t, config, undefined, signals, localFilter, clipLength, productWords, reference, reviewMemory, genreArg, briefArg);
     // 候选段画面复核(v0.12):每条候选一张接触表让 VL 看画面,画面分回流
     // 排序、看点进 reason。fail-open:失败/超时沿用原候选。
     let candidates = outcome.candidates;

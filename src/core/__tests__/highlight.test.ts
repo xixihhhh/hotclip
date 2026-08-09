@@ -122,8 +122,22 @@ describe("parseReviews / applyReviews", () => {
   it("parses verdicts and tolerates fenced JSON", () => {
     const out = parseReviews('```json\n{"reviews":[{"id":1,"keep":false,"score":30,"note":"平淡"},{"id":2,"keep":true,"score":88}]}\n```');
     expect(out).toEqual([
-      { id: 1, keep: false, score: 30, note: "平淡" },
-      { id: 2, keep: true, score: 88, note: "" },
+      // 老输出没有 verdict:keep=false 推导为保守的 review 档(不是 drop)
+      { id: 1, keep: false, gate: "review", score: 30, note: "平淡" },
+      { id: 2, keep: true, gate: "publish", score: 88, note: "" },
+    ]);
+  });
+
+  it("parses the three-tier verdict field and keep follows it", () => {
+    const out = parseReviews(
+      '{"reviews":[{"id":1,"verdict":"publish","score":90},{"id":2,"verdict":"review","keep":true,"score":70,"note":"结尾没收住"},{"id":3,"verdict":"drop","score":20,"note":"凑数"},{"id":4,"verdict":"胡说","keep":true,"score":50}]}'
+    );
+    // keep 一律由 verdict 推导(publish 才 true),模型把 keep 填错也不影响档位
+    expect(out.map((r) => [r.gate, r.keep])).toEqual([
+      ["publish", true],
+      ["review", false],
+      ["drop", false],
+      ["publish", true], // 非法 verdict 回退 keep 推导
     ]);
   });
 
@@ -136,9 +150,10 @@ describe("parseReviews / applyReviews", () => {
       { ...base, id: 1, score: 90 },
       { ...base, id: 2, score: 80 },
     ];
-    const out = applyReviews(cands, [{ id: 1, keep: false, score: 35, note: "弱钩子" }]);
-    expect(out[0]).toMatchObject({ recommended: false, score: 35, reviewNote: "弱钩子" });
+    const out = applyReviews(cands, [{ id: 1, keep: false, gate: "drop", score: 35, note: "弱钩子" }]);
+    expect(out[0]).toMatchObject({ recommended: false, score: 35, reviewNote: "弱钩子", gate: "drop", gateNotes: ["弱钩子"] });
     expect(out[1]).toMatchObject({ recommended: true, score: 80 });
+    expect(out[1].gate).toBeUndefined();
   });
 
   it("throws on malformed reviewer output", () => {
@@ -163,7 +178,7 @@ describe("parseReviews / applyReviews", () => {
     };
     const out = applyReviews(
       [{ ...base, id: 1, score: 90 }],
-      [{ id: 1, keep: true, score: 74, note: "", dims: { hook: 80, flow: 60, value: 100, trend: 40 }, teaser: "钩子句" }]
+      [{ id: 1, keep: true, gate: "publish", score: 74, note: "", dims: { hook: 80, flow: 60, value: 100, trend: 40 }, teaser: "钩子句" }]
     );
     expect(out[0].scoreDims).toEqual({ hook: 80, flow: 60, value: 100, trend: 40 });
     expect(out[0].teaser).toBe("钩子句");

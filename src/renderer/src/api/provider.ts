@@ -294,7 +294,7 @@ const browserMock: HotClipApi = {
   openUrl(url) {
     window.open(url, "_blank", "noreferrer");
   },
-  async detectHighlights(transcript, _llm, _filePath, diarize, prefilter, vision, _length, products, referencePath): Promise<DetectHighlightsResult> {
+  async detectHighlights(transcript, _llm, _filePath, diarize, prefilter, vision, _length, products, referencePath, _genre, _brief, scan): Promise<DetectHighlightsResult> {
     await sleep(1500);
     // 浏览器预览:给了参考视频就演示一份画像
     const reference = referencePath
@@ -304,8 +304,12 @@ const browserMock: HotClipApi = {
     const funnel = prefilter
       ? { totalSegments: 220, keptSegments: 41, totalChars: 12800, keptChars: 2400 }
       : undefined;
-    // 开了视觉信号就演示一份抽帧统计
-    const visionStats = vision ? { framesTotal: 20, framesScored: 18, peakCount: 3 } : undefined;
+    // 开了视觉信号就演示一份抽帧统计;开了全场扫描给扫描档的量级
+    const visionStats = vision
+      ? scan
+        ? { framesTotal: 240, framesScored: 233, peakCount: 9, fullScan: true, notedMoments: 14 }
+        : { framesTotal: 20, framesScored: 18, peakCount: 3 }
+      : undefined;
     // 表情峰值信号零配置自动跑,浏览器预览恒给演示统计
     const emotionStats = { framesTotal: 96, facesScored: 74, peakCount: 2 };
     // 弹幕信号:演示"录播旁发现了同名弹幕 XML"的情况
@@ -335,8 +339,16 @@ const browserMock: HotClipApi = {
           ? { hook: "实测演示开场,3秒内有画面冲击", flow: "起于提问收于结论,完整", value: "省钱结论直接可用", trend: "比价内容平台长青" }
           : undefined,
       teaser: id === 1 ? "倒半杯水会怎样?" : id === 2 ? "差价10倍的真相" : "",
-      recommended: id !== 3,
-      reviewNote: id === 3 ? "开场是问候语,前3秒没有钩子,独立可看性弱" : "",
+      recommended: id === 1,
+      reviewNote: id === 3 ? "开场是问候语,前3秒没有钩子,独立可看性弱" : id === 2 ? "结尾截在逗号上,建议人工顺一下切点" : "",
+      // 质量门三档演示:1=建议发 2=需人审(规则层抓到硬伤) 3=弃
+      gate: id === 1 ? "publish" : id === 2 ? "review" : "drop",
+      gateNotes:
+        id === 2
+          ? ["结尾没收住(截在逗号上)"]
+          : id === 3
+            ? ["开场是问候语,单独看没有信息量,不值得发布"]
+            : undefined,
     });
     // 多片段拼接演示:承诺句和后面的打脸句相隔很远,摆在一起才成立——
     // 浏览器预览要能走通拼接的整条 UI(候选卡的拼接标记 + 审阅台的段清单预览)
@@ -365,6 +377,7 @@ const browserMock: HotClipApi = {
       teaser: "他自己打了自己的脸",
       recommended: true,
       reviewNote: "",
+      gate: "publish",
     };
     const candidates = [
       pick(3, 4, 1, "半杯水都不渗?实测给你看", "你看这个吸水速度,直接倒半杯水都不带渗的", 92, "强演示钩子+价格反差,完播率高"),

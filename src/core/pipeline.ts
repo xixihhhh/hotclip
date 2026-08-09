@@ -141,7 +141,9 @@ export async function autoClip(videoPath: string, cfg: AutoClipConfig): Promise<
   const transcript = await transcribeCached(videoPath, cfg.modelsRoot, cfg.cacheDir, cfg.glossary);
   cfg.onStage?.("detecting");
   const candidates = await detectForPipeline(videoPath, transcript, cfg);
-  const publishable = candidates.filter((c) => c.recommended);
+  // 无人值守只发「建议发」档:质量门判需人审/弃的没有人看过,不能自动发出去
+  // (gate 缺省 = 信号候选/复评没跑,沿用 recommended 的老语义)
+  const publishable = candidates.filter((c) => c.recommended && (c.gate === undefined || c.gate === "publish"));
   const outDir =
     cfg.outDir ?? join(dirname(videoPath), `${sanitizeFilename(basename(videoPath, extname(videoPath)), "video")}-hotclip`);
   if (publishable.length === 0) return { outDir, transcript, candidates, exported: [] };
