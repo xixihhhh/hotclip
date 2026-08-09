@@ -27,6 +27,8 @@ import {
   LuRepeat2,
   LuScan,
   LuUsers,
+  LuWind,
+  LuShuffle,
   LuTriangleAlert,
   LuType,
   LuZap,
@@ -175,7 +177,7 @@ export function HighlightsView({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   // 出片偏好持久化:上次的开关组合下次直接生效(解构保持下方 JSX 引用不变)
   const { prefs, setPref } = useRenderPrefs();
-  const { vertical, captionStyle, jumpCut, cleanFillers, cutRetakes, autoZoom, sfx, bgmPath, trimUi, titleCard, openingHook, coldOpen, flashForward, preciseAlign, alsoLandscape, normalizeLoudness, denoise, compilation, translate, publishCopy, subtitleFile, timeline, aigcLabel, evidencePack, publishPack, packPlatforms, variants, outDir, quality } = prefs;
+  const { vertical, captionStyle, jumpCut, keepBreath, speakerLabels, templateJitter, cleanFillers, cutRetakes, autoZoom, sfx, bgmPath, trimUi, titleCard, openingHook, coldOpen, flashForward, preciseAlign, alsoLandscape, normalizeLoudness, denoise, compilation, translate, publishCopy, subtitleFile, timeline, aigcLabel, evidencePack, publishPack, packPlatforms, variants, outDir, quality } = prefs;
   /** 出厂导出根目录(主进程才知道 ~/影片 在哪);用户没自选时显示它。 */
   const [defaultOutDir, setDefaultOutDir] = useState("");
   useEffect(() => {
@@ -1246,6 +1248,10 @@ export function HighlightsView({
                     { key: "optColdOpen", on: coldOpen, Icon: LuFastForward, label: t("optColdOpen"), act: () => setPref({ coldOpen: !coldOpen }) },
                     { key: "optFlash", on: flashForward, Icon: LuZap, label: t("optFlash"), act: () => setPref({ flashForward: !flashForward }) },
                     { key: "optJumpCut", on: jumpCut, Icon: LuFastForward, label: t("optJumpCut"), act: () => setPref({ jumpCut: !jumpCut }) },
+                    // 保留呼吸口:跳剪的子选项,跳剪关着时置灰
+                    { key: "optBreath", on: keepBreath && jumpCut, disabled: !jumpCut, Icon: LuWind, label: t("optBreath"), act: () => setPref({ keepBreath: !keepBreath }) },
+                    // 说话人标签:吃多人对谈的标注,没开对谈时置灰
+                    { key: "optSpeakerTags", on: speakerLabels && diarize, disabled: !diarize, Icon: LuUsers, label: t("optSpeakerTags"), act: () => setPref({ speakerLabels: !speakerLabels }) },
                     { key: "optAlign", on: preciseAlign, Icon: LuCrosshair, label: t("optAlign"), act: () => setPref({ preciseAlign: !preciseAlign }) },
                     { key: "optCleanFillers", on: cleanFillers, Icon: LuEraser, label: t("optCleanFillers"), act: () => setPref({ cleanFillers: !cleanFillers }) },
                     { key: "optCutRetakes", on: cutRetakes, Icon: LuRepeat2, label: t("optCutRetakes"), act: () => setPref({ cutRetakes: !cutRetakes }) },
@@ -1271,6 +1277,8 @@ export function HighlightsView({
                       act: () => setPref({ variants: variants >= 3 ? 1 : variants + 1 }),
                     },
                     { key: "optPack", on: publishPack, Icon: LuPackage, label: t("optPack"), act: () => setPref({ publishPack: !publishPack }) },
+                    // 模板微扰:矩阵批量发的反量产指纹,挨着一片多版/发布包这组
+                    { key: "optJitter", on: templateJitter, Icon: LuShuffle, label: t("optJitter"), act: () => setPref({ templateJitter: !templateJitter }) },
                     {
                       key: "captionStyle",
                       on: captionStyle !== "none",
@@ -1391,7 +1399,7 @@ export function HighlightsView({
                   void getApi()
                     .recordReview(filePath ?? "", summarize(candidates.filter((c) => selected.has(c.id))), summarize(candidates.filter((c) => !selected.has(c.id))))
                     .catch(() => {});
-                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, cleanFillers, cutRetakes, autoZoom, sfx, bgmPath: bgmPath || undefined, genreId, preciseAlign, trimUi, titleCard, openingHook, coldOpen, flashForward, alsoLandscape, normalizeLoudness, denoise, compilation, brand: activeBrandStyle(brandState), translate: translate ? { targetLang, llm: config } : undefined, publishCopy: publishCopy ? { llm: config } : undefined, subtitleFile, timeline, aigcLabel, evidencePack, publishPack: publishPack && packPlatforms.length > 0 ? packPlatforms : undefined, variants: variants > 1 ? { count: variants, llm: config } : undefined, outDir, quality });
+                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, keepBreath, speakerLabels, templateJitter, cleanFillers, cutRetakes, autoZoom, sfx, bgmPath: bgmPath || undefined, genreId, preciseAlign, trimUi, titleCard, openingHook, coldOpen, flashForward, alsoLandscape, normalizeLoudness, denoise, compilation, brand: activeBrandStyle(brandState), translate: translate ? { targetLang, llm: config } : undefined, publishCopy: publishCopy ? { llm: config } : undefined, subtitleFile, timeline, aigcLabel, evidencePack, publishPack: publishPack && packPlatforms.length > 0 ? packPlatforms : undefined, variants: variants > 1 ? { count: variants, llm: config } : undefined, outDir, quality });
                 }}
                 className="btn-flame inline-flex shrink-0 items-center gap-1.5 rounded-lg px-6 py-2.5 text-[14px] font-bold whitespace-nowrap text-white disabled:opacity-40"
               >

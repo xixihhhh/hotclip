@@ -282,6 +282,12 @@ export interface ExportOptions {
   captionStyle: CaptionStyleChoice;
   /** Splice out intra-clip silences for a tighter, hand-edited rhythm. */
   jumpCut: boolean;
+  /** 保留呼吸口:跳剪剪长停顿时每个剪口多留一口气(~0.25s),不无缝贴死。 */
+  keepBreath?: boolean;
+  /** 说话人标签:多说话人切片换人时字幕行首加彩色「A:」(开了多人对谈才有标注)。 */
+  speakerLabels?: boolean;
+  /** 模板受控微扰:按切片种子小幅抖动字幕几何,批量出片不共享模板指纹。 */
+  templateJitter?: boolean;
   /** Splice out hesitation sounds (嗯/呃/um/uh) and stutter repeats. */
   cleanFillers?: boolean;
   /** 剪掉重录废稿:同一句紧挨着说了两遍时只留最后一遍。 */

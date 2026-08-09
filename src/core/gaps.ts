@@ -40,6 +40,12 @@ export interface JumpCutOptions {
    * forceCutSpans——语气词/重录/拼接是明确要删的内容)。
    */
   protectedSpans?: KeptSegment[];
+  /**
+   * 保留呼吸口(v0.14):每个 gap 剪口在语音尾部多留这么多秒的自然停顿——
+   * 长停顿照剪,但剪完不是无缝贴死,句间还有一口气。跳剪「过瘦」是 AI 味
+   * 的来源之一(真人剪辑会给呼吸留空)。0/缺省 = 历史紧凑节奏不变。
+   */
+  breathPadSec?: number;
 }
 
 /** Subtract cut spans from kept segments (interval difference). Pure. */
@@ -83,6 +89,8 @@ export interface JumpCutPlan {
 
 /** Word gaps longer than this get cut. */
 const GAP_THRESHOLD_SEC = 0.6;
+/** 「保留呼吸口」的默认留白量(加在语音尾部 PAD_AFTER 之上)。 */
+export const BREATH_PAD_SEC = 0.25;
 /** Breathing room kept around speech on both sides of a cut. */
 const PAD_BEFORE_SEC = 0.12;
 const PAD_AFTER_SEC = 0.18;
@@ -115,7 +123,9 @@ export function computeJumpCut(
   clipEndSec: number,
   options: JumpCutOptions = {}
 ): JumpCutPlan {
-  const { peaks, silenceThreshold = SILENCE_PEAK_THRESHOLD, forceCutSpans = [], gapThresholdSec = GAP_THRESHOLD_SEC, protectedSpans = [] } = options;
+  const { peaks, silenceThreshold = SILENCE_PEAK_THRESHOLD, forceCutSpans = [], gapThresholdSec = GAP_THRESHOLD_SEC, protectedSpans = [], breathPadSec = 0 } = options;
+  // 呼吸口加在语音尾部:剪掉的区间相应缩短,句尾多留一口气
+  const padAfter = PAD_AFTER_SEC + Math.max(0, breathPadSec);
   const inClip = words.filter((w) => w.endSec > clipStartSec && w.startSec < clipEndSec);
   if (inClip.length === 0) {
     const full = { startSec: clipStartSec, endSec: clipEndSec };
@@ -130,15 +140,15 @@ export function computeJumpCut(
     const gap = w.startSec - prevEnd;
     if (gap > gapThresholdSec) {
       // AND gate: the removed span must be word-free AND acoustically quiet.
-      const removedFrom = prevEnd + PAD_AFTER_SEC;
+      const removedFrom = prevEnd + padAfter;
       const removedTo = w.startSec - PAD_BEFORE_SEC;
       const quiet =
         !peaks || removedTo <= removedFrom || peakInRange(peaks, removedFrom, removedTo) < silenceThreshold;
       // 情绪守卫:待删空隙撞上禁删区间(情绪事件 ±保护半径)就不剪
       const protectedGap = protectedSpans.some((p) => p.startSec < removedTo && p.endSec > removedFrom);
       if (quiet && !protectedGap) {
-        segments.push({ startSec: segStart, endSec: Math.min(prevEnd + PAD_AFTER_SEC, clipEndSec) });
-        segStart = Math.max(w.startSec - PAD_BEFORE_SEC, prevEnd + PAD_AFTER_SEC);
+        segments.push({ startSec: segStart, endSec: Math.min(prevEnd + padAfter, clipEndSec) });
+        segStart = Math.max(w.startSec - PAD_BEFORE_SEC, prevEnd + padAfter);
       }
     }
     prevEnd = Math.max(prevEnd, w.endSec);
@@ -165,6 +175,8 @@ export function computeJumpCut(
           text: w.text,
           startSec: outOffset + (w.startSec - seg.startSec),
           endSec: outOffset + Math.min(w.endSec, seg.endSec) - seg.startSec,
+          // 说话人标注跟着词走——丢了它,压缩时间轴上的字幕就没法按人上色/打标签
+          ...(w.speaker !== undefined ? { speaker: w.speaker } : {}),
         });
       }
     }

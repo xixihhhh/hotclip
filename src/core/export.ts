@@ -13,7 +13,8 @@ import { resolveFfmpegPath } from "./binaries";
 const execFileAsync = promisify(execFile);
 import { cutClip, cutJumpClip, concatClips } from "./cut";
 import { planColdOpen, planFlashForward, FLASH_SKIP_NEAR_START_SEC } from "./coldopen";
-import { computeJumpCut } from "./gaps";
+import { computeJumpCut, BREATH_PAD_SEC } from "./gaps";
+import { perturbLayout } from "../shared/perturb";
 import { clampTranslationLines, remapTranslationLines, type TranslationLine } from "./translate";
 import { postTextFile, type PublishCopy } from "./publish";
 import { buildPublishPacks, coverFilter, type PackSummary } from "./publish-pack";
@@ -224,6 +225,12 @@ export interface ExportRenderOptions {
   renderOverlay?: OverlayRenderFn;
   /** Splice out intra-clip silences (clips must carry `words`). */
   jumpCut?: boolean;
+  /** 保留呼吸口:跳剪剪长停顿时每个剪口多留一口气(~0.25s),不无缝贴死。 */
+  keepBreath?: boolean;
+  /** 说话人标签:多说话人切片换人时字幕行首加彩色「A:」(词表带标注才生效)。 */
+  speakerLabels?: boolean;
+  /** 模板受控微扰:按切片种子小幅抖动字幕几何(字号/基线),批量出片不共享模板指纹。 */
+  templateJitter?: boolean;
   /** Splice out hesitation sounds (嗯/呃/um/uh) and stutter repeats. */
   cleanFillers?: boolean;
   /** 剪掉重录废稿:同一句紧挨着说了两遍时,只留最后一遍(见 retakes.ts)。 */
@@ -386,7 +393,7 @@ export async function exportClips(
     return sfxDir;
   };
   // 品牌预设:字号/位置作用于布局,高亮色传给字幕构建,水印挂进 filter 链
-  const layout = applyBrandToLayout(options.vertical ? VERTICAL_LAYOUT : HORIZONTAL_LAYOUT, options.brand);
+  const baseLayout = applyBrandToLayout(options.vertical ? VERTICAL_LAYOUT : HORIZONTAL_LAYOUT, options.brand);
   const watermark: WatermarkSpec | undefined = options.brand?.watermark
     ? {
         path: options.brand.watermark.path,
@@ -434,6 +441,12 @@ export async function exportClips(
       let clip = clips[i];
       if (signal?.aborted) throw new Error("export cancelled");
       onProgress?.({ current: i + 1, total: totalUnits, clipId: clip.id, stage: "cutting" });
+
+      // 模板受控微扰(v0.14):按「源文件+切片 id」种子小幅抖动字幕几何,
+      // 批量出的成片不共享像素级相同的版式指纹;同种子可复现。
+      const layout = options.templateJitter
+        ? perturbLayout(baseLayout, `${basename(inputPath)}#${clip.id}`)
+        : baseLayout;
 
       // 多片段拼接:段清单在这里定型,后面所有阶段都以它为准。
       // 手动选段(manualBounds)只并重叠不砍段——「最多 4 段/最短 2 秒」是
@@ -523,6 +536,8 @@ export async function exportClips(
             // 静音阈值按品类分档:解说 0.4s、口播 0.6s、对谈 0.9s(genre.ts)
             gapThresholdSec: options.jumpCut ? genrePauseGapSec(options.genreId) : Infinity,
             protectedSpans,
+            // 保留呼吸口:每个剪口在句尾多留一口气,不是无缝贴死
+            breathPadSec: options.keepBreath ? BREATH_PAD_SEC : 0,
           });
         }
       }
@@ -569,6 +584,7 @@ export async function exportClips(
             highlightHex: options.brand?.highlightColor,
             translation: transLines.length > 0 ? transLines : undefined,
             aigcBadge: options.aigcLabel ? { durationSec: clipDuration } : undefined,
+            speakerLabels: options.speakerLabels,
           }
         );
         await writeFile(subtitlePath, ass, "utf8");
@@ -782,6 +798,7 @@ export async function exportClips(
                 openingHook: openingHook ? { text: openingHook.text, durationSec: Math.min(OPENING_HOOK_SEC, miniDur) } : undefined,
                 highlightHex: options.brand?.highlightColor,
                 aigcBadge: options.aigcLabel ? { durationSec: miniDur } : undefined,
+                speakerLabels: options.speakerLabels,
               });
               await writeFile(miniAssPath, miniAss, "utf8");
             }

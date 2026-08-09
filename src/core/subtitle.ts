@@ -267,6 +267,56 @@ function karaokeText(line: TranscriptWord[]): string {
   return parts.join("");
 }
 
+/**
+ * 说话人标签色板(与 bubble 模板的说话人配色同源;标签不用白色——要和
+ * 白色正文区分开)。按「首次发言顺序」循环取色。
+ */
+const SPEAKER_LABEL_HEX = ["#7FD4FF", "#FFD36B", "#9DFF8F", "#FF9DC4"];
+
+/** 行/块的主导说话人:按词时长多数票;没有任何说话人标注返回 undefined。 */
+export function lineSpeaker(line: TranscriptWord[]): number | undefined {
+  const byId = new Map<number, number>();
+  for (const w of line) {
+    if (w.speaker === undefined) continue;
+    byId.set(w.speaker, (byId.get(w.speaker) ?? 0) + Math.max(0, w.endSec - w.startSec));
+  }
+  let best: number | undefined;
+  let bestSec = -1;
+  for (const [id, sec] of byId) {
+    if (sec > bestSec) { best = id; bestSec = sec; }
+  }
+  return best;
+}
+
+/**
+ * 说话人标签器(v0.14「对谈静音观看」):词表里 ≥2 个说话人才激活;每当
+ * 行/块的主导说话人相对上一行变化,行首加一个彩色「A:」小标签(字母按
+ * 整段词表的首次发言顺序分配,跨行稳定)。标签只在换人时出现不刷屏——
+ * 静音刷对谈切片时能看清是谁在说,这是 2026 对谈类切片的标配。
+ * 返回的函数带状态(记住上一行的说话人),每条切片新建一个。
+ */
+export function createSpeakerLabeler(
+  words: TranscriptWord[],
+  enabled: boolean
+): (line: TranscriptWord[]) => string {
+  const order = new Map<number, number>();
+  for (const w of words) {
+    if (w.speaker !== undefined && !order.has(w.speaker)) order.set(w.speaker, order.size);
+  }
+  if (!enabled || order.size < 2) return () => "";
+  let prev: number | undefined;
+  return (line) => {
+    const sp = lineSpeaker(line);
+    if (sp === undefined || sp === prev) return "";
+    prev = sp;
+    const idx = order.get(sp) ?? order.size;
+    const letter = String.fromCharCode(65 + (idx % 26));
+    const color = hexToAssInline(SPEAKER_LABEL_HEX[idx % SPEAKER_LABEL_HEX.length]) ?? WHITE_INLINE;
+    // 小一号的彩色「A:」;裸 \c / \fscx100 把颜色和缩放交还给样式默认值
+    return `{\\c${color}\\fscx85\\fscy85}${letter}:{\\c\\fscx100\\fscy100}`;
+  };
+}
+
 /** ASS colors are &HAABBGGRR. Highlight = flame orange, base = white. */
 const EMBER_COLOR = "&H000D6EFF"; // #FF6E0D
 const WHITE_COLOR = "&H00FFFFFF";
@@ -311,6 +361,11 @@ export interface CaptionOptions {
   translation?: Array<{ startSec: number; endSec: number; text: string }>;
   /** AIGC 显式标识:左上角小字「AI 生成」全程可见(《标识办法》显式标识)。 */
   aigcBadge?: { durationSec: number };
+  /**
+   * 说话人标签(v0.14):多说话人切片换人时行首加彩色「A:」标签,
+   * 对谈静音观看不迷路。只在词表带 ≥2 个说话人标注时生效。
+   */
+  speakerLabels?: boolean;
 }
 
 /** Title block sits below platform top overlays (~8% of height) with air. */
@@ -590,6 +645,8 @@ export function buildCaptionAss(
   }
 
   const forcedBreaks = options.forcedBreaks ?? [];
+  // 说话人标签器:每条切片一个(带「上一行是谁」的状态);单人/没开不生效
+  const speakerTag = createSpeakerLabeler(words, Boolean(options.speakerLabels));
   if (style === "pop" || style === "hormozi" || style === "minimal") {
     const maxUnits =
       style === "pop" ? POP_MAX_UNITS : style === "hormozi" ? HORMOZI_MAX_UNITS : MINIMAL_MAX_UNITS;
@@ -602,16 +659,19 @@ export function buildCaptionAss(
       const lastEnd = unit[unit.length - 1].endSec;
       const next = units[i + 1]?.[0].startSec;
       const end = (next !== undefined ? Math.min(next, lastEnd + CAPTION_HOLD_MAX_SEC) : lastEnd + 0.2) - clipStartSec;
+      // 说话人标签放在动效标签之前:标签字符不参与顶入/弹入缩放动画,
+      // 后续正文的动效覆写不受影响
+      const tag = speakerTag(unit);
       if (style === "hormozi") {
         // 大字爆点:短块顶入 + 块内逐词卡拉OK点亮;拉丁词全大写(CJK 不受影响)
         const caps = unit.map((w) => ({ ...w, text: w.text.toUpperCase() }));
-        events.push(dialogue(start, end, HORMOZI_INTRO + karaokeText(caps)));
+        events.push(dialogue(start, end, tag + HORMOZI_INTRO + karaokeText(caps)));
       } else if (style === "minimal") {
         // 动态极简:短块轻顶入,块内至多 1 处品牌色高亮(关键词/数字优先)
-        events.push(dialogue(start, end, MINIMAL_INTRO + minimalText(unit, options.keywords ?? [], highlightHex)));
+        events.push(dialogue(start, end, tag + MINIMAL_INTRO + minimalText(unit, options.keywords ?? [], highlightHex)));
       } else {
         // pop:阻尼弹入 + 块内当前词换色(品牌高亮色跟手点亮)
-        events.push(dialogue(start, end, POP_INTRO + popText(unit, unit[0].startSec, highlightHex)));
+        events.push(dialogue(start, end, tag + POP_INTRO + popText(unit, unit[0].startSec, highlightHex)));
       }
     }
   } else {
@@ -628,7 +688,7 @@ export function buildCaptionAss(
       const end =
         (nextStart !== undefined ? Math.min(nextStart, lastEnd + CAPTION_HOLD_MAX_SEC) : lastEnd) - clipStartSec;
       const text = style === "karaoke" ? karaokeText(line) : keywordText(line, options.keywords ?? [], highlightHex);
-      events.push(dialogue(start, end, text));
+      events.push(dialogue(start, end, speakerTag(line) + text));
     }
   }
 

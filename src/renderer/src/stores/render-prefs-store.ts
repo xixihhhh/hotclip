@@ -13,6 +13,12 @@ export interface RenderPrefs {
   vertical: boolean;
   captionStyle: CaptionStyleChoice;
   jumpCut: boolean;
+  /** 保留呼吸口:跳剪剪长停顿时每个剪口多留一口气,不无缝贴死。 */
+  keepBreath: boolean;
+  /** 说话人标签:多说话人切片换人时字幕行首加彩色「A:」(开了多人对谈才有标注)。 */
+  speakerLabels: boolean;
+  /** 模板受控微扰:按切片种子小幅抖动字幕几何,批量出片不共享模板指纹。 */
+  templateJitter: boolean;
   cleanFillers: boolean;
   cutRetakes: boolean;
   autoZoom: boolean;
@@ -67,6 +73,9 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   vertical: true,
   captionStyle: "keyword",
   jumpCut: true,
+  keepBreath: false, // 呼吸口改变跳剪节奏,默认保持历史紧凑感,由用户按素材开
+  speakerLabels: true, // 缺省开:没开多人对谈时词表无标注,自然不生效
+  templateJitter: false, // 微扰改变成片几何(虽观感无差),默认关由矩阵玩家开
   cleanFillers: true,
   cutRetakes: false, // 剪掉的是完整一句话,误伤代价高——默认关,由用户按素材开
   autoZoom: false, // 运镜是风格化选择(素材本身有运动时会打架),默认关

@@ -705,6 +705,12 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       vertical: Boolean(opts.vertical),
       captionStyle: style,
       jumpCut,
+      // 保留呼吸口(v0.14):跳剪的剪口留一口气;只在跳剪开着时有意义
+      keepBreath: Boolean(opts.keepBreath),
+      // 说话人标签(v0.14):缺省开——词表没有说话人标注时自然不生效
+      speakerLabels: opts.speakerLabels !== false,
+      // 模板受控微扰(v0.14):批量出片反量产指纹,显式开启才抖
+      templateJitter: Boolean(opts.templateJitter),
       cleanFillers,
       cutRetakes,
       autoZoom: Boolean(opts.autoZoom),
