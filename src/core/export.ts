@@ -20,6 +20,7 @@ import { postTextFile, type PublishCopy } from "./publish";
 import { buildPublishPacks, coverFilter, type PackSummary } from "./publish-pack";
 import { buildSrt, srtLinesFromWords } from "./srt";
 import { buildEdl, type EdlClip } from "./edl";
+import { buildDraftContent, buildDraftMetaInfo } from "./jianying";
 import { runAudiogram, audiogramSpec } from "./audiogram";
 import { pickCoverTime } from "./cover";
 import { findFillerWords, dropFillerWords, fillerCutSpans, type FillerHit } from "./fillers";
@@ -85,6 +86,12 @@ export interface ExportClipSpec {
   variant?: number;
   /** 封面抓第几高的响度峰(0=最高,与历史一致);变体封面靠它错开帧。 */
   coverRank?: number;
+  /**
+   * 一片多版的结构差异维度:本条强制开「爆点闪现」开场(与全局开关 OR)。
+   * 变体不只换包装——最后一版连开场结构都不同,矩阵分发的「真差异」再进一步;
+   * 闪不出来(全程无显著峰)按既有 fail-open 回退普通开场。
+   */
+  flashForward?: boolean;
   /** Evidence-chain fields carried into clips.json for CMS/matrix pipelines. */
   meta?: {
     hook: string;
@@ -291,6 +298,8 @@ export interface ExportRenderOptions {
   subtitleFile?: boolean;
   /** 输出目录落 timeline.edl(CMX3600)——切点交给剪辑软件重链源片精修。 */
   timeline?: boolean;
+  /** 剪映草稿:每条切片一个草稿文件夹(拷进剪映草稿目录即可打开精修)。 */
+  jianyingDraft?: boolean;
   /** AIGC 标识:左上角「AI 生成」显式标识 + 容器元数据隐式标识(《标识办法》)。 */
   aigcLabel?: boolean;
   /** 留证包(v0.14):每条切片流复制源片前后各 3 分钟到「留证/」——授权审核新规要求的原始录屏留存。 */
@@ -645,7 +654,7 @@ export async function exportClips(
       // 峰值事件(输出时间轴):运镜强调与音效打点共用一份——响度峰≈情绪
       // 高点,与智能封面同一声学代理;跳剪时映射到压缩时间轴。提取失败/
       // 拼接跨度超限按「无事件」fail-open。
-      if ((options.autoZoom || options.sfx || options.flashForward) && !clipPeaks && !peakSpanTooLong(clip)) {
+      if ((options.autoZoom || options.sfx || options.flashForward || clip.flashForward) && !clipPeaks && !peakSpanTooLong(clip)) {
         clipPeaks = await extractPeaks(inputPath, clip.startSec, clip.endSec).catch(() => undefined);
       }
       // (源时间, 输出时间) 成对保留:运镜强调/音效打点吃输出时间,
@@ -756,10 +765,11 @@ export async function exportClips(
       let flashForwardUsed = false;
       // 钩子文本在 meta.hook(证据链字段),不在顶层——读错位置会让高潮前置永远不触发
       const coldOpenHook = clip.meta?.hook?.trim();
-      if (!audioOnly && !webStyle && (options.flashForward || options.coldOpen)) {
+      if (!audioOnly && !webStyle && (options.flashForward || clip.flashForward || options.coldOpen)) {
         // 爆点闪现优先:两个开关同开时,视觉钩子是更强的差异化(全网仅
-        // 0.04% 切片有 visual hook);闪不出来(全程无显著峰)回退钩子句
-        if (options.flashForward) {
+        // 0.04% 切片有 visual hook);闪不出来(全程无显著峰)回退钩子句。
+        // clip.flashForward 是一片多版的结构差异维度(该变体单独开闪现)
+        if (options.flashForward || clip.flashForward) {
           const farEnough = peakEventPairs
             .filter((p) => p.outSec >= FLASH_SKIP_NEAR_START_SEC)
             .map((p) => p.srcSec);
@@ -1112,6 +1122,34 @@ export async function exportClips(
         clips: edlClips,
       });
       await writeFile(join(outDir, "timeline.edl"), edl, "utf8").catch(() => {});
+    }
+
+    // 剪映草稿:每条切片一个草稿文件夹(含跳剪的每一段),整夹拷进剪映
+    // 草稿目录即可打开精修——EDL 的国民级剪辑器版本。纯音频源无画面轨,
+    // 草稿无意义跳过;单条失败静默,绝不拖垮导出。
+    if (options.jianyingDraft && edlClips.length > 0 && srcInfo && srcInfo.hasVideo) {
+      const draftsRoot = join(outDir, "剪映草稿");
+      const fps = srcInfo.fps > 0 ? Math.round(srcInfo.fps) : 30;
+      for (let d = 0; d < edlClips.length; d++) {
+        const ec = edlClips[d];
+        try {
+          const folder = join(draftsRoot, `${String(d + 1).padStart(2, "0")}-${sanitizeFilename(ec.title)}`);
+          await mkdir(folder, { recursive: true });
+          const content = buildDraftContent({
+            sourcePath: inputPath,
+            sourceName: basename(inputPath),
+            sourceDurationSec: srcInfo.durationSec,
+            width: srcInfo.width,
+            height: srcInfo.height,
+            fps,
+            clip: ec,
+          });
+          await writeFile(join(folder, "draft_content.json"), JSON.stringify(content, null, 4), "utf8");
+          await writeFile(join(folder, "draft_meta_info.json"), JSON.stringify(buildDraftMetaInfo(), null, 4), "utf8");
+        } catch {
+          /* fail-open:草稿是附加产物 */
+        }
+      }
     }
 
     // 平台发布包:每平台一个文件夹,视频硬链+按平台画幅裁的封面+按平台上限

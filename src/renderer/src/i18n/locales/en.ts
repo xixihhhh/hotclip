@@ -178,6 +178,8 @@ export const en = {
     optSpeakerTags: "Speaker tags",
     optSpeakerTagsHint: "In multi-speaker clips, prefix captions with a colored \"A:\" / \"B:\" tag whenever the talker changes — viewers scrolling on mute can follow who's speaking (needs Multi-speaker on)",
     optJitter: "Template jitter",
+    optJianying: "JianYing draft",
+    optJianyingHint: "Generate a JianYing (CapCut CN) draft folder per clip — every AI cut, including jump-cut splices, lands on the timeline. Copy folders from 剪映草稿/ into JianYing's draft directory (Settings → draft location) to open and refine; media links back to the source file, works with JianYing 5.9+",
     optJitterHint: "Deterministically nudge caption size/position per clip (visually identical) so batch exports don't share a pixel-exact template fingerprint — recommended for multi-account posting",
     transformChip: "Transform ~{n}",
     transformHint: "How much the clip differs from the raw stream; score and tier go into clips.json and the ledger",

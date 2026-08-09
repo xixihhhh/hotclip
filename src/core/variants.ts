@@ -137,19 +137,23 @@ export async function generateVariantPlans(
  * 文案,封面改抓下一个响度峰(coverRank),id 从现有最大值续编保证唯一。
  * 与原标题一字不差的变体丢弃(没有差异化价值)。attachPost=false 时
  * (用户没开发布文案)变体也不带文案,与原版行为一致。
+ * flashDim=true(全局爆点闪现没开)时,每条切片的最后一个变体再叠一层
+ * 结构差异:强制开 flash-forward 开场——变体不只换包装,连开场结构都
+ * 不同(v0.14 反量产指纹的「真差异」维度;闪不出来自动回退,fail-open)。
  */
 export function expandClipSpecs(
   specs: ExportClipSpec[],
   plans: Map<number, VariantPackaging[]>,
-  attachPost: boolean
+  attachPost: boolean,
+  flashDim = false
 ): ExportClipSpec[] {
   let nextId = specs.reduce((m, s) => Math.max(m, s.id), 0) + 1;
   const out: ExportClipSpec[] = [];
   for (const spec of specs) {
     out.push(spec);
     let seq = 1; // 原版是第 1 版
-    for (const v of plans.get(spec.id) ?? []) {
-      if (v.title === spec.title.trim()) continue;
+    const usable = (plans.get(spec.id) ?? []).filter((v) => v.title !== spec.title.trim());
+    for (const v of usable) {
       seq++;
       out.push({
         ...spec,
@@ -158,6 +162,8 @@ export function expandClipSpecs(
         variantOf: spec.id,
         variant: seq,
         coverRank: seq - 1, // 第 2 版抓第 2 峰,以此类推
+        // 最后一版换开场结构(爆点闪现),前面的版只换包装
+        flashForward: flashDim && seq === usable.length + 1 ? true : spec.flashForward,
         publish: attachPost ? (v.post ?? spec.publish) : undefined,
         meta: spec.meta ? { ...spec.meta, teaser: v.teaser ?? spec.meta.teaser } : undefined,
       });

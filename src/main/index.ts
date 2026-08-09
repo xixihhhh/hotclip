@@ -698,8 +698,9 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
     }));
   return await exportClips(
     filePath,
-    // 一片多版:变体克隆原 spec(换标题/悬念句/文案/封面峰),紧跟原版排列
-    variantPlans ? expandClipSpecs(baseSpecs, variantPlans, Boolean(pub?.llm?.baseUrl && pub.llm.model)) : baseSpecs,
+    // 一片多版:变体克隆原 spec(换标题/悬念句/文案/封面峰),紧跟原版排列;
+    // 全局爆点闪现没开时,最后一版再换开场结构(flash-forward 差异维度)
+    variantPlans ? expandClipSpecs(baseSpecs, variantPlans, Boolean(pub?.llm?.baseUrl && pub.llm.model), !opts.flashForward) : baseSpecs,
     outDir,
     {
       vertical: Boolean(opts.vertical),
@@ -740,6 +741,8 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       translateLang: translations ? opts.translate!.targetLang : undefined,
       subtitleFile: Boolean(opts.subtitleFile),
       timeline: Boolean(opts.timeline),
+      // 剪映草稿(v0.14):AI 切点进剪映时间轴,国民级「粗剪→精修」通道
+      jianyingDraft: Boolean(opts.jianyingDraft),
       aigcLabel: Boolean(opts.aigcLabel),
       // 留证包(v0.14):源片前后各 3 分钟流复制留档(授权审核新规)
       evidencePack: Boolean(opts.evidencePack),

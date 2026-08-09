@@ -29,6 +29,7 @@ import {
   LuUsers,
   LuWind,
   LuShuffle,
+  LuClapperboard,
   LuTriangleAlert,
   LuType,
   LuZap,
@@ -177,7 +178,7 @@ export function HighlightsView({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   // 出片偏好持久化:上次的开关组合下次直接生效(解构保持下方 JSX 引用不变)
   const { prefs, setPref } = useRenderPrefs();
-  const { vertical, captionStyle, jumpCut, keepBreath, speakerLabels, templateJitter, cleanFillers, cutRetakes, autoZoom, sfx, bgmPath, trimUi, titleCard, openingHook, coldOpen, flashForward, preciseAlign, alsoLandscape, normalizeLoudness, denoise, compilation, translate, publishCopy, subtitleFile, timeline, aigcLabel, evidencePack, publishPack, packPlatforms, variants, outDir, quality } = prefs;
+  const { vertical, captionStyle, jumpCut, keepBreath, speakerLabels, templateJitter, cleanFillers, cutRetakes, autoZoom, sfx, bgmPath, trimUi, titleCard, openingHook, coldOpen, flashForward, preciseAlign, alsoLandscape, normalizeLoudness, denoise, compilation, translate, publishCopy, subtitleFile, timeline, jianyingDraft, aigcLabel, evidencePack, publishPack, packPlatforms, variants, outDir, quality } = prefs;
   /** 出厂导出根目录(主进程才知道 ~/影片 在哪);用户没自选时显示它。 */
   const [defaultOutDir, setDefaultOutDir] = useState("");
   useEffect(() => {
@@ -1264,6 +1265,8 @@ export function HighlightsView({
                     { key: "optPublish", on: publishCopy, Icon: LuMegaphone, label: t("optPublish"), act: () => setPref({ publishCopy: !publishCopy }) },
                     { key: "optSrt", on: subtitleFile, Icon: LuFileText, label: t("optSrt"), act: () => setPref({ subtitleFile: !subtitleFile }) },
                     { key: "optTimeline", on: timeline, Icon: LuFilm, label: t("optTimeline"), act: () => setPref({ timeline: !timeline }) },
+                    // 剪映草稿:EDL 的国民级剪辑器版本,挨着时间线放
+                    { key: "optJianying", on: jianyingDraft, Icon: LuClapperboard, label: t("optJianying"), act: () => setPref({ jianyingDraft: !jianyingDraft }) },
                     { key: "optCompilation", on: compilation, Icon: LuListVideo, label: t("optCompilation"), act: () => setPref({ compilation: !compilation }) },
                     { key: "optAigc", on: aigcLabel, Icon: LuBadgeCheck, label: t("optAigc"), act: () => setPref({ aigcLabel: !aigcLabel }) },
                     // 留证包:授权审核要的「片段前后各3分钟原始录屏」流复制留档
@@ -1399,7 +1402,7 @@ export function HighlightsView({
                   void getApi()
                     .recordReview(filePath ?? "", summarize(candidates.filter((c) => selected.has(c.id))), summarize(candidates.filter((c) => !selected.has(c.id))))
                     .catch(() => {});
-                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, keepBreath, speakerLabels, templateJitter, cleanFillers, cutRetakes, autoZoom, sfx, bgmPath: bgmPath || undefined, genreId, preciseAlign, trimUi, titleCard, openingHook, coldOpen, flashForward, alsoLandscape, normalizeLoudness, denoise, compilation, brand: activeBrandStyle(brandState), translate: translate ? { targetLang, llm: config } : undefined, publishCopy: publishCopy ? { llm: config } : undefined, subtitleFile, timeline, aigcLabel, evidencePack, publishPack: publishPack && packPlatforms.length > 0 ? packPlatforms : undefined, variants: variants > 1 ? { count: variants, llm: config } : undefined, outDir, quality });
+                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, keepBreath, speakerLabels, templateJitter, cleanFillers, cutRetakes, autoZoom, sfx, bgmPath: bgmPath || undefined, genreId, preciseAlign, trimUi, titleCard, openingHook, coldOpen, flashForward, alsoLandscape, normalizeLoudness, denoise, compilation, brand: activeBrandStyle(brandState), translate: translate ? { targetLang, llm: config } : undefined, publishCopy: publishCopy ? { llm: config } : undefined, subtitleFile, timeline, jianyingDraft, aigcLabel, evidencePack, publishPack: publishPack && packPlatforms.length > 0 ? packPlatforms : undefined, variants: variants > 1 ? { count: variants, llm: config } : undefined, outDir, quality });
                 }}
                 className="btn-flame inline-flex shrink-0 items-center gap-1.5 rounded-lg px-6 py-2.5 text-[14px] font-bold whitespace-nowrap text-white disabled:opacity-40"
               >

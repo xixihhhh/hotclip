@@ -330,6 +330,8 @@ export interface ExportOptions {
   subtitleFile?: boolean;
   /** 输出目录落 timeline.edl——AI 切点交给 DaVinci/Premiere 重链源片精修。 */
   timeline?: boolean;
+  /** 剪映草稿:每条切片一个草稿文件夹,拷进剪映草稿目录即可打开精修。 */
+  jianyingDraft?: boolean;
   /** AIGC 标识:画面显式标识 + 元数据隐式标识(发布平台要求 AIGC 声明时开启)。 */
   aigcLabel?: boolean;
   /** 留证包:每条切片流复制源片前后各 3 分钟(授权审核的原始录屏留存)。 */

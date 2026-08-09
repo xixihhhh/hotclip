@@ -134,6 +134,24 @@ describe("expandClipSpecs", () => {
   it("总版本数上限是 3(含原版)", () => {
     expect(VARIANT_TOTAL_MAX).toBe(3);
   });
+
+  it("flashDim:最后一版换开场结构(爆点闪现),其余版与原版不动", () => {
+    const out = expandClipSpecs([spec(1, "原标题")], plans, true, true);
+    expect(out.map((s) => Boolean(s.flashForward))).toEqual([false, false, true]);
+  });
+
+  it("flashDim 关(全局闪现已开)时不叠结构差异,行为与历史一致", () => {
+    const out = expandClipSpecs([spec(1, "原标题")], plans, true);
+    expect(out.every((s) => !s.flashForward)).toBe(true);
+  });
+
+  it("flashDim + 与原标题重复的变体被丢弃后,闪现落在真正的最后一版上", () => {
+    const lazy = new Map([[1, [{ title: "原标题" }, { title: "真的不同" }]]]);
+    const out = expandClipSpecs([spec(1, "原标题")], lazy, true, true);
+    expect(out).toHaveLength(2);
+    expect(Boolean(out[0].flashForward)).toBe(false);
+    expect(out[1].flashForward).toBe(true);
+  });
 });
 
 describe("pickCoverTime 分峰", () => {

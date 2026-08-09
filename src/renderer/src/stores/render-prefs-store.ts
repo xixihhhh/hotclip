@@ -42,6 +42,8 @@ export interface RenderPrefs {
   publishCopy: boolean;
   subtitleFile: boolean;
   timeline: boolean;
+  /** 剪映草稿:每条切片一个草稿文件夹,拷进剪映草稿目录即可打开精修。 */
+  jianyingDraft: boolean;
   aigcLabel: boolean;
   /** 留证包:每条切片流复制源片前后各 3 分钟(授权审核的原始录屏留存)。 */
   evidencePack: boolean;
@@ -95,6 +97,7 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   publishCopy: false,
   subtitleFile: false,
   timeline: false,
+  jianyingDraft: false, // 草稿是额外产物(每条一个文件夹),默认关按需开
   aigcLabel: false,
   evidencePack: false, // 留证段占磁盘(每条约 6 分钟源片),默认关按需开
   publishPack: false, // 发布包产生一堆文件夹,默认关由用户按需开
