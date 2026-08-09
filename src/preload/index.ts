@@ -29,6 +29,7 @@ const api: HotClipApi = {
   mediaUrl: (filePath) => `hotclip-media://local/${encodeURIComponent(filePath)}`,
   selectImage: () => ipcRenderer.invoke("hotclip:select-image"),
   selectAudio: () => ipcRenderer.invoke("hotclip:select-audio"),
+  generateBgm: (config, genreId) => ipcRenderer.invoke("hotclip:generate-bgm", config, genreId),
   getAudioPeaks: (filePath, startSec, endSec) =>
     ipcRenderer.invoke("hotclip:audio-peaks", filePath, startSec, endSec),
   contactSheet: (filePath, startSec, endSec) =>

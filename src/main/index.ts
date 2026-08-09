@@ -31,6 +31,7 @@ import { collectEmotionSignal } from "@core/emotion";
 import { collectClipSegments, translateSegments, clipTranslationLines } from "@core/translate";
 import { generatePublishCopies } from "@core/publish";
 import { generateVariantPlans, expandClipSpecs, VARIANT_TOTAL_MAX } from "@core/variants";
+import { generateAiBgm } from "@core/bgm-ai";
 import { validPlatformIds } from "../shared/platform-specs";
 import { FolderWatcher, isVideoFile, isSeen, type SeenMap, type WatchedFile } from "@core/watch";
 import { startWebhookServer, type WebhookServerHandle } from "@core/webhook";
@@ -196,6 +197,18 @@ ipcMain.handle("hotclip:select-audio", async () => {
   });
   if (result.canceled || result.filePaths.length === 0) return null;
   return result.filePaths[0];
+});
+
+// AI 生成版权安全 BGM(v0.14 云端档):按品类风格生成纯音乐,存 userData
+// 复用;生成完由渲染层把路径设进 bgmPath,走既有混音链
+ipcMain.handle("hotclip:generate-bgm", async (_event, config: unknown, genreId: unknown) => {
+  const llm = (config ?? {}) as LlmConfig;
+  return await generateAiBgm({
+    genreId: typeof genreId === "string" && genreId.trim() ? genreId : undefined,
+    baseUrl: typeof llm.baseUrl === "string" ? llm.baseUrl : "",
+    apiKey: typeof llm.apiKey === "string" ? llm.apiKey : "",
+    destDir: join(app.getPath("userData"), "ai-bgm"),
+  });
 });
 
 // 水印 logo 选择(品牌预设)
@@ -746,6 +759,11 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       aigcLabel: Boolean(opts.aigcLabel),
       // 留证包(v0.14):源片前后各 3 分钟流复制留档(授权审核新规)
       evidencePack: Boolean(opts.evidencePack),
+      // AI 封面双档(v0.14):透传用户 LLM 档的 Atlas Key,导出层判端点可用性
+      aiCover:
+        opts.aiCover?.llm?.baseUrl && opts.aiCover.llm.apiKey && (opts.aiCover.tier === "volume" || opts.aiCover.tier === "premium")
+          ? { tier: opts.aiCover.tier, baseUrl: opts.aiCover.llm.baseUrl, apiKey: opts.aiCover.llm.apiKey, zh }
+          : undefined,
       // 平台发布包:未知平台 id 直接过滤(不猜),空清单等于没开
       publishPack: Array.isArray(opts.publishPack) ? validPlatformIds(opts.publishPack.filter((p): p is string => typeof p === "string")) : undefined,
       modelsRoot: modelsRoot(),

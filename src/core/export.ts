@@ -21,6 +21,7 @@ import { buildPublishPacks, coverFilter, type PackSummary } from "./publish-pack
 import { buildSrt, srtLinesFromWords } from "./srt";
 import { buildEdl, type EdlClip } from "./edl";
 import { buildDraftContent, buildDraftMetaInfo } from "./jianying";
+import { generateAiCover, type CoverTier } from "./cover-ai";
 import { runAudiogram, audiogramSpec } from "./audiogram";
 import { pickCoverTime } from "./cover";
 import { findFillerWords, dropFillerWords, fillerCutSpans, type FillerHit } from "./fillers";
@@ -300,6 +301,12 @@ export interface ExportRenderOptions {
   timeline?: boolean;
   /** 剪映草稿:每条切片一个草稿文件夹(拷进剪映草稿目录即可打开精修)。 */
   jianyingDraft?: boolean;
+  /**
+   * AI 封面双档(v0.14):按切片标题生成竖版大字封面,与抓帧封面并存。
+   * volume=Seedream 走量档 / premium=Nano Banana Pro 精品档;需要 LLM 档
+   * 指向 Atlas 且带 Key(zh 控制提示词语言);失败静默,绝不拖垮导出。
+   */
+  aiCover?: { tier: CoverTier; baseUrl: string; apiKey: string; zh?: boolean };
   /** AIGC 标识:左上角「AI 生成」显式标识 + 容器元数据隐式标识(《标识办法》)。 */
   aigcLabel?: boolean;
   /** 留证包(v0.14):每条切片流复制源片前后各 3 分钟到「留证/」——授权审核新规要求的原始录屏留存。 */
@@ -1199,6 +1206,37 @@ export async function exportClips(
       }
     }
 
+    // AI 封面双档(v0.14):只给原版生成(变体的封面差异化已有响度峰机制,
+    // 逐版生成是翻倍花费);合集(id 0)/横屏副本(负 id)不生成。并行出图,
+    // 单张失败静默——封面是加分项,绝不拖垮导出。
+    const aiCoverByClip = new Map<number, string>();
+    if (options.aiCover && results.length > 0) {
+      const ac = options.aiCover;
+      await Promise.allSettled(
+        results
+          .filter((r) => r.id > 0 && !clips.find((c) => c.id === r.id)?.variantOf)
+          .map(async (r) => {
+            const spec = clips.find((c) => c.id === r.id);
+            const outPath = r.path.replace(/\.mp4$/, ".封面AI.jpg");
+            const ok = await generateAiCover({
+              tier: ac.tier,
+              title: r.title,
+              hook: spec?.meta?.hook,
+              zh: ac.zh !== false,
+              baseUrl: ac.baseUrl,
+              apiKey: ac.apiKey,
+              outPath,
+              signal,
+            }).catch((e) => {
+              console.error(`ai cover failed for clip ${r.id}:`, e);
+              return false;
+            });
+            if (ok) aiCoverByClip.set(r.id, outPath);
+          })
+      );
+      if (signal?.aborted) throw new Error("export cancelled");
+    }
+
     // clips.json: machine-readable evidence chain for CMS / matrix pipelines.
     const metadata = {
       source: inputPath,
@@ -1255,6 +1293,8 @@ export async function exportClips(
         return {
           file: basename(r.path),
           cover: r.coverPath ? basename(r.coverPath) : null,
+          // AI 生成封面(v0.14 双档):与抓帧封面并存,由用户挑着用
+          aiCover: aiCoverByClip.has(r.id) ? basename(aiCoverByClip.get(r.id)!) : null,
           title: r.title,
           durationSec: Number(r.durationSec.toFixed(3)),
           sourceStartSec: range?.startSec ?? spec?.startSec ?? null,

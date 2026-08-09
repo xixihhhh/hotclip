@@ -332,6 +332,8 @@ export interface ExportOptions {
   timeline?: boolean;
   /** 剪映草稿:每条切片一个草稿文件夹,拷进剪映草稿目录即可打开精修。 */
   jianyingDraft?: boolean;
+  /** AI 封面双档:volume=Seedream 走量 / premium=Nano Banana Pro 精品;需 Atlas 档 Key。 */
+  aiCover?: { tier: "volume" | "premium"; llm: LlmConfig };
   /** AIGC 标识:画面显式标识 + 元数据隐式标识(发布平台要求 AIGC 声明时开启)。 */
   aigcLabel?: boolean;
   /** 留证包:每条切片流复制源片前后各 3 分钟(授权审核的原始录屏留存)。 */
@@ -477,6 +479,8 @@ export interface HotClipApi {
   selectImage: () => Promise<string | null>;
   /** 选择一个音频文件(BGM 用);取消返回 null。 */
   selectAudio: () => Promise<string | null>;
+  /** AI 生成一段版权安全 BGM(按品类风格,需 Atlas 档 Key);返回保存路径。 */
+  generateBgm: (config: LlmConfig, genreId?: string) => Promise<string>;
   /** 取 [startSec, endSec] 的音频峰值轨——审阅台时间轴的波形。 */
   getAudioPeaks: (filePath: string, startSec: number, endSec: number) => Promise<AudioPeaks>;
   /** 候选片段的 3×3 接触表(画面速览):返回 data URL;失败/不支持返回空串。 */

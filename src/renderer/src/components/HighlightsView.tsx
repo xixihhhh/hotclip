@@ -30,6 +30,8 @@ import {
   LuWind,
   LuShuffle,
   LuClapperboard,
+  LuImagePlus,
+  LuWandSparkles,
   LuTriangleAlert,
   LuType,
   LuZap,
@@ -178,7 +180,7 @@ export function HighlightsView({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   // 出片偏好持久化:上次的开关组合下次直接生效(解构保持下方 JSX 引用不变)
   const { prefs, setPref } = useRenderPrefs();
-  const { vertical, captionStyle, jumpCut, keepBreath, speakerLabels, templateJitter, cleanFillers, cutRetakes, autoZoom, sfx, bgmPath, trimUi, titleCard, openingHook, coldOpen, flashForward, preciseAlign, alsoLandscape, normalizeLoudness, denoise, compilation, translate, publishCopy, subtitleFile, timeline, jianyingDraft, aigcLabel, evidencePack, publishPack, packPlatforms, variants, outDir, quality } = prefs;
+  const { vertical, captionStyle, jumpCut, keepBreath, speakerLabels, templateJitter, cleanFillers, cutRetakes, autoZoom, sfx, bgmPath, trimUi, titleCard, openingHook, coldOpen, flashForward, preciseAlign, alsoLandscape, normalizeLoudness, denoise, compilation, translate, publishCopy, subtitleFile, timeline, jianyingDraft, aigcLabel, evidencePack, publishPack, packPlatforms, variants, aiCover, outDir, quality } = prefs;
   /** 出厂导出根目录(主进程才知道 ~/影片 在哪);用户没自选时显示它。 */
   const [defaultOutDir, setDefaultOutDir] = useState("");
   useEffect(() => {
@@ -198,6 +200,22 @@ export function HighlightsView({
     if (p) setPref({ bgmPath: p });
   }, [bgmPath, setPref]);
   const bgmName = bgmPath ? bgmPath.split(/[\\/]/).pop() ?? bgmPath : "";
+  // AI 生成档(封面/配乐)需要 LLM 档指向 Atlas 且带 Key——其他端点没有生成 API
+  const atlasReady = /atlascloud\.ai/i.test(config.baseUrl ?? "") && Boolean(config.apiKey);
+  const [bgmGenerating, setBgmGenerating] = useState(false);
+  // AI 配乐:按当前品类风格生成版权安全纯音乐,生成完直接设为 BGM
+  const genBgm = useCallback(async (): Promise<void> => {
+    if (bgmGenerating) return;
+    setBgmGenerating(true);
+    try {
+      const p = await getApi().generateBgm(config, prefs.genreId === "auto" ? undefined : prefs.genreId);
+      if (p) setPref({ bgmPath: p });
+    } catch (e) {
+      setError(stripIpcError(e instanceof Error ? e.message : String(e)));
+    } finally {
+      setBgmGenerating(false);
+    }
+  }, [bgmGenerating, config, prefs.genreId, setPref]);
   const [diarize, setDiarize] = useState(false);
   // 中文源译英,其余译中——短视频出海/引进的两个主方向
   const targetLang = (transcript.language || "").startsWith("zh") ? "en" : "zh";
@@ -1261,6 +1279,8 @@ export function HighlightsView({
                     { key: "optDenoise", on: denoise, Icon: LuAudioWaveform, label: t("optDenoise"), act: () => setPref({ denoise: !denoise }) },
                     { key: "optSfx", on: sfx, Icon: LuBell, label: t("optSfx"), act: () => setPref({ sfx: !sfx }) },
                     { key: "optBgm", on: Boolean(bgmPath), Icon: LuMusic, label: bgmName ? t("optBgmOn", { name: bgmName }) : t("optBgm"), act: () => void pickBgm() },
+                    // AI 配乐:生成版权安全纯音乐直接设为 BGM;需 Atlas 档 Key
+                    { key: "optAiBgm", on: bgmGenerating, disabled: !atlasReady || bgmGenerating, Icon: LuWandSparkles, label: bgmGenerating ? t("optAiBgmBusy") : t("optAiBgm"), act: () => void genBgm() },
                     { key: "optTranslate", on: translate, Icon: LuLanguages, label: t(targetLang === "en" ? "optTranslateEn" : "optTranslateZh"), act: () => setPref({ translate: !translate }) },
                     { key: "optPublish", on: publishCopy, Icon: LuMegaphone, label: t("optPublish"), act: () => setPref({ publishCopy: !publishCopy }) },
                     { key: "optSrt", on: subtitleFile, Icon: LuFileText, label: t("optSrt"), act: () => setPref({ subtitleFile: !subtitleFile }) },
@@ -1282,6 +1302,15 @@ export function HighlightsView({
                     { key: "optPack", on: publishPack, Icon: LuPackage, label: t("optPack"), act: () => setPref({ publishPack: !publishPack }) },
                     // 模板微扰:矩阵批量发的反量产指纹,挨着一片多版/发布包这组
                     { key: "optJitter", on: templateJitter, Icon: LuShuffle, label: t("optJitter"), act: () => setPref({ templateJitter: !templateJitter }) },
+                    // AI 封面双档:点击循环 关→走量→精品;需 Atlas 档 Key
+                    {
+                      key: "optAiCover",
+                      on: aiCover !== "off",
+                      disabled: !atlasReady,
+                      Icon: LuImagePlus,
+                      label: aiCover === "premium" ? t("optAiCoverPremium") : aiCover === "volume" ? t("optAiCoverVolume") : t("optAiCover"),
+                      act: () => setPref({ aiCover: aiCover === "off" ? "volume" : aiCover === "volume" ? "premium" : "off" }),
+                    },
                     {
                       key: "captionStyle",
                       on: captionStyle !== "none",
@@ -1402,7 +1431,7 @@ export function HighlightsView({
                   void getApi()
                     .recordReview(filePath ?? "", summarize(candidates.filter((c) => selected.has(c.id))), summarize(candidates.filter((c) => !selected.has(c.id))))
                     .catch(() => {});
-                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, keepBreath, speakerLabels, templateJitter, cleanFillers, cutRetakes, autoZoom, sfx, bgmPath: bgmPath || undefined, genreId, preciseAlign, trimUi, titleCard, openingHook, coldOpen, flashForward, alsoLandscape, normalizeLoudness, denoise, compilation, brand: activeBrandStyle(brandState), translate: translate ? { targetLang, llm: config } : undefined, publishCopy: publishCopy ? { llm: config } : undefined, subtitleFile, timeline, jianyingDraft, aigcLabel, evidencePack, publishPack: publishPack && packPlatforms.length > 0 ? packPlatforms : undefined, variants: variants > 1 ? { count: variants, llm: config } : undefined, outDir, quality });
+                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, keepBreath, speakerLabels, templateJitter, cleanFillers, cutRetakes, autoZoom, sfx, bgmPath: bgmPath || undefined, genreId, preciseAlign, trimUi, titleCard, openingHook, coldOpen, flashForward, alsoLandscape, normalizeLoudness, denoise, compilation, brand: activeBrandStyle(brandState), translate: translate ? { targetLang, llm: config } : undefined, publishCopy: publishCopy ? { llm: config } : undefined, subtitleFile, timeline, jianyingDraft, aigcLabel, evidencePack, publishPack: publishPack && packPlatforms.length > 0 ? packPlatforms : undefined, variants: variants > 1 ? { count: variants, llm: config } : undefined, aiCover: aiCover !== "off" && atlasReady ? { tier: aiCover, llm: config } : undefined, outDir, quality });
                 }}
                 className="btn-flame inline-flex shrink-0 items-center gap-1.5 rounded-lg px-6 py-2.5 text-[14px] font-bold whitespace-nowrap text-white disabled:opacity-40"
               >
