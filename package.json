@@ -1,6 +1,6 @@
 {
   "name": "hotclip",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Turn long videos & livestream replays into viral vertical shorts — AI highlight detection, auto captions, 9:16 reframe. Free, local-first, no watermark. 长视频/直播回放一键切成爆款竖屏短视频。",
   "main": "./out/main/index.js",
   "author": "xixihhhh",
