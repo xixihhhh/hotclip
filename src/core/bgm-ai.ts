@@ -12,8 +12,8 @@ import { atlasMediaBase, generateMedia, downloadMedia } from "./atlas-media";
 export const BGM_MODEL = "minimax/music-2.6";
 export const BGM_COST_USD = 0.15;
 
-/** 一首歌生成较慢(30-90s 常见),预算给足。 */
-export const BGM_TIMEOUT_MS = 180_000;
+/** 一首歌生成较慢(真机实测 150-180s+),预算给到 2 倍余量。 */
+export const BGM_TIMEOUT_MS = 360_000;
 
 /**
  * 品类 → BGM 风格提示词(英文——音乐模型的风格词汇以英文语料为主)。

@@ -44,19 +44,24 @@ function clipHeadline(text: string, maxUnits = 32): string {
 export function coverPrompt(title: string, hook: string | undefined, zh: boolean): string {
   const headline = clipHeadline(title.trim());
   const scene = hook?.trim() ? hook.trim().slice(0, 60) : title.trim().slice(0, 40);
+  // 真机实测(2026-08,Seedream):提示词里的元描述名词(封面/海报/直播切片)
+  // 会被当成文字渲染进画面,否定式「不要出现其他文字」压不住——必须(1)描述里
+  // 不出现这类名词,(2)用正向约束「画面中唯一的文字是标题」。
   if (zh) {
     return [
-      `竖版 3:4 直播切片封面海报。画面主体:${scene}的真实直播场景感,真人质感、抓拍感、高清。`,
-      `超大加粗中文标题文字:「${headline}」,原样渲染这几个字,不要改写、不要错别字;`,
+      `竖版 3:4 构图。画面主体:${scene},真实抓拍感、真人质感、高清。`,
+      `画面中唯一的文字是超大加粗中文标题:「${headline}」,原样渲染这几个字,不要改写、不要错别字;`,
       "标题占画面上三分之一,粗黑体白字加高对比描边或色块底,手机小屏可读。",
-      "整体高对比、饱和撞色、有冲击力;避免 AI 塑料感、避免多余英文、避免水印。",
+      "除这条标题外,画面任何位置(包括背景物品上)都不要再出现文字或水印。",
+      "整体高对比、饱和撞色、有冲击力;避免 AI 塑料感、避免多余英文。",
     ].join("\n");
   }
   return [
-    `Vertical 3:4 livestream-clip cover poster. Subject: authentic live-stream candid feel of ${scene}, photoreal, sharp.`,
-    `Huge bold headline text: "${headline}" — render these exact words, no rewording, no typos;`,
+    `Vertical 3:4 composition. Subject: ${scene}, authentic candid feel, photoreal, sharp.`,
+    `The ONLY text in the image is a huge bold headline: "${headline}" — render these exact words, no rewording, no typos;`,
     "headline fills the top third, heavy sans-serif with high-contrast outline or color block, readable on a phone screen.",
-    "High contrast, punchy saturated colors; avoid plastic AI look, avoid watermarks.",
+    "No other text or watermarks anywhere else in the image, including on background objects.",
+    "High contrast, punchy saturated colors; avoid plastic AI look.",
   ].join("\n");
 }
 
