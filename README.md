@@ -13,7 +13,7 @@
 <p>
   <a href="https://github.com/xixihhhh/hotclip/releases/latest"><img src="https://img.shields.io/github/v/release/xixihhhh/hotclip?label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC&color=ff5722" alt="最新版本"></a>
   <a href="https://github.com/xixihhhh/hotclip/releases"><img src="https://img.shields.io/github/downloads/xixihhhh/hotclip/total?label=%E4%B8%8B%E8%BD%BD%E9%87%8F&color=ff9800" alt="下载量"></a>
-  <img src="https://img.shields.io/badge/%E5%B9%B3%E5%8F%B0-Windows%20%7C%20macOS-blue" alt="平台">
+  <img src="https://img.shields.io/badge/%E5%B9%B3%E5%8F%B0-Windows%20%7C%20macOS%20%7C%20Linux-blue" alt="平台">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/xixihhhh/hotclip?label=%E5%BC%80%E6%BA%90%E5%8D%8F%E8%AE%AE" alt="License"></a>
   <a href="https://github.com/xixihhhh/hotclip/stargazers"><img src="https://img.shields.io/github/stars/xixihhhh/hotclip?style=social" alt="GitHub stars"></a>
 </p>
@@ -33,6 +33,7 @@
 | Windows 安装版 | `HotClip-x.y.z-win-x64.exe` | 双击安装即用 |
 | Windows 绿色版 | `HotClip-x.y.z-win-x64.zip` | 免安装,解压即用 |
 | macOS(Apple 芯片) | `HotClip-x.y.z-mac-arm64.dmg` | 拖进「应用程序」 |
+| Linux(实验性) | `HotClip-x.y.z-linux-x64.AppImage` | `chmod +x` 后运行;启动报 sandbox 错误加 `--no-sandbox` |
 
 > ⚠️ 当前版本未做代码签名:Windows SmartScreen 提示时点「更多信息 → 仍要运行」;macOS 首次打开用右键 → 打开(或到「系统设置 → 隐私与安全性」允许)。代码签名已在规划中。
 >

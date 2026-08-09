@@ -23,6 +23,8 @@ jobs:
             args: --mac dmg
           - os: windows-latest # nsis installer + portable zip (绿色版)
             args: --win
+          - os: ubuntu-latest # experimental AppImage (issue #7)
+            args: --linux
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -58,6 +60,7 @@ jobs:
             dist/*.dmg
             dist/*.exe
             dist/*.zip
+            dist/*.AppImage
             dist/*.blockmap
             dist/latest*.yml
           if-no-files-found: error

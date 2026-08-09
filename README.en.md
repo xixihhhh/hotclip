@@ -13,7 +13,7 @@
 <p>
   <a href="https://github.com/xixihhhh/hotclip/releases/latest"><img src="https://img.shields.io/github/v/release/xixihhhh/hotclip?label=release&color=ff5722" alt="Latest release"></a>
   <a href="https://github.com/xixihhhh/hotclip/releases"><img src="https://img.shields.io/github/downloads/xixihhhh/hotclip/total?label=downloads&color=ff9800" alt="Downloads"></a>
-  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-blue" alt="Platform">
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue" alt="Platform">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/xixihhhh/hotclip" alt="License"></a>
   <a href="https://github.com/xixihhhh/hotclip/stargazers"><img src="https://img.shields.io/github/stars/xixihhhh/hotclip?style=social" alt="GitHub stars"></a>
 </p>
@@ -33,6 +33,7 @@
 | Windows installer | `HotClip-x.y.z-win-x64.exe` | Double-click to install |
 | Windows portable | `HotClip-x.y.z-win-x64.zip` | Unzip & run |
 | macOS (Apple Silicon) | `HotClip-x.y.z-mac-arm64.dmg` | Drag into Applications |
+| Linux (experimental) | `HotClip-x.y.z-linux-x64.AppImage` | `chmod +x` then run; add `--no-sandbox` if it fails to launch with a sandbox error |
 
 > ⚠️ Builds are currently unsigned: on Windows SmartScreen choose "More info → Run anyway"; on macOS right-click → Open on first launch (or allow it under System Settings → Privacy & Security). Code signing is on the roadmap.
 >
@@ -273,7 +274,7 @@ Full history in [Releases](https://github.com/xixihhhh/hotclip/releases) · Want
 ## FAQ
 
 **What is the best free Opus Clip alternative without watermark?**
-HotClip — free, open source (AGPL-3.0), runs locally on Windows/macOS, no watermark, no credits, no length caps. Optional cloud LLMs bill your own key; a local Ollama model makes it fully free and offline.
+HotClip — free, open source (AGPL-3.0), runs locally on Windows/macOS/Linux (experimental), no watermark, no credits, no length caps. Optional cloud LLMs bill your own key; a local Ollama model makes it fully free and offline.
 
 **Is there an AI clipper that runs locally without uploading my video?**
 Yes — transcription, captions, cutting and export all run on your machine. Only the highlight-detection step calls a cloud LLM by default (your key, transcript text only); point it at local Ollama for a 100% offline pipeline.

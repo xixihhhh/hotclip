@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HotClip — Free Open-Source AI Video Clipper | Turn Long Videos into Viral Shorts, Locally, No Watermark</title>
-<meta name="description" content="HotClip is a free, open-source AI clipping tool that runs 100% locally (Windows/macOS). Turn podcasts, livestreams & long videos into viral 9:16 shorts: AI highlight detection, karaoke word-level captions, face-tracked auto-reframe. No credits, no watermark, no uploads — a free Opus Clip alternative.">
+<meta name="description" content="HotClip is a free, open-source AI clipping tool that runs 100% locally (Windows/macOS/Linux). Turn podcasts, livestreams & long videos into viral 9:16 shorts: AI highlight detection, karaoke word-level captions, face-tracked auto-reframe. No credits, no watermark, no uploads — a free Opus Clip alternative.">
 <meta name="keywords" content="ai video clipper, ai clipping tool, free opus clip alternative, open source opus clip alternative, long video to shorts converter, podcast to shorts, auto captions no watermark, karaoke captions, remove filler words, ai highlights generator">
 <link rel="canonical" href="https://xixihhhh.github.io/hotclip/en.html">
 <link rel="alternate" hreflang="zh-CN" href="https://xixihhhh.github.io/hotclip/">
@@ -29,7 +29,7 @@
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   "name": "HotClip",
-  "operatingSystem": "Windows, macOS",
+  "operatingSystem": "Windows, macOS, Linux",
   "applicationCategory": "MultimediaApplication",
   "softwareVersion": "0.9.4",
   "inLanguage": ["en", "zh-CN"],
@@ -49,7 +49,7 @@
   "@type": "HowTo",
   "name": "How to turn a long video into shorts for free",
   "description": "Three steps to turn a podcast, livestream replay or any long video into viral vertical shorts with HotClip, a free open-source desktop app.",
-  "tool": [{ "@type": "HowToTool", "name": "HotClip (free & open source, Windows/macOS)" }],
+  "tool": [{ "@type": "HowToTool", "name": "HotClip (free & open source, Windows/macOS/Linux)" }],
   "step": [
     { "@type": "HowToStep", "position": 1, "name": "Import your long video", "text": "Drop a podcast, livestream replay, lecture or vlog into HotClip (MP4/MKV/MOV/FLV/TS, audio-only works too). Hours-long replays go straight in — everything is processed locally." },
     { "@type": "HowToStep", "position": 2, "name": "Let AI pick the highlights", "text": "After local word-level transcription, the AI reads the whole transcript and nominates quotables, conflicts and peak moments — each with a virality score, an opening hook and its reasoning. Untick anything you don't like." },
@@ -62,7 +62,7 @@
   "@context": "https://schema.org",
   "@type": "FAQPage",
   "mainEntity": [
-    { "@type": "Question", "name": "What is the best free Opus Clip alternative without watermark?", "acceptedAnswer": { "@type": "Answer", "text": "HotClip is a free, open-source (AGPL-3.0) desktop app for Windows and macOS that covers OpusClip's core job — long video in, viral vertical shorts out — with no credit system, no watermark and no video-length caps, because it runs entirely on your own machine." } },
+    { "@type": "Question", "name": "What is the best free Opus Clip alternative without watermark?", "acceptedAnswer": { "@type": "Answer", "text": "HotClip is a free, open-source (AGPL-3.0) desktop app for Windows, macOS and Linux that covers OpusClip's core job — long video in, viral vertical shorts out — with no credit system, no watermark and no video-length caps, because it runs entirely on your own machine." } },
     { "@type": "Question", "name": "Is there an AI clipper that runs locally without uploading my video?", "acceptedAnswer": { "@type": "Answer", "text": "Yes — HotClip processes everything locally: transcription, highlight detection, cutting and export. Only the highlight-detection step calls a cloud LLM by default (with your own key, transcript text only); point it at a local Ollama model and the entire pipeline is 100% offline." } },
     { "@type": "Question", "name": "How is HotClip different from OpusClip, Klap or Vizard?", "acceptedAnswer": { "@type": "Answer", "text": "Your footage never leaves your machine. Those SaaS tools require cloud uploads and meter credits per source minute (credits expire monthly; free tiers add watermarks). HotClip is free, local, watermark-free and cap-free, and every AI cut ships with auditable reasoning you can veto." } },
     { "@type": "Question", "name": "How do I add karaoke style captions to a video?", "acceptedAnswer": { "@type": "Answer", "text": "HotClip transcribes locally with word-level timestamps and burns karaoke word-by-word highlighted captions into every clip automatically. You can also export SRT files for native platform upload, and enable bilingual captions with full-sentence translation." } },
@@ -130,14 +130,14 @@
   <h1 id="hero-title">Long videos &amp; livestreams,<br>clipped into <span class="hl">viral vertical shorts</span></h1>
   <p class="sub">Drop in a podcast, VOD or lecture — <strong>AI finds the highlights</strong> → <strong>9:16 face-tracked reframe</strong> + <strong>karaoke word-level captions</strong> → ready for TikTok, Reels, Shorts, Douyin and Bilibili.<br>Free &amp; open source · 100% local, no uploads · no watermark · no credits · no length caps.</p>
   <div class="cta">
-    <a class="btn btn-primary" href="https://github.com/xixihhhh/hotclip/releases/latest"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Download free (Windows / macOS)</a>
+    <a class="btn btn-primary" href="https://github.com/xixihhhh/hotclip/releases/latest"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Download free (Windows / macOS / Linux)</a>
     <a class="btn btn-ghost" href="https://github.com/xixihhhh/hotclip">Star on GitHub</a>
   </div>
   <p class="note">No Python, no Docker, no account — a real desktop app you double-click</p>
   <div class="meta-badges">
     <span>Latest <b id="gh-version">v0.9.4</b></span>
     <span>GitHub <b id="gh-stars">★</b></span>
-    <span>Windows · macOS</span>
+    <span>Windows · macOS · Linux</span>
   </div>
 
   <!-- The clipping rig: one long timeline, flame-marked peaks cut into vertical shorts -->
@@ -398,7 +398,7 @@
 
 <div class="final-cta" data-reveal>
   <h2>Give your next replay to <span class="hl">HotClip</span></h2>
-  <p>Windows / macOS · free &amp; open source · no sign-up · double-click to run</p>
+  <p>Windows / macOS / Linux · free &amp; open source · no sign-up · double-click to run</p>
   <div class="cta">
     <a class="btn btn-primary" href="https://github.com/xixihhhh/hotclip/releases/latest"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Download the latest release</a>
     <a class="btn btn-ghost" href="https://github.com/xixihhhh/hotclip">Star it on GitHub</a>
