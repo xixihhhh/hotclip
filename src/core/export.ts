@@ -53,6 +53,8 @@ import { planRepair, applyRepair } from "./repair";
 import { applyBrandToLayout } from "./brand";
 import type { TranscriptWord, BrandStyle } from "../shared/api-types";
 import type { WatermarkSpec } from "./cut";
+import { transformScore, type TransformInputs, type TransformScore } from "../shared/transform-score";
+import { buildLedgerCsv, type LedgerRow } from "./ledger";
 
 export interface ExportClipSpec {
   id: number;
@@ -148,6 +150,30 @@ export function summarizeEdit(
     keptSec: Number(plan.durationSec.toFixed(2)),
     removedSec: Number(Math.max(0, origDurSec - plan.durationSec).toFixed(2)),
     cutRatio: Number(Math.max(0, 1 - plan.durationSec / origDurSec).toFixed(3)),
+  };
+}
+
+/**
+ * 变形度输入(v0.14,纯函数):从单条回执 + 导出选项映射出各变形项——
+ * 尽量用「实际发生了什么」(outcome)而非「开关开没开」(options),
+ * 回退失败的项不能骗分。
+ */
+export function transformInputsFromRender(
+  render: ClipRenderOutcome,
+  opts: Pick<ExportRenderOptions, "titleCard" | "autoZoom" | "brand">
+): TransformInputs {
+  return {
+    vertical: render.reframe === "face-track" || render.reframe === "center-crop",
+    captions: render.captionsBurned,
+    recut: (render.edit?.splices ?? 0) > 0 || render.fillersRemoved > 0 || render.retakesRemoved > 0,
+    reopened: render.coldOpenSec !== null || render.flashForward,
+    titleOverlay: Boolean(opts.titleCard) || render.openingHookBurned,
+    autoZoom: Boolean(opts.autoZoom),
+    bgm: render.bgmMixed,
+    sfx: render.sfxCues > 0,
+    stitched: render.stitchedPieces >= 2,
+    translated: render.translatedLines > 0,
+    watermark: Boolean(opts.brand?.watermark),
   };
 }
 
@@ -260,6 +286,8 @@ export interface ExportRenderOptions {
   timeline?: boolean;
   /** AIGC 标识:左上角「AI 生成」显式标识 + 容器元数据隐式标识(《标识办法》)。 */
   aigcLabel?: boolean;
+  /** 留证包(v0.14):每条切片流复制源片前后各 3 分钟到「留证/」——授权审核新规要求的原始录屏留存。 */
+  evidencePack?: boolean;
   /** 平台发布包:按平台规格整理齐套素材到 `发布包/<平台>/`(见 publish-pack.ts)。 */
   publishPack?: string[];
   /**
@@ -976,7 +1004,7 @@ export async function exportClips(
 
       // 发布文案:mp4 旁落同名 .post.txt(标题+话题+简介,直接全选复制)
       if (clip.publish) {
-        await writeFile(outPath.replace(/\.mp4$/, ".post.txt"), postTextFile(clip.publish), "utf8").catch(() => {});
+        await writeFile(outPath.replace(/\.mp4$/, ".post.txt"), postTextFile(clip.publish, Boolean(options.aigcLabel)), "utf8").catch(() => {});
       }
 
       results.push({
@@ -1086,7 +1114,34 @@ export async function exportClips(
           ["-hide_banner", "-v", "error", "-i", src, "-vf", coverFilter(spec), "-frames:v", "1", "-q:v", "2", "-y", dest],
           { maxBuffer: 8 * 1024 * 1024 }
         ).then(() => true, () => false);
-      }).catch(() => []);
+      }, Boolean(options.aigcLabel)).catch(() => []);
+    }
+
+    // 留证包(v0.14 可选):每条切片截源片前后各 3 分钟流复制留档——2026-07
+    // 起授权审核要求留存片段前后 ≥3 分钟原始录屏。流复制不重编码,秒级完成;
+    // 单条失败跳过,绝不拖垮导出。
+    if (options.evidencePack && results.length > 0) {
+      const evDir = join(outDir, "留证");
+      await mkdir(evDir, { recursive: true }).catch(() => {});
+      for (const r of results) {
+        const range = snappedRange.get(r.id);
+        const spec = clips.find((c) => c.id === r.id);
+        const start = range?.startSec ?? spec?.startSec;
+        const end = range?.endSec ?? spec?.endSec;
+        if (start === undefined || end === undefined) continue;
+        const dest = join(evDir, basename(r.path).replace(/\.mp4$/, "-前后3分钟.mp4"));
+        await execFileAsync(
+          resolveFfmpegPath(),
+          [
+            "-hide_banner", "-v", "error",
+            "-ss", Math.max(0, start - 180).toFixed(2),
+            "-to", (end + 180).toFixed(2),
+            "-i", inputPath,
+            "-c", "copy", "-y", dest,
+          ],
+          { maxBuffer: 8 * 1024 * 1024 }
+        ).catch(() => {});
+      }
     }
 
     // clips.json: machine-readable evidence chain for CMS / matrix pipelines.
@@ -1139,6 +1194,9 @@ export async function exportClips(
       clips: results.map((r) => {
         const spec = clips.find((c) => c.id === r.id);
         const range = snappedRange.get(r.id);
+        // 变形度评分(v0.14):按实际发生的变形项算,低分 = 接近「裁一刀直接发」
+        const render = renderByClip.get(r.id);
+        const transform: TransformScore | null = render ? transformScore(transformInputsFromRender(render, options)) : null;
         return {
           file: basename(r.path),
           cover: r.coverPath ? basename(r.coverPath) : null,
@@ -1157,7 +1215,9 @@ export async function exportClips(
           variantOf: spec?.variantOf ?? null,
           variant: spec?.variant ?? null,
           removedFillers: removedFillersByClip.get(r.id) ?? [],
-          render: renderByClip.get(r.id) ?? null,
+          render: render ?? null,
+          // 变形度(0-100)与档位:warn = 有搬运判定风险(Reels 视觉指纹/抖音信息熵口径)
+          transform: transform ? { score: transform.score, level: transform.level } : null,
           // 出片质检报告:pass/warn + 告警清单(黑屏/静音/响度/时长/半词)
           qa: r.qa ?? null,
           // 发布文案(标题/话题/简介),同内容也落在 mp4 旁的 .post.txt
@@ -1167,6 +1227,31 @@ export async function exportClips(
       }),
     };
     await writeFile(join(outDir, "clips.json"), JSON.stringify(metadata, null, 2), "utf8").catch(() => {});
+
+    // 分发台账(v0.14):逐条「成片↔源区间↔导出时间」记录 + 发布侧留空列,
+    // 对上 2026-07 授权审核「一视频一条分发记录」的台账要求。零成本常开。
+    const ledgerRows: LedgerRow[] = results
+      .filter((r) => r.id > 0) // 合集(id 0)与横屏副本(负 id)不进台账
+      .map((r) => {
+        const spec = clips.find((c) => c.id === r.id);
+        const range = snappedRange.get(r.id);
+        const render = renderByClip.get(r.id);
+        return {
+          file: basename(r.path),
+          title: r.title,
+          durationSec: r.durationSec,
+          source: inputPath,
+          sourceStartSec: range?.startSec ?? spec?.startSec ?? null,
+          sourceEndSec: range?.endSec ?? spec?.endSec ?? null,
+          pieces: piecesByClip.get(r.id)?.length ?? 1,
+          exportedAt: metadata.exportedAt,
+          aigcLabel: Boolean(options.aigcLabel),
+          transformScore: render ? transformScore(transformInputsFromRender(render, options)).score : null,
+        };
+      });
+    if (ledgerRows.length > 0) {
+      await writeFile(join(outDir, "分发台账.csv"), buildLedgerCsv(ledgerRows), "utf8").catch(() => {});
+    }
 
     // 多画幅:整条管线用 vertical:false 递归再跑一遍到「横屏/」子目录——
     // 横屏字幕布局/封面/回执全部自动正确;失败静默,绝不拖垮已出的竖屏版。

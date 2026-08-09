@@ -10,7 +10,9 @@ import {
   LuArrowLeft,
   LuClock3,
   LuShoppingCart,
+  LuArchive,
   LuBan,
+  LuBookmark,
   LuCrosshair,
   LuKeyRound,
   LuExternalLink,
@@ -56,6 +58,7 @@ import { useLlmStore, isLlmReady, LLM_PRESETS, LLM_PRESET_LIST, presetForBaseUrl
 import { useBrandStore, activeBrandStyle } from "../stores/brand-store";
 import { useRenderPrefs } from "../stores/render-prefs-store";
 import { adjustCandidateBoundary } from "../../../shared/boundary";
+import { transformScore } from "../../../shared/transform-score";
 import { stripIpcError } from "../../../shared/transcribe-errors";
 import { preflightVerdict, type PreflightVerdict } from "../../../shared/llm-preflight";
 import { clipDurationSec, isStitched } from "../../../shared/pieces";
@@ -172,7 +175,7 @@ export function HighlightsView({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   // 出片偏好持久化:上次的开关组合下次直接生效(解构保持下方 JSX 引用不变)
   const { prefs, setPref } = useRenderPrefs();
-  const { vertical, captionStyle, jumpCut, cleanFillers, cutRetakes, autoZoom, sfx, bgmPath, trimUi, titleCard, openingHook, coldOpen, flashForward, preciseAlign, alsoLandscape, normalizeLoudness, denoise, compilation, translate, publishCopy, subtitleFile, timeline, aigcLabel, publishPack, packPlatforms, variants, outDir, quality } = prefs;
+  const { vertical, captionStyle, jumpCut, cleanFillers, cutRetakes, autoZoom, sfx, bgmPath, trimUi, titleCard, openingHook, coldOpen, flashForward, preciseAlign, alsoLandscape, normalizeLoudness, denoise, compilation, translate, publishCopy, subtitleFile, timeline, aigcLabel, evidencePack, publishPack, packPlatforms, variants, outDir, quality } = prefs;
   /** 出厂导出根目录(主进程才知道 ~/影片 在哪);用户没自选时显示它。 */
   const [defaultOutDir, setDefaultOutDir] = useState("");
   useEffect(() => {
@@ -1061,6 +1064,16 @@ export function HighlightsView({
                         {t("gateDropChip")}
                       </span>
                     )}
+                    {/* 实用密度达线(v0.14):收藏导向内容,发布文案会自动转收藏 CTA */}
+                    {c.utility && (
+                      <span
+                        title={c.utility.hits.join("/")}
+                        className="flex items-center gap-1 rounded-full border border-sky-400/30 bg-sky-500/10 px-2.5 py-1 text-[11px] font-bold text-sky-400"
+                      >
+                        <LuBookmark className="h-3 w-3" />
+                        {t("saveWorthyChip")}
+                      </span>
+                    )}
                     {/* 手动选段没有爆款分——亮「手动」徽标,不硬编一个假分数 */}
                     {c.score > 0 ? (
                       <span className="flame-gradient flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-extrabold text-white">
@@ -1247,6 +1260,8 @@ export function HighlightsView({
                     { key: "optTimeline", on: timeline, Icon: LuFilm, label: t("optTimeline"), act: () => setPref({ timeline: !timeline }) },
                     { key: "optCompilation", on: compilation, Icon: LuListVideo, label: t("optCompilation"), act: () => setPref({ compilation: !compilation }) },
                     { key: "optAigc", on: aigcLabel, Icon: LuBadgeCheck, label: t("optAigc"), act: () => setPref({ aigcLabel: !aigcLabel }) },
+                    // 留证包:授权审核要的「片段前后各3分钟原始录屏」流复制留档
+                    { key: "optEvidence", on: evidencePack, Icon: LuArchive, label: t("optEvidence"), act: () => setPref({ evidencePack: !evidencePack }) },
                     // 一片多版:点一下循环 关→2版→3版(标签实时显示档位)
                     {
                       key: "optVariants",
@@ -1302,7 +1317,43 @@ export function HighlightsView({
               )}
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-dashed border-line pt-3">
                 <div className="min-w-0">
-                  <span className="text-[13px] font-semibold text-mut">{t("selectedCount", { n: selected.size })}</span>
+                  <span className="flex flex-wrap items-center gap-2 text-[13px] font-semibold text-mut">
+                    {t("selectedCount", { n: selected.size })}
+                    {/* 变形度预估(v0.14):按当前开关组合估算,低于警戒线亮黄
+                        ——「发不出去」比「不好看」严重,提前在出片前提醒 */}
+                    {(() => {
+                      const est = transformScore({
+                        vertical,
+                        captions: captionStyle !== "none",
+                        recut: jumpCut || cleanFillers || cutRetakes,
+                        reopened: coldOpen || flashForward,
+                        titleOverlay: titleCard || openingHook,
+                        autoZoom: autoZoom && vertical,
+                        bgm: Boolean(bgmPath),
+                        sfx,
+                        stitched: false,
+                        translated: translate,
+                        watermark: Boolean(activeBrandStyle(brandState)?.watermark),
+                      });
+                      const miss = est.missingTop.map((k) => t(`tf_${k}`)).join("/");
+                      return (
+                        <span
+                          title={est.level === "warn" ? t("transformWarnHint", { miss }) : t("transformHint")}
+                          className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${
+                            est.level === "warn"
+                              ? "border border-amber-500/40 bg-amber-500/10 text-amber-400"
+                              : "chip text-mut"
+                          }`}
+                        >
+                          {t("transformChip", { n: est.score })}
+                        </span>
+                      );
+                    })()}
+                  </span>
+                  {/* 单场限产提示:同场超发会在算法信息流里自我蚕食(每集 3-5 条上限的行业口径) */}
+                  {selected.size > 5 && (
+                    <p className="mt-0.5 text-[11px] text-amber-400/90">{t("overCapHint", { n: selected.size })}</p>
+                  )}
                   {/* 成片落在哪儿:默认 ~/影片/HotClip,可改可复位(issue #3)——
                       「文件到底导到哪去了」是新手第一困惑,写在按钮边上最省事 */}
                   <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-mut/80">
@@ -1340,7 +1391,7 @@ export function HighlightsView({
                   void getApi()
                     .recordReview(filePath ?? "", summarize(candidates.filter((c) => selected.has(c.id))), summarize(candidates.filter((c) => !selected.has(c.id))))
                     .catch(() => {});
-                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, cleanFillers, cutRetakes, autoZoom, sfx, bgmPath: bgmPath || undefined, genreId, preciseAlign, trimUi, titleCard, openingHook, coldOpen, flashForward, alsoLandscape, normalizeLoudness, denoise, compilation, brand: activeBrandStyle(brandState), translate: translate ? { targetLang, llm: config } : undefined, publishCopy: publishCopy ? { llm: config } : undefined, subtitleFile, timeline, aigcLabel, publishPack: publishPack && packPlatforms.length > 0 ? packPlatforms : undefined, variants: variants > 1 ? { count: variants, llm: config } : undefined, outDir, quality });
+                  onExport(candidates.filter((c) => selected.has(c.id)), { vertical, captionStyle, jumpCut, cleanFillers, cutRetakes, autoZoom, sfx, bgmPath: bgmPath || undefined, genreId, preciseAlign, trimUi, titleCard, openingHook, coldOpen, flashForward, alsoLandscape, normalizeLoudness, denoise, compilation, brand: activeBrandStyle(brandState), translate: translate ? { targetLang, llm: config } : undefined, publishCopy: publishCopy ? { llm: config } : undefined, subtitleFile, timeline, aigcLabel, evidencePack, publishPack: publishPack && packPlatforms.length > 0 ? packPlatforms : undefined, variants: variants > 1 ? { count: variants, llm: config } : undefined, outDir, quality });
                 }}
                 className="btn-flame inline-flex shrink-0 items-center gap-1.5 rounded-lg px-6 py-2.5 text-[14px] font-bold whitespace-nowrap text-white disabled:opacity-40"
               >

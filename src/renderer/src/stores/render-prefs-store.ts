@@ -37,6 +37,8 @@ export interface RenderPrefs {
   subtitleFile: boolean;
   timeline: boolean;
   aigcLabel: boolean;
+  /** 留证包:每条切片流复制源片前后各 3 分钟(授权审核的原始录屏留存)。 */
+  evidencePack: boolean;
   /** 平台发布包:每平台一个「拿起来就能发」的齐套文件夹。 */
   publishPack: boolean;
   /** 发布包选中的平台 id(platform-specs.ts)。 */
@@ -85,6 +87,7 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   subtitleFile: false,
   timeline: false,
   aigcLabel: false,
+  evidencePack: false, // 留证段占磁盘(每条约 6 分钟源片),默认关按需开
   publishPack: false, // 发布包产生一堆文件夹,默认关由用户按需开
   packPlatforms: ["douyin", "xiaohongshu", "channels"], // 中文矩阵最常见的三件套
   variants: 1, // 多版=多倍导出时间+一次 LLM 调用,默认关

@@ -21,6 +21,8 @@ export interface PlatformSpec {
   tagsMax: number;
   /** 备注(进 manifest,提醒发布时的平台特性)。 */
   noteZh: string;
+  /** AIGC 标注操作提示(开了 AIGC 标识时进发布文案与 manifest;2026-07 新规三次违规封号)。 */
+  aigcNoteZh: string;
 }
 
 // 封面画幅依据(2026-08 核对):抖音/快手/TikTok/Reels 竖屏 9:16;
@@ -35,6 +37,7 @@ export const PLATFORM_SPECS: PlatformSpec[] = [
     titleMax: 55,
     tagsMax: 5, // 建议值:话题过多稀释权重
     noteZh: "标题与正文同栏,前55字决定列表展示;话题建议不超过5个",
+    aigcNoteZh: "发布时勾选「内容由AI生成」声明;平台要求AI内容前5秒显著标注(成片左上角标识已烧入)",
   },
   {
     id: "kuaishou",
@@ -43,6 +46,7 @@ export const PLATFORM_SPECS: PlatformSpec[] = [
     titleMax: 50,
     tagsMax: 4, // 建议值
     noteZh: "描述区展示行数有限,钩子放最前;话题建议不超过4个",
+    aigcNoteZh: "发布时勾选AIGC内容声明(平台强制要求,违规三次封号)",
   },
   {
     id: "bilibili",
@@ -51,6 +55,7 @@ export const PLATFORM_SPECS: PlatformSpec[] = [
     titleMax: 80,
     tagsMax: 10, // 平台硬上限
     noteZh: "封面16:10横版;竖屏成片可发story,横屏版在「横屏/」目录;标签上限10个",
+    aigcNoteZh: "投稿时勾选「包含AI生成内容」声明",
   },
   {
     id: "channels",
@@ -59,6 +64,7 @@ export const PLATFORM_SPECS: PlatformSpec[] = [
     titleMax: 60,
     tagsMax: 3, // 建议值:#话题# 过多影响可读性
     noteZh: "feed卡片约6:7,封面主体放中间;话题用#话题#格式,建议不超过3个",
+    aigcNoteZh: "发表时声明「内容包含AI生成」",
   },
   {
     id: "xiaohongshu",
@@ -67,6 +73,7 @@ export const PLATFORM_SPECS: PlatformSpec[] = [
     titleMax: 20, // 平台硬上限:笔记标题 20 字
     tagsMax: 10, // 建议值
     noteZh: "笔记标题上限20字(硬限制);首图3:4;封面+标题的点击率是首要考核",
+    aigcNoteZh: "发布时勾选AIGC标注;注意平台对真人内容占比有推荐门槛,纯AI批量内容会限流",
   },
   {
     id: "tiktok",
@@ -75,6 +82,7 @@ export const PLATFORM_SPECS: PlatformSpec[] = [
     titleMax: 90, // caption 上限 2200,但列表展示按前 90 字截断
     tagsMax: 5, // 建议值
     noteZh: "caption上限2200字符,展示截断在90字符左右;话题建议3-5个",
+    aigcNoteZh: "开启「AI-generated content」标签",
   },
   {
     id: "shorts",
@@ -83,6 +91,7 @@ export const PLATFORM_SPECS: PlatformSpec[] = [
     titleMax: 100, // 平台硬上限
     tagsMax: 3, // 标题内 hashtag 建议值
     noteZh: "标题上限100字符;标题内#hashtag建议不超过3个",
+    aigcNoteZh: "在YouTube Studio开启「合成内容披露」(Altered content);标签只是透明度信号,不降权",
   },
   {
     id: "reels",
@@ -91,6 +100,7 @@ export const PLATFORM_SPECS: PlatformSpec[] = [
     titleMax: 90, // caption 上限 2200,列表展示截断
     tagsMax: 5, // 建议值
     noteZh: "caption上限2200字符;网格封面中央4:5区域可见,主体放中间",
+    aigcNoteZh: "开启「Made with AI」标签",
   },
 ];
 

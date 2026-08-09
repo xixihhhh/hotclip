@@ -35,6 +35,8 @@ export interface PublishSource {
   /** 片内正文(超长会被截断)。 */
   text: string;
   keywords: string[];
+  /** 实用密度达线(v0.14):文案要转收藏/搜索导向(CTA 收藏、标题搜索句式)。 */
+  saveWorthy?: boolean;
 }
 
 /** 与 detect.ts 的 chatComplete 同形的注入点。 */
@@ -52,6 +54,8 @@ export function publishSystemPrompt(zh: boolean): string {
       "你是短视频运营,为每条切片写发布文案(抖音/小红书/视频号通用)。",
       "每条输出:title=发布标题(≤30字,别用片名原文照抄)。下笔前先从钩子角度菜单里挑最贴合内容的一个,整批切片换着用,别全走同一个套路:",
       hookAngleMenu(true),
+      // 2026 算法对齐:收藏率与搜索权重最高——标题埋观众会搜的词,干货片 CTA 转收藏/合集
+      "【2026 算法要点】平台现在收藏率与搜索权重最高:标题优先写成「观众会在搜索框里打的问题/关键词句式」(把片内的具体名词/数字埋进标题,不要只写情绪词);标了[可收藏]的干货片,ctaType 必须选 save,CTA 引导「收藏起来」或「更多同场内容看主页合集」,标题走干货句式。",
       "hashtags=3-6 个话题标签(带#,垂类词优先,泛词最多1个);",
       "description=一两句简介(补充钩子或语境,≤60字,不要堆表情);",
       "cta=一句收尾行动号召(≤20字),类型从菜单里挑与内容匹配的:",
@@ -63,6 +67,7 @@ export function publishSystemPrompt(zh: boolean): string {
     "You are a short-video social manager writing post copy for each clip (TikTok/Shorts/Reels).",
     "For each clip output: title = a post title (≤ 60 chars, don't copy the clip name verbatim). Pick the best-fitting hook angle from this menu first, and vary angles across the batch:",
     hookAngleMenu(false),
+    "[2026 algorithm notes] Saves and search now carry the most weight: prefer titles phrased as what viewers would type into search (embed the clip's concrete nouns/numbers, not just emotion words); clips tagged [save-worthy] must use ctaType=save with a 'save this for later' CTA and a how-to style title.",
     "hashtags = 3-6 tags (with #, niche terms first, at most one generic tag);",
     "description = one or two sentences (≤ 120 chars, extend the hook, no emoji spam);",
     "cta = one closing call-to-action line (≤ 40 chars), typed from this menu to match the content:",
@@ -75,7 +80,8 @@ export function publishUserPrompt(sources: PublishSource[]): string {
   return sources
     .map((s) => {
       const kw = s.keywords.length > 0 ? ` 关键词:${s.keywords.join("/")}` : "";
-      return `[${s.id}] 片名:${s.title} 钩子:${s.hook}${kw}\n正文节选:${s.text.slice(0, TEXT_EXCERPT_CHARS)}`;
+      const save = s.saveWorthy ? " [可收藏]" : "";
+      return `[${s.id}]${save} 片名:${s.title} 钩子:${s.hook}${kw}\n正文节选:${s.text.slice(0, TEXT_EXCERPT_CHARS)}`;
     })
     .join("\n\n");
 }
@@ -157,10 +163,12 @@ export async function generatePublishCopies(
 }
 
 /** .post.txt 内容:标题 + 空行 + 话题 + 空行 + 简介(CTA 缀在简介后一行),直接全选复制。 */
-export function postTextFile(copy: PublishCopy): string {
+export function postTextFile(copy: PublishCopy, aigc = false): string {
   const parts = [copy.title];
   if (copy.hashtags.length > 0) parts.push(copy.hashtags.join(" "));
   const body = [copy.description, copy.cta ?? ""].filter(Boolean).join("\n");
   if (body) parts.push(body);
+  // 开了 AIGC 标识:通用提醒(各平台的具体操作提示在发布包 manifest/文案里)
+  if (aigc) parts.push("【AIGC 标注】发布时按平台要求勾选 AI 生成内容声明(未标注最高罚则为封号)");
   return parts.join("\n\n") + "\n";
 }

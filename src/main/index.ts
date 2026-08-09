@@ -638,7 +638,8 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
   }
   // 发布文案(可选):一次 LLM 批量为所有切片生成标题+话题+简介(fail-open)。
   const zh = !(opts.transcript?.language ?? "zh").startsWith("en");
-  const copySources = list.map((c) => ({ id: c.id, title: c.title, hook: c.hook, text: c.text, keywords: c.keywords }));
+  // saveWorthy:实用密度达线的候选(v0.14),发布文案转收藏/搜索导向
+  const copySources = list.map((c) => ({ id: c.id, title: c.title, hook: c.hook, text: c.text, keywords: c.keywords, saveWorthy: Boolean(c.utility) }));
   let publishCopies: Map<number, import("@core/publish").PublishCopy> | null = null;
   const pub = opts.publishCopy;
   if (pub?.llm?.baseUrl && pub.llm.model) {
@@ -734,6 +735,8 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       subtitleFile: Boolean(opts.subtitleFile),
       timeline: Boolean(opts.timeline),
       aigcLabel: Boolean(opts.aigcLabel),
+      // 留证包(v0.14):源片前后各 3 分钟流复制留档(授权审核新规)
+      evidencePack: Boolean(opts.evidencePack),
       // 平台发布包:未知平台 id 直接过滤(不猜),空清单等于没开
       publishPack: Array.isArray(opts.publishPack) ? validPlatformIds(opts.publishPack.filter((p): p is string => typeof p === "string")) : undefined,
       modelsRoot: modelsRoot(),

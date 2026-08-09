@@ -23,6 +23,7 @@ import { resolveSelection, type RawSelection, type RawPart } from "./match";
 import { prefilterTranscript } from "./prefilter";
 import { detectClipCommands } from "./commands";
 import { applyRuleGate, type GateTier } from "./gate";
+import { utilityDensity, utilityBoost, UTILITY_SAVE_WORTHY } from "../../shared/utility-density";
 import { clipDurationSec, MAX_PIECES, type ClipPiece } from "../../shared/pieces";
 import { genrePreset, normalizeGenreId, type EvidenceClass } from "../genre";
 import {
@@ -560,9 +561,11 @@ export async function detectHighlights(
   // applyReviews 对没评到的 id 本来就保持原样(fail-open),所以直接跳过即可。
   // 质量门规则层收尾:无论复评走不走/成不成,确定性硬伤检查都要跑
   // (只降档到 review、不 drop,fail-open 见 gate.ts)。
-  const gated = (list: HighlightCandidate[]): HighlightCandidate[] => applyRuleGate(transcript, list, zh);
+  // 实用密度在复评之后加分(复评会覆写 score),在归一化之前(要影响排序)。
+  const finish = (list: HighlightCandidate[]): HighlightCandidate[] =>
+    applyRuleGate(transcript, normalizeScores(applyUtilitySignal(list, zh)), zh);
   const reviewable = kept.filter((c) => c.boundary !== "signal");
-  if (reviewable.length === 0) return { candidates: gated(normalizeScores(kept)), funnel };
+  if (reviewable.length === 0) return { candidates: finish(kept), funnel };
   try {
     const reviews = await chatCompleteJson(
       llm,
@@ -571,10 +574,34 @@ export async function detectHighlights(
       parseReviews,
       signal
     );
-    return { candidates: gated(normalizeScores(applyReviews(kept, reviews))), funnel };
+    return { candidates: finish(applyReviews(kept, reviews)), funnel };
   } catch {
-    return { candidates: gated(kept), funnel };
+    return { candidates: finish(kept), funnel };
   }
+}
+
+/**
+ * 实用密度第十路信号(v0.14,纯函数):文本候选测「值得收藏」的信息浓度
+ * (步骤/清单/具体数字/方法论),达线小幅加分、打标 utility、理由追加说明。
+ * 依据:收藏率已是第一权重(慢推流 7 天评估看收藏与回搜),「有用」是与
+ * 「精彩」不同的维度——密度只做加分项,不推翻爆点排序。信号候选跳过
+ * (它们不是按文本立身的)。
+ */
+export function applyUtilitySignal(candidates: HighlightCandidate[], zh: boolean): HighlightCandidate[] {
+  return candidates.map((c) => {
+    if (c.boundary === "signal") return c;
+    const u = utilityDensity(c.text);
+    if (u.score < UTILITY_SAVE_WORTHY) return c;
+    const note = zh
+      ? `实用密度 ${u.score}/10(${u.hits.slice(0, 3).join("/")}),可收藏内容`
+      : `utility density ${u.score}/10 (${u.hits.slice(0, 3).join("/")}), save-worthy`;
+    return {
+      ...c,
+      score: Math.min(99, c.score + utilityBoost(u.score)),
+      utility: u,
+      reason: c.reason ? `${c.reason};${note}` : note,
+    };
+  });
 }
 
 /**

@@ -219,6 +219,8 @@ export interface HighlightCandidate {
   gate?: "publish" | "review" | "drop";
   /** 质量门原因清单(LLM 复评 + 规则层硬伤,给人看的证据链)。 */
   gateNotes?: string[];
+  /** 实用密度(v0.14 第十路):达线即「值得收藏」,发布文案转收藏/搜索导向。 */
+  utility?: { score: number; hits: string[] };
   /** 用户手动调过切点(审阅台/微调按钮):导出时跳过镜头吸附,尊重人的决定。 */
   manualBounds?: boolean;
 }
@@ -324,6 +326,8 @@ export interface ExportOptions {
   timeline?: boolean;
   /** AIGC 标识:画面显式标识 + 元数据隐式标识(发布平台要求 AIGC 声明时开启)。 */
   aigcLabel?: boolean;
+  /** 留证包:每条切片流复制源片前后各 3 分钟(授权审核的原始录屏留存)。 */
+  evidencePack?: boolean;
   /** 平台发布包:选中的平台 id 清单(platform-specs.ts);每平台落一个齐套文件夹。 */
   publishPack?: string[];
   /** 一片多版:同一切片出 count 版差异化包装(含原版,2 或 3);需要 LLM。 */

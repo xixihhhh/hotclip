@@ -55,7 +55,7 @@ const CTA_TYPES: CtaType[] = [
   { id: "follow", zh: "关注引导", en: "follow", hintZh: "给关注的理由,预告下一条(「关注我,下期拆解×××」)", hintEn: "give a reason to follow, tease the next video" },
   { id: "comment", zh: "评论互动", en: "comment", hintZh: "提问式收尾请观众站队/补充(「你是哪一种?评论区聊聊」)", hintEn: "end with a question inviting comments" },
   { id: "share", zh: "转发分享", en: "share", hintZh: "指定转发对象(「转给那个总是×××的朋友」)", hintEn: "name who to share it with" },
-  { id: "save", zh: "收藏回看", en: "save", hintZh: "步骤多/信息密的内容提示先收藏(「细节多,建议收藏慢慢看」)", hintEn: "dense how-to content: suggest saving for later" },
+  { id: "save", zh: "收藏回看", en: "save", hintZh: "步骤多/信息密的内容提示先收藏(「细节多,建议收藏慢慢看」),可加一句「更多同场内容看主页合集」——收藏率与合集是 2026 权重最高的两个入口", hintEn: "dense how-to content: suggest saving for later, optionally point to the profile playlist/collection" },
   { id: "product", zh: "商品引导", en: "product", hintZh: "仅内容明显带货时用,站内组件口径(购物车/小黄车);禁站外导流与加微信类话术", hintEn: "only for clearly commercial clips, in-platform components only; never funnel off-platform" },
 ];
 

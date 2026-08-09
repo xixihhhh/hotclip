@@ -339,6 +339,8 @@ const browserMock: HotClipApi = {
           ? { hook: "实测演示开场,3秒内有画面冲击", flow: "起于提问收于结论,完整", value: "省钱结论直接可用", trend: "比价内容平台长青" }
           : undefined,
       teaser: id === 1 ? "倒半杯水会怎样?" : id === 2 ? "差价10倍的真相" : "",
+      // 实用密度演示:比价内容(数字密)标「可收藏」
+      utility: id === 2 ? { score: 5, hits: ["十几块", "两块多"] } : undefined,
       recommended: id === 1,
       reviewNote: id === 3 ? "开场是问候语,前3秒没有钩子,独立可看性弱" : id === 2 ? "结尾截在逗号上,建议人工顺一下切点" : "",
       // 质量门三档演示:1=建议发 2=需人审(规则层抓到硬伤) 3=弃

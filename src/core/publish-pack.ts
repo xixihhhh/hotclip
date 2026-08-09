@@ -80,7 +80,13 @@ export interface AdaptedPost {
  * 抖音 55 字是列表展示截断线),话题截到 tagsMax。没有发布文案时用切片
  * 标题兜底——发布框里至少有个能用的标题。
  */
-export function adaptPost(clipTitle: string, copy: PublishCopy | undefined, spec: PlatformSpec): AdaptedPost {
+export function adaptPost(
+  clipTitle: string,
+  copy: PublishCopy | undefined,
+  spec: PlatformSpec,
+  /** 开了 AIGC 标识:文案末尾附该平台的标注操作提示(v0.14,新规三次违规封号)。 */
+  aigc = false
+): AdaptedPost {
   const raw = (copy?.title ?? clipTitle).trim();
   const chars = Array.from(raw); // 按码点截,代理对/emoji 不切半
   const titleTruncated = chars.length > spec.titleMax;
@@ -90,6 +96,7 @@ export function adaptPost(clipTitle: string, copy: PublishCopy | undefined, spec
   if (hashtags.length > 0) parts.push(hashtags.join(" "));
   const body = [copy?.description ?? "", copy?.cta ?? ""].filter(Boolean).join("\n");
   if (body) parts.push(body);
+  if (aigc) parts.push(`【AIGC 标注】${spec.aigcNoteZh}`);
   return { text: parts.join("\n\n") + "\n", title, titleTruncated, hashtags };
 }
 
@@ -111,7 +118,9 @@ export async function buildPublishPacks(
   outDir: string,
   clips: PackClipInput[],
   platformIds: string[],
-  adaptCover: AdaptCoverFn
+  adaptCover: AdaptCoverFn,
+  /** 开了 AIGC 标识:每平台文案附标注操作提示,manifest 一并记录。 */
+  aigc = false
 ): Promise<PackSummary[]> {
   const summaries: PackSummary[] = [];
   for (const id of validPlatformIds(platformIds)) {
@@ -131,7 +140,7 @@ export async function buildPublishPacks(
           const ok = await adaptCover(clip.coverFile, dest, spec).catch(() => false);
           if (ok) coverName = basename(dest);
         }
-        const post = adaptPost(clip.title, clip.publish, spec);
+        const post = adaptPost(clip.title, clip.publish, spec, aigc);
         if (post.titleTruncated) truncated++;
         const postName = base.replace(/\.mp4$/, ".post.txt");
         await writeFile(join(dir, postName), post.text, "utf8").catch(() => {});
@@ -155,6 +164,8 @@ export async function buildPublishPacks(
             titleMax: spec.titleMax,
             tagsMax: spec.tagsMax,
             note: spec.noteZh,
+            // AIGC 标注提醒:开了标识才写(发布前扫 manifest 就知道该在平台点哪个开关)
+            aigcNote: aigc ? spec.aigcNoteZh : null,
             clips: rows,
           },
           null,
