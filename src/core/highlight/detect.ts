@@ -58,8 +58,27 @@ function isLocalEndpoint(baseUrl: string): boolean {
   return /localhost|127\.0\.0\.1/.test(baseUrl);
 }
 
-/** Call an OpenAI-compatible chat endpoint. Throws with an actionable message. */
-export async function chatComplete(llm: LlmConfig, system: string, user: string, signal?: AbortSignal): Promise<string> {
+/** 单次调用的输出预算。注意:思考型模型的推理 token 也计入这份预算。 */
+export const MAX_TOKENS = 4000;
+/** 空正文重试的放大预算:思考型模型把常规预算全烧在推理上时,给足空间再试一次。 */
+export const RETRY_MAX_TOKENS = 16000;
+
+/** 一次 chat 调用的三元结果:正文之外还带推理轨迹与收尾原因,供空响应诊断。 */
+interface ChatAttempt {
+  content: string;
+  /** 思考型模型的推理轨迹(reasoning_content 或 OpenRouter 风格的 reasoning)。 */
+  reasoning: string;
+  finishReason: string;
+}
+
+/** 发一次 OpenAI 兼容请求。网络/HTTP/解析错误都带可执行的指引。 */
+async function chatAttempt(
+  llm: LlmConfig,
+  system: string,
+  user: string,
+  signal: AbortSignal | undefined,
+  maxTokens: number
+): Promise<ChatAttempt> {
   const url = `${llm.baseUrl.replace(/\/+$/, "")}/chat/completions`;
   let res: Response;
   try {
@@ -76,7 +95,7 @@ export async function chatComplete(llm: LlmConfig, system: string, user: string,
           { role: "user", content: user },
         ],
         temperature: 0.6,
-        max_tokens: 4000,
+        max_tokens: maxTokens,
         ...extraParams(llm.baseUrl),
       }),
       signal,
@@ -98,15 +117,67 @@ export async function chatComplete(llm: LlmConfig, system: string, user: string,
       : "";
     throw new Error(`LLM 请求失败 / LLM request failed (HTTP ${res.status}): ${text.slice(0, 300)}${hint}`);
   }
-  let data: { choices?: Array<{ message?: { content?: string } }> };
+  let data: {
+    choices?: Array<{
+      finish_reason?: string;
+      message?: { content?: string; reasoning_content?: string; reasoning?: string };
+    }>;
+  };
   try {
     data = JSON.parse(text);
   } catch {
     throw new Error(`LLM 返回非 JSON 响应 / non-JSON response: ${text.slice(0, 200)}`);
   }
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error("LLM 未返回内容 / empty LLM response");
-  return content;
+  const choice = data.choices?.[0];
+  const msg = choice?.message;
+  return {
+    content: typeof msg?.content === "string" ? msg.content : "",
+    reasoning:
+      (typeof msg?.reasoning_content === "string" && msg.reasoning_content) ||
+      (typeof msg?.reasoning === "string" && msg.reasoning) ||
+      "",
+    finishReason: String(choice?.finish_reason ?? ""),
+  };
+}
+
+/**
+ * Call an OpenAI-compatible chat endpoint. Throws with an actionable message.
+ *
+ * 空正文的三层处理(issue #8,多家平台的「深度思考」模型都会踩):
+ * 1. 思考型模型把 4k 预算全烧在推理上(finish=length、只有 reasoning 没有
+ *    content)——换 4 倍预算自动重试一次,多数场景直接救活;
+ * 2. 个别网关把正文错放进 reasoning 字段(模型正常收尾但 content 为空)——
+ *    直接取 reasoning 交给下游解析,解析不动自会走既有重试;
+ * 3. 仍然空:按证据分因报错(思考模型烧预算/安全审查拦截/服务端偶发),
+ *    每条都告诉用户下一步换什么。
+ */
+export async function chatComplete(llm: LlmConfig, system: string, user: string, signal?: AbortSignal): Promise<string> {
+  const first = await chatAttempt(llm, system, user, signal, MAX_TOKENS);
+  if (first.content) return first.content;
+  if (first.reasoning && first.finishReason !== "length") return first.reasoning;
+  // 大预算重试自身的报错(比如超过模型输出上限的 400)不覆盖「空响应」这个
+  // 更准的诊断;用户主动取消照常中断
+  let retry: ChatAttempt | null = null;
+  try {
+    retry = await chatAttempt(llm, system, user, signal, RETRY_MAX_TOKENS);
+  } catch (e) {
+    if (signal?.aborted) throw e;
+  }
+  if (retry?.content) return retry.content;
+  if (retry?.reasoning && retry.finishReason !== "length") return retry.reasoning;
+  const filtered = first.finishReason === "content_filter" || retry?.finishReason === "content_filter";
+  // 没吐 reasoning 也可能在思考:部分服务商隐藏推理轨迹,但 finish=length
+  // 且正文为空,预算只可能是被思考吃掉的
+  const thinking =
+    Boolean(first.reasoning || retry?.reasoning) ||
+    first.finishReason === "length" ||
+    retry?.finishReason === "length";
+  const hint = filtered
+    ? "内容被服务商的安全审查拦截了,请换一家供应商或换一段素材。/ Blocked by the provider's content filter — try another provider or different footage."
+    : thinking
+      ? "当前模型是「深度思考」模型,思考过程就把输出预算烧完了。请在模型列表换它的非思考版本(通常带 instruct/chat 字样,或平台上可关闭深度思考),或换常规对话模型。/ This is a reasoning model that spends the whole output budget thinking — switch to its non-thinking variant (usually named instruct/chat) or a regular chat model."
+      : "服务商返回了空内容,可点重试;若持续出现请换个模型。/ The provider returned empty content — retry, or switch models if it persists.";
+  throw new Error(`LLM 未返回内容 / empty LLM response\n${hint}`);
 }
 
 /** 要 JSON 的调用最多试几次(1 次重试)。 */
