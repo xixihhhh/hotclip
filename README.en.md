@@ -24,20 +24,15 @@
 
 </div>
 
-## ⬇️ Download
+## Why HotClip
 
-**[Get the latest release »](https://github.com/xixihhhh/hotclip/releases/latest)**
-
-| Platform | File | Notes |
-|---|---|---|
-| Windows installer | `HotClip-x.y.z-win-x64.exe` | Double-click to install |
-| Windows portable | `HotClip-x.y.z-win-x64.zip` | Unzip & run |
-| macOS (Apple Silicon) | `HotClip-x.y.z-mac-arm64.dmg` | Drag into Applications |
-| Linux (experimental) | `HotClip-x.y.z-linux-x64.AppImage` | `chmod +x` then run; add `--no-sandbox` if it fails to launch with a sandbox error |
-
-> ⚠️ Builds are currently unsigned: on Windows SmartScreen choose "More info → Run anyway"; on macOS right-click → Open on first launch (or allow it under System Settings → Privacy & Security). Code signing is on the roadmap.
->
-> No Python, no Docker, no command line, no account — a real desktop app you double-click.
+- **Actually free, not a trial**: AGPL-3.0 open source — no watermark, no credits, no length caps, no account. There is no crippled free tier, and no quota that expires at month's end
+- **Your footage never leaves your machine**: transcription, captions, cutting and export all run locally — unreleased footage and client material stay yours
+- **Every cut comes with receipts**: virality score + opening hook + reasoning + four-dimension review, cut points aligned to the word; veto anything — the AI never guesses timestamps, and never makes the final call for you
+- **Live chat feeds highlight detection**: the chat log next to your recording is auto-discovered (BililiveRecorder .xml and Douyin-recorder .jsonl both work), gifts and superchats weighted, spam-proof — the audience voting second by second, evidence most tools never even look at
+- **Ready to post, not just cut**: vertical clips + dynamic captions + covers + post copy + per-platform publish packs, all in one run
+- **Built to survive distribution**: transform score against repost detection, AIGC labeling, a distribution ledger with evidence packs, anti-fingerprint variants — the other half of the 2026 game
+- **Clips while you sleep**: a 24/7 watch folder turns finished recordings into clips; CLI / MCP make it a one-sentence agent deliverable
 
 <!-- TODO(P0): 30-60s demo mp4 here (drag into GitHub's README web editor to get a user-attachments inline player):
      drop in a livestream replay → highlight candidate cards appear → one-click export → vertical clip with dynamic captions -->
@@ -69,6 +64,21 @@
 </table>
 
 > Real UI, driven with a sample livestream-selling replay. **If the cuts look right to you, a ⭐ helps more creators escape credit-metered clipping tools — and Star + Watch gets you release notifications.**
+
+## ⬇️ Download
+
+**[Get the latest release »](https://github.com/xixihhhh/hotclip/releases/latest)**
+
+| Platform | File | Notes |
+|---|---|---|
+| Windows installer | `HotClip-x.y.z-win-x64.exe` | Double-click to install |
+| Windows portable | `HotClip-x.y.z-win-x64.zip` | Unzip & run |
+| macOS (Apple Silicon) | `HotClip-x.y.z-mac-arm64.dmg` | Drag into Applications |
+| Linux (experimental) | `HotClip-x.y.z-linux-x64.AppImage` | `chmod +x` then run; add `--no-sandbox` if it fails to launch with a sandbox error |
+
+> ⚠️ Builds are currently unsigned: on Windows SmartScreen choose "More info → Run anyway"; on macOS right-click → Open on first launch (or allow it under System Settings → Privacy & Security). Code signing is on the roadmap.
+>
+> No Python, no Docker, no command line, no account — a real desktop app you double-click.
 
 ## Who it's for
 
@@ -257,6 +267,8 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 </details>
 
 ## What's new
+
+**In development · shipping with the next release** "Chat votes, counted properly": **Douyin recorder chat-log support** (.jsonl next to the recording, auto-discovered alongside BililiveRecorder .xml — Douyin streamers' replays finally get chat evidence too); **interaction-event weighting** (superchats / memberships / gifts / follows / like bursts on their own tier — money and action votes beat plain messages); **anti-spam caps** (one sender's contribution per window is capped — a hundred messages from one spammer isn't a hot moment); **surge bonus** (sudden jumps over the previous window score extra — highlights explode, they don't simmer); **fusion upgrades** (multi-signal resonance: loudness + chat + laughter firing together is what earns trust; windows now stretch to fit sustained peaks and shrink around short bursts); **chat-guided sampling** (expensive models spend their budget where the chat explodes)
 
 **[v0.14.1](https://github.com/xixihhhh/hotclip/releases/tag/v0.14.1)** (2026-08-11) "Think deep, still deliver": fixes "highlight detection failed: empty LLM response" ([#8](https://github.com/xixihhhh/hotclip/issues/8)) — the default models on most platforms are now *reasoning* models whose thinking counts against the output budget, so on a long transcript they burn all 4,000 tokens thinking and return no content, on every platform alike. A thinking-only response now auto-retries once with a 16,000-token budget (which rescues most runs); content misplaced into the `reasoning` field by some gateways is recovered; and if the response still comes up empty, the error names the actual cause with a next step — reasoning model out of budget (switch to its non-thinking variant), provider content filter (switch provider or footage), or a transient empty response (just retry).
 
