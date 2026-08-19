@@ -12,6 +12,7 @@ import { selectionToPieces, pickVerdict, MANUAL_MAX_PIECES } from "../../../shar
 import { piecesText } from "../../../shared/boundary";
 import { piecesDurationSec } from "../../../shared/pieces";
 import type { Transcript, ClipPiece } from "../../../shared/api-types";
+import { ModalShell } from "./ui";
 
 /** 说话人徽标配色:按 speaker id 轮转,与人无关只求区分。 */
 const SPK_COLORS = [
@@ -91,10 +92,7 @@ export function TranscriptPickModal({
     : null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm"
-      onClick={onClose}
-    >
+    <ModalShell onClose={onClose}>
       <div
         className="card flex max-h-[86vh] w-full max-w-2xl flex-col rounded-2xl p-5"
         onClick={(e) => e.stopPropagation()}
@@ -223,6 +221,6 @@ export function TranscriptPickModal({
           </div>
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }

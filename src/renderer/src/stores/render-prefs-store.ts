@@ -64,6 +64,8 @@ export interface RenderPrefs {
   briefFocus: string;
   /** 用户点题:明确排除什么。 */
   briefExclude: string;
+  /** 商品讲解模式:商品词列表(带货直播按商品选段)。 */
+  products: string[];
   /** 全场画面扫描:~30 秒一帧扫完整场(需已配置视觉端点;费时/云端计费)。 */
   fullScan: boolean;
   /** 成片导出根目录;空串 = 跟随系统默认(~/影片/HotClip)。 */
@@ -111,6 +113,7 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   genreCustom: "",
   briefFocus: "", // 点题出厂为空:不点题就按通用判据找
   briefExclude: "",
+  products: [],
   fullScan: false, // 全场扫描费时(云端还计费),默认关由用户开
   outDir: "", // 出厂跟随系统默认目录,用户选过才存绝对路径
   quality: "high", // 与升级前的成片一致,换档是用户的主动选择
@@ -133,6 +136,18 @@ function load(): RenderPrefs {
       out.packPlatforms = Array.isArray(out.packPlatforms)
         ? validPlatformIds(out.packPlatforms.filter((x): x is string => typeof x === "string"))
         : [...RENDER_PREF_DEFAULTS.packPlatforms];
+      out.products = Array.isArray(out.products)
+        ? out.products.filter((x): x is string => typeof x === "string" && x.trim().length > 0).slice(0, 20)
+        : [];
+      // 老版本的商品词存在独立的 localStorage key 里,迁移进偏好后不再回头读
+      if (out.products.length === 0) {
+        try {
+          const legacy = JSON.parse(localStorage.getItem("hotclip-products") ?? "[]");
+          if (Array.isArray(legacy)) out.products = legacy.filter((x): x is string => typeof x === "string").slice(0, 20);
+        } catch {
+          /* 没有旧数据 */
+        }
+      }
       if (![1, 2, 3].includes(out.variants)) out.variants = 1;
       if (!["short", "standard", "long"].includes(out.clipLength)) out.clipLength = "standard";
       if (!["high", "standard", "compact"].includes(out.quality)) out.quality = "high";

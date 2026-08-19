@@ -26,6 +26,7 @@ import { contextWindow, wordsInWindow, snapToWordEdge, clampDrag, clipText } fro
 import { piecesDurationSec } from "../../../shared/pieces";
 import { SAFE_ZONE_PLATFORMS, zonesFor, fitContain, cropRect9x16 } from "../../../shared/safe-zones";
 import type { Transcript, HighlightCandidate, AudioPeaks, ClipPiece } from "../../../shared/api-types";
+import { ModalShell } from "./ui";
 
 /** 查结尾:只回放最后这么多秒。 */
 const TAIL_PREVIEW_SEC = 2.5;
@@ -369,10 +370,7 @@ export function ClipReviewModal({
   const showVideo = src !== "" && !videoFailed;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm"
-      onClick={onClose}
-    >
+    <ModalShell onClose={onClose}>
       <div
         className="card rise-in flex max-h-[92vh] w-full max-w-3xl flex-col overflow-y-auto rounded-2xl p-5 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
@@ -641,6 +639,6 @@ export function ClipReviewModal({
           </div>
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }

@@ -9,6 +9,7 @@ import { useT } from "../i18n/store";
 import { getApi } from "../api/provider";
 import type { GlossaryEntry } from "../../../shared/api-types";
 import { upsertGlossaryEntry, sanitizeGlossary } from "../../../shared/glossary";
+import { ModalShell } from "./ui";
 
 export function GlossaryModal({ onClose }: { onClose: () => void }): React.JSX.Element {
   const t = useT("glossary");
@@ -42,10 +43,7 @@ export function GlossaryModal({ onClose }: { onClose: () => void }): React.JSX.E
   };
 
   return (
-    <div
-      onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm"
-    >
+    <ModalShell onClose={onClose}>
       <section
         className="card w-full max-w-xl rounded-2xl p-6"
         onClick={(e) => e.stopPropagation()}
@@ -122,6 +120,6 @@ export function GlossaryModal({ onClose }: { onClose: () => void }): React.JSX.E
 
         <p className="mt-3 text-[11.5px] leading-relaxed text-mut/80">{t("hint")}</p>
       </section>
-    </div>
+    </ModalShell>
   );
 }

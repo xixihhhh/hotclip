@@ -41,9 +41,13 @@ export function ExportView({
   const [error, setError] = useState<string | null>(null);
   const started = useRef(false);
 
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
+  // 可重入的导出启动:失败/取消后「重试」直接再跑一轮,不再 reload 整个应用
+  // (reload 会把整个会话状态一起炸掉——工作台时代候选还在 store 里,不能陪葬)
+  const runExport = useRef(() => {});
+  runExport.current = (): void => {
+    setError(null);
+    setResults(null);
+    setProgress(null);
     const api = getApi();
     const unsubscribe = api.onExportProgress(setProgress);
     api
@@ -58,7 +62,12 @@ export function ExportView({
       .then(setResults)
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(unsubscribe);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  };
+
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    runExport.current();
   }, []);
 
   const currentClip = progress ? clips.find((c) => c.id === progress.clipId) : null;
@@ -123,7 +132,7 @@ export function ExportView({
             </button>
             <button
               type="button"
-              onClick={() => window.location.reload()}
+              onClick={() => runExport.current()}
               className="btn-flame rounded-lg px-5 py-2 text-sm font-bold text-white"
             >
               {t("retry")}

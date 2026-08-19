@@ -9,6 +9,7 @@ import { useT } from "../i18n/store";
 import { getApi } from "../api/provider";
 import { useBrandStore, activeBrandStyle, SWATCHES } from "../stores/brand-store";
 import type { BrandStyle, BrandWatermark } from "../../../shared/api-types";
+import { ModalShell } from "./ui";
 
 /** 迷你预览里字幕基线位置(与管线三档 marginV 倍率一致换算)。 */
 const PREVIEW_BASELINE: Record<string, string> = { low: "78%", standard: "70.8%", high: "63.5%" };
@@ -54,10 +55,7 @@ export function BrandStyleModal({ onClose }: { onClose: () => void }): React.JSX
     }`;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm"
-      onClick={onClose}
-    >
+    <ModalShell onClose={onClose}>
       <div
         className="card rise-in flex max-h-[92vh] w-full max-w-3xl flex-col overflow-y-auto rounded-2xl p-5 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
@@ -293,7 +291,7 @@ export function BrandStyleModal({ onClose }: { onClose: () => void }): React.JSX
           </button>
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }
 

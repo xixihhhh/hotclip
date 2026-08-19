@@ -11,6 +11,7 @@ import { getApi, isElectron } from "../api/provider";
 import { useLlmStore, isLlmReady } from "../stores/llm-store";
 import { useRenderPrefs } from "../stores/render-prefs-store";
 import type { WatchEvent } from "../../../shared/api-types";
+import { ModalShell } from "./ui";
 
 function fmtTime(at: number): string {
   const d = new Date(at);
@@ -101,12 +102,7 @@ export function WatchFolderModal({ onClose }: { onClose: () => void }): React.JS
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm"
-      onClick={onClose}
-      onKeyDown={(e) => e.key === "Escape" && onClose()}
-      role="presentation"
-    >
+    <ModalShell onClose={onClose}>
       <section
         className="card w-full max-w-xl rounded-2xl p-6"
         onClick={(e) => e.stopPropagation()}
@@ -244,6 +240,6 @@ export function WatchFolderModal({ onClose }: { onClose: () => void }): React.JS
         </div>
         <p className="mt-2.5 text-[11px] leading-relaxed text-mut">{t("note")}</p>
       </section>
-    </div>
+    </ModalShell>
   );
 }
