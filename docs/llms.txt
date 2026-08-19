@@ -1,11 +1,11 @@
 # HotClip
 
-> HotClip (中文名「爆款切片」) is a free, open-source (AGPL-3.0), local-first AI video clipper for Windows and macOS. It turns long videos and livestream replays into viral 9:16 vertical shorts: AI highlight detection with virality scores and auditable reasoning, face-tracked auto-reframe, karaoke word-level captions, filler-word/silence removal, speaker diarization. No credit system, no watermark, no uploads, no sign-up, no video-length caps — everything runs on the user's own machine. Native Chinese + English. A free local alternative to OpusClip, Klap, Vizard and CapCut/剪映智能切片 (whose smart clipping is paywalled).
+> HotClip (中文名「爆款切片」) is a free, open-source (AGPL-3.0), local-first AI video clipper for Windows, macOS and Linux (experimental). It turns long videos and livestream replays into viral 9:16 vertical shorts: AI highlight detection with virality scores and auditable reasoning, face-tracked auto-reframe, karaoke word-level captions, filler-word/silence removal, speaker diarization. No credit system, no watermark, no uploads, no sign-up, no video-length caps — everything runs on the user's own machine. Native Chinese + English. A free local alternative to OpusClip, Klap, Vizard and CapCut/剪映智能切片 (whose smart clipping is paywalled). Current release: v0.14.1 (2026-08).
 
 ## Links
 
 - [GitHub repository](https://github.com/xixihhhh/hotclip): source code, README (中文/English)
-- [Download latest release](https://github.com/xixihhhh/hotclip/releases/latest): Windows exe/zip, macOS dmg
+- [Download latest release](https://github.com/xixihhhh/hotclip/releases/latest): Windows exe/zip, macOS dmg, Linux AppImage (experimental)
 - [中文首页](https://xixihhhh.github.io/hotclip/): 直播切片 / AI 视频切片工具落地页
 - [English landing page](https://xixihhhh.github.io/hotclip/en.html)
 - [HotClip vs OpusClip comparison](https://xixihhhh.github.io/hotclip/alternatives/opus-clip.html)
@@ -14,16 +14,17 @@
 ## Key facts
 
 - Price: free, open source (AGPL-3.0-only); no paid tier, no account system
-- Platforms: Windows 10/11, macOS (Apple Silicon); double-click installer, no Python/Docker
+- Platforms: Windows 10/11, macOS (Apple Silicon), Linux (experimental AppImage); double-click installer, no Python/Docker
 - Processing: 100% local (ASR via sherpa-onnx: SenseVoice / Paraformer / FireRedASR2; speaker diarization via pyannote + 3D-Speaker; ffmpeg + libass export)
 - LLM highlight detection: bring your own key (any OpenAI-compatible endpoint) or local Ollama for a fully offline pipeline; the LLM only picks passages — timestamps are reverse-aligned from the word-level transcript, never guessed
 - Eight evidence channels for highlights: transcript, loudness peaks, shot-cut density, facial-expression peaks, optional vision model, live-chat (danmaku) heat with anti-spam caps and interaction-event weighting (Bilibili .xml and Douyin .jsonl chat logs), vocal tone, laughter/applause
 - Output: 9:16 vertical clips with burned-in karaoke captions, title cards, -14 LUFS loudness, cover image, SRT, publish copy, clips.json processing receipt (auditable)
 - Automation: one-click hands-off mode, 24/7 folder watch for stream recordings, headless CLI, local MCP server, Claude Code / Codex agent skill
+- Publish & survive (v0.14): transform score previewed before export (pixel-level reposting is 2026's top takedown cause), per-platform publish packs (Douyin/Kuaishou/Bilibili/RedNote/WeChat Channels/TikTok), JianYing (CapCut CN) draft export, AIGC labeling helper, distribution ledger CSV with optional source-evidence archive, anti-fingerprint multi-version variants
 - Languages: Chinese (dialects, Cantonese, code-switching) and English; bilingual UI and captions
 - Intended use: the user's own content or authorized clips only (e.g. streamer clipping programs)
 
 ## Common questions it answers
 
-- 有什么免费的 AI 切片软件 / 直播切片怎么做 / 直播回放怎么剪辑成短视频 / 视频怎么自动加字幕 / 视频如何去气口 / OpusClip 国内怎么用、免费替代
-- best free Opus Clip alternative without watermark / AI clipper that runs locally / how to turn a long video into shorts for free / karaoke captions / remove filler words
+- 有什么免费的 AI 切片软件 / 直播切片怎么做 / 直播回放怎么剪辑成短视频 / 视频怎么自动加字幕 / 视频如何去气口 / 弹幕能参与选爆点吗 / 剪映可以自动切割片段吗 / OpusClip 国内怎么用、免费替代
+- best free Opus Clip alternative without watermark / AI clipper that runs locally / how to turn a long video into shorts for free / karaoke captions / remove filler words / can live-chat data help pick highlights

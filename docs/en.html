@@ -31,11 +31,11 @@
   "name": "HotClip",
   "operatingSystem": "Windows, macOS, Linux",
   "applicationCategory": "MultimediaApplication",
-  "softwareVersion": "0.9.4",
+  "softwareVersion": "0.14.1",
   "inLanguage": ["en", "zh-CN"],
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
   "description": "Free, open-source AI video clipper that runs locally: turn long videos and livestream replays into viral 9:16 shorts with AI highlight detection, karaoke word-level captions and face-tracked auto-reframe. No credits, no watermark, no uploads.",
-  "featureList": "AI highlight detection with virality scores and reasoning, face-tracked 9:16 auto-reframe, karaoke word-level captions, filler-word and silence removal, speaker diarization, folder watch for stream recordings, SRT and bilingual caption export",
+  "featureList": "AI highlight detection with virality scores and reasoning (eight evidence channels), live-chat heat as highlight evidence (Bilibili and Douyin chat logs, gifts and superchats weighted), face-tracked 9:16 auto-reframe, karaoke word-level captions, filler-word and silence removal, speaker diarization, folder watch for stream recordings, per-platform publish packs, SRT and bilingual caption export",
   "url": "https://xixihhhh.github.io/hotclip/en.html",
   "downloadUrl": "https://github.com/xixihhhh/hotclip/releases/latest",
   "screenshot": "https://xixihhhh.github.io/hotclip/screenshots/04-highlights.png",
@@ -67,6 +67,7 @@
     { "@type": "Question", "name": "How is HotClip different from OpusClip, Klap or Vizard?", "acceptedAnswer": { "@type": "Answer", "text": "Your footage never leaves your machine. Those SaaS tools require cloud uploads and meter credits per source minute (credits expire monthly; free tiers add watermarks). HotClip is free, local, watermark-free and cap-free, and every AI cut ships with auditable reasoning you can veto." } },
     { "@type": "Question", "name": "How do I add karaoke style captions to a video?", "acceptedAnswer": { "@type": "Answer", "text": "HotClip transcribes locally with word-level timestamps and burns karaoke word-by-word highlighted captions into every clip automatically. You can also export SRT files for native platform upload, and enable bilingual captions with full-sentence translation." } },
     { "@type": "Question", "name": "Can it remove filler words and silences for free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Silence jump-cuts remove pauses between sentences and the filler-word pass cuts ums/uhs and stutters — caption timing is remapped automatically, and every edit is logged to clips.json so you can audit what the AI did." } },
+    { "@type": "Question", "name": "Can live-chat data help pick highlights?", "acceptedAnswer": { "@type": "Answer", "text": "Yes — HotClip auto-discovers the chat log next to a recording (BililiveRecorder .xml and Douyin-recorder .jsonl both work) and feeds chat density plus superchats, memberships, gifts, follows and like bursts into highlight detection, with per-sender spam caps and surge bonuses. Without a chat file, loudness, shot-cut, facial-emotion and laughter signals take over." } },
     { "@type": "Question", "name": "Do I need a GPU?", "acceptedAnswer": { "@type": "Answer", "text": "No. The local speech-recognition models are int8-quantized and run fine on a normal CPU." } },
     { "@type": "Question", "name": "Does it work for Chinese video?", "acceptedAnswer": { "@type": "Answer", "text": "Yes — Chinese speech goes through dedicated ASR engines (SenseVoice, Paraformer, FireRedASR2) with noticeably better accuracy than general-purpose models, covering dialects, Cantonese and code-switching." } },
     { "@type": "Question", "name": "Can I clip other people's streams?", "acceptedAnswer": { "@type": "Answer", "text": "HotClip is for your own content or clips you are authorized to make (e.g. streamer clipping programs). Unauthorized re-uploading is not supported and not welcome." } }
@@ -391,6 +392,7 @@
   <details><summary>How is it different from OpusClip / Klap / Vizard?</summary><p>Your footage never leaves your machine. Those tools upload to the cloud and meter credits per source minute (expiring monthly; watermarked free tiers). HotClip is free, local, watermark-free — and every cut comes with auditable reasoning.</p></details>
   <details><summary>How do I add karaoke style captions?</summary><p>They're automatic: local word-level transcription drives word-by-word highlighted captions burned into every clip. <b>SRT export</b> and bilingual captions are one toggle away.</p></details>
   <details><summary>Can it remove filler words and silences?</summary><p>Yes — silence jump-cuts plus an um/uh filler pass, with caption timing remapped automatically. Every edit is logged to clips.json so you can audit what the AI did.</p></details>
+  <details><summary>Can live-chat data help pick highlights?</summary><p>Yes — HotClip auto-discovers the chat log next to a recording (<b>BililiveRecorder .xml and Douyin-recorder .jsonl</b> both work) and feeds chat density plus superchats, gifts, follows and like bursts into detection, with per-sender spam caps and surge bonuses. No chat file? Loudness, shot-cut, facial-emotion and laughter signals take over.</p></details>
   <details><summary>Do I need a GPU?</summary><p>No — the local ASR models are int8-quantized and run fine on CPU.</p></details>
   <details><summary>Does it work for Chinese video?</summary><p>Yes, exceptionally well — dedicated Chinese ASR engines (SenseVoice / Paraformer / FireRedASR2) cover dialects, Cantonese and code-switching.</p></details>
   <details><summary>Can I clip other people's streams?</summary><p>HotClip is for your own content or clips you're authorized to make (e.g. streamer clipping programs). Unauthorized re-uploading is not supported and not welcome.</p></details>

@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HotClip 爆款切片 — 免费开源 AI 直播切片工具:长视频/直播回放一键切成爆款竖屏短视频</title>
-<meta name="description" content="HotClip 是免费开源的 AI 视频切片 / 直播切片自动剪辑软件(Windows/macOS/Linux):直播回放、播客、长视频一键切片,AI 自动找爆点、横屏转竖屏 9:16、自动加字幕(卡拉OK逐字)。本地运行、无水印、无积分制、不限时长,OpusClip、剪映智能切片的免费替代。">
-<meta name="keywords" content="直播切片,AI视频切片工具,直播切片自动剪辑软件,长视频转短视频,AI剪辑软件免费,一键切片,直播回放剪辑,自动加字幕,横屏转竖屏,口播剪辑,去气口,OpusClip 免费替代">
+<meta name="description" content="HotClip 是免费开源的 AI 视频切片 / 直播切片自动剪辑软件(Windows/macOS/Linux):直播回放、播客、长视频一键切片,AI 自动找爆点、弹幕热度进爆点判断、横屏转竖屏 9:16、自动加动态字幕。本地运行、无水印、无积分制、不限时长,OpusClip、剪映智能切片的免费替代。">
+<meta name="keywords" content="直播切片,AI视频切片工具,直播切片自动剪辑软件,长视频转短视频,AI剪辑软件免费,一键切片,直播回放剪辑,直播高光切片,自动加字幕,横屏转竖屏,口播剪辑,去气口,OpusClip 免费替代">
 <link rel="canonical" href="https://xixihhhh.github.io/hotclip/">
 <link rel="alternate" hreflang="zh-CN" href="https://xixihhhh.github.io/hotclip/">
 <link rel="alternate" hreflang="en" href="https://xixihhhh.github.io/hotclip/en.html">
@@ -32,11 +32,11 @@
   "alternateName": "HotClip 爆款切片",
   "operatingSystem": "Windows, macOS, Linux",
   "applicationCategory": "MultimediaApplication",
-  "softwareVersion": "0.9.4",
+  "softwareVersion": "0.14.1",
   "inLanguage": ["zh-CN", "en"],
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
-  "description": "免费开源、本地运行的 AI 视频切片 / 直播切片软件:长视频、直播回放一键切成爆款竖屏短视频。AI 找爆点、横屏转竖屏 9:16、卡拉OK逐字字幕,无积分制、无水印、素材不上传。",
-  "featureList": "AI 找爆点(附爆款分与理由)、横屏转竖屏 9:16 人脸跟随、自动加字幕(卡拉OK逐字点亮)、去气口剪口头禅、说话人分离、录播监听、一键全托管、SRT/双语字幕导出",
+  "description": "免费开源、本地运行的 AI 视频切片 / 直播切片软件:长视频、直播回放一键切成爆款竖屏短视频。AI 找爆点、弹幕热度进爆点判断、横屏转竖屏 9:16、逐词点亮动态字幕,无积分制、无水印、素材不上传。",
+  "featureList": "AI 找爆点(八路证据链,附爆款分与理由)、弹幕热度进爆点判断(B站/抖音弹幕,礼物SC点赞计权)、横屏转竖屏 9:16 人脸跟随、自动加字幕(关键词高亮/逐词点亮)、去气口剪口头禅、说话人分离、录播监听、一键全托管、平台发布包、剪映草稿导出、SRT/双语字幕导出",
   "url": "https://xixihhhh.github.io/hotclip/",
   "downloadUrl": "https://github.com/xixihhhh/hotclip/releases/latest",
   "screenshot": "https://xixihhhh.github.io/hotclip/screenshots/04-highlights.png",
@@ -54,7 +54,7 @@
   "step": [
     { "@type": "HowToStep", "position": 1, "name": "导入长视频", "text": "把播客、直播回放、课程、Vlog 拖进 HotClip(支持 MP4/MKV/MOV/FLV/TS,纯音频也可以),数小时的直播回放直接进,全程本地处理不上传。" },
     { "@type": "HowToStep", "position": 2, "name": "AI 找爆点", "text": "本地逐字转写后,AI 通读全文挑出金句、冲突、高能片段,每条附爆款分、开场钩子和推荐理由,切点精确到词,看不顺眼的取消勾选即可。" },
-    { "@type": "HowToStep", "position": 3, "name": "一键出片", "text": "一键导出竖屏 9:16 成片:人脸跟随取景、卡拉OK逐字字幕、标题贴片、响度归一,附封面图和发布文案,直接发抖音、快手、B站、视频号、小红书、TikTok。" }
+    { "@type": "HowToStep", "position": 3, "name": "一键出片", "text": "一键导出竖屏 9:16 成片:人脸跟随取景、逐词点亮动态字幕、标题贴片、响度归一,附封面图和发布文案,直接发抖音、快手、B站、视频号、小红书、TikTok。" }
   ]
 }
 </script>
@@ -68,7 +68,9 @@
     { "@type": "Question", "name": "HotClip 和 OpusClip、剪映智能切片有什么区别?", "acceptedAnswer": { "@type": "Answer", "text": "最大区别是素材不出你的电脑:OpusClip 等 SaaS 必须上传云端、按源视频分钟扣积分且积分月底清零,免费档带水印,国内访问也不稳;剪映的智能切片核心功能在会员里。HotClip 免费开源、全程本地处理、无水印、不限时长,每条 AI 切点都附理由可审计。" } },
     { "@type": "Question", "name": "需要联网吗?视频会上传到云端吗?", "acceptedAnswer": { "@type": "Answer", "text": "素材永不上传。转写、字幕、切片、导出全程离线;只有 AI 找爆点这一步默认调用云端大模型(只发文字稿,用你自己的 Key),接本机 Ollama 后整条流水线 100% 离线。" } },
     { "@type": "Question", "name": "支持中文视频吗?方言和粤语呢?", "acceptedAnswer": { "@type": "Answer", "text": "支持且是强项。中文识别走专用引擎(SenseVoice/Paraformer/FireRedASR2),准确率显著高于通用模型;方言、粤语、中英混说都覆盖,界面、字幕、爆点判断提示词都针对中文内容做了适配。" } },
-    { "@type": "Question", "name": "视频怎么自动加字幕?能导出 SRT 吗?", "acceptedAnswer": { "@type": "Answer", "text": "导入后自动逐字转写,卡拉OK式逐字点亮字幕直接烧进画面;也可以一键导出 SRT 字幕文件给平台原生上传,开双语字幕还能整句翻译烧成第二行。" } },
+    { "@type": "Question", "name": "视频怎么自动加字幕?能导出 SRT 吗?", "acceptedAnswer": { "@type": "Answer", "text": "导入后自动逐字转写,关键词高亮/大字弹出/气泡特效等多款动态字幕一档切换、直接烧进画面;也可以一键导出 SRT 字幕文件给平台原生上传,开双语字幕还能整句翻译烧成第二行。" } },
+    { "@type": "Question", "name": "弹幕能参与选爆点吗?", "acceptedAnswer": { "@type": "Answer", "text": "能,而且是最硬的证据。HotClip 自动发现录播旁的弹幕文件(B 站录播姬 .xml、抖音直播录制 .jsonl 都认),弹幕密度与 SC/舰长/礼物/关注/点赞互动按档计权直接进爆点判断;单人刷屏有贡献封顶,突然爆发有额外加成。没有弹幕文件时,响度/镜头/表情/语气/笑声等信号兜底。" } },
+    { "@type": "Question", "name": "剪映可以自动切割片段吗?能和剪映配合用吗?", "acceptedAnswer": { "@type": "Answer", "text": "剪映的智能切片在会员档,且只能切连续区间。HotClip 免费开源,支持把相隔十几分钟的片段拼成一条,还能把每条切片导出成剪映草稿——AI 粗剪交给 HotClip,打开剪映接着精修。" } },
     { "@type": "Question", "name": "能自动剪掉口播里的停顿和口头禅吗?视频如何去气口?", "acceptedAnswer": { "@type": "Answer", "text": "能。「剪气口」自动删掉说话间的静音停顿,「剪口头禅」剪掉嗯/呃与结巴重复,字幕时间轴同步重映射;剪了什么逐条写进 clips.json,你始终知道 AI 动了哪里。" } },
     { "@type": "Question", "name": "需要显卡吗?配置要求高吗?", "acceptedAnswer": { "@type": "Answer", "text": "不需要显卡。本地转写用 int8 量化的小模型,普通 CPU 就能跑;找爆点的大模型在云端或你本机的 Ollama。" } },
     { "@type": "Question", "name": "可以切别人的直播吗?直播切片如何申请授权?", "acceptedAnswer": { "@type": "Answer", "text": "HotClip 面向你自己的内容或已获授权的切片。切别人的直播请先拿到授权(如各平台/公会的主播切片授权计划),未经授权的影视/直播搬运不受支持,也不欢迎。" } }
@@ -394,7 +396,9 @@
   <details><summary>和 OpusClip、剪映智能切片有什么区别?</summary><p>最大区别是<b>素材不出你的电脑</b>:OpusClip 等 SaaS 必须上传云端、按源视频分钟扣积分(月底清零),免费档带水印;剪映的智能切片核心功能在会员里。HotClip 免费开源、本地处理、无水印、不限时长,AI 切点附理由可审计。</p></details>
   <details><summary>需要联网吗?视频会上传到云端吗?</summary><p>素材永不上传。转写、字幕、切片、导出全程离线;只有「AI 找爆点」默认调云端大模型(只发文字稿,用你自己的 Key),接本机 Ollama 后整条流水线 <b>100% 离线</b>。</p></details>
   <details><summary>支持中文视频吗?方言和粤语呢?</summary><p>支持且是强项:SenseVoice / Paraformer / FireRedASR2 专用引擎,方言、粤语、中英混说覆盖;界面、字幕、爆点判断提示词都为中文内容适配。</p></details>
-  <details><summary>视频怎么自动加字幕?能导出 SRT 吗?</summary><p>导入后自动逐字转写,卡拉OK式逐字点亮字幕直接烧进画面;也可以一键导出 <b>SRT 字幕文件</b>给平台原生上传,开双语字幕还能整句翻译烧成第二行。</p></details>
+  <details><summary>视频怎么自动加字幕?能导出 SRT 吗?</summary><p>导入后自动逐字转写,关键词高亮/大字弹出/气泡特效等多款动态字幕一档切换、直接烧进画面;也可以一键导出 <b>SRT 字幕文件</b>给平台原生上传,开双语字幕还能整句翻译烧成第二行。</p></details>
+  <details><summary>弹幕能参与选爆点吗?</summary><p>能,而且是<b>最硬的证据</b>。HotClip 自动发现录播旁的弹幕文件(B 站录播姬 .xml、抖音直播录制 .jsonl 都认),弹幕密度与 SC/舰长/礼物/关注/点赞互动按档计权直接进爆点判断;单人刷屏有贡献封顶,突然爆发有额外加成。没有弹幕文件时,响度/镜头/表情/语气/笑声等信号兜底。</p></details>
+  <details><summary>剪映可以自动切割片段吗?能和剪映配合用吗?</summary><p>剪映的智能切片在会员档,且只能切连续区间。HotClip 免费开源,支持把相隔十几分钟的片段拼成一条,还能把每条切片导出成<b>剪映草稿</b>——AI 粗剪交给 HotClip,打开剪映接着精修。</p></details>
   <details><summary>能自动剪掉口播里的停顿和口头禅吗?</summary><p>能。「剪气口」自动删掉说话间的静音停顿(去气口),「剪口头禅」剪掉嗯/呃与结巴重复——剪了什么逐条写进 clips.json,你始终知道 AI 动了哪里。</p></details>
   <details><summary>需要显卡吗?配置要求高吗?</summary><p>不需要显卡。本地转写用 int8 量化的小模型,普通 CPU 就能跑;找爆点的大模型在云端或你本机的 Ollama。</p></details>
   <details><summary>可以切别人的直播吗?直播切片如何申请授权?</summary><p>HotClip 面向<b>你自己的内容或已获授权的切片</b>。切别人的直播请先拿到授权(如各平台/公会的主播切片授权计划);未经授权的影视/直播搬运不受支持,也不欢迎。</p></details>
