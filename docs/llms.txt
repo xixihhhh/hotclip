@@ -17,7 +17,7 @@
 - Platforms: Windows 10/11, macOS (Apple Silicon); double-click installer, no Python/Docker
 - Processing: 100% local (ASR via sherpa-onnx: SenseVoice / Paraformer / FireRedASR2; speaker diarization via pyannote + 3D-Speaker; ffmpeg + libass export)
 - LLM highlight detection: bring your own key (any OpenAI-compatible endpoint) or local Ollama for a fully offline pipeline; the LLM only picks passages — timestamps are reverse-aligned from the word-level transcript, never guessed
-- Six evidence channels for highlights: transcript, loudness peaks, shot-cut density, facial-expression peaks, optional vision model, live-chat (danmaku) heat
+- Eight evidence channels for highlights: transcript, loudness peaks, shot-cut density, facial-expression peaks, optional vision model, live-chat (danmaku) heat with anti-spam caps and interaction-event weighting (Bilibili .xml and Douyin .jsonl chat logs), vocal tone, laughter/applause
 - Output: 9:16 vertical clips with burned-in karaoke captions, title cards, -14 LUFS loudness, cover image, SRT, publish copy, clips.json processing receipt (auditable)
 - Automation: one-click hands-off mode, 24/7 folder watch for stream recordings, headless CLI, local MCP server, Claude Code / Codex agent skill
 - Languages: Chinese (dialects, Cantonese, code-switching) and English; bilingual UI and captions

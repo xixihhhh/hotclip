@@ -72,7 +72,7 @@
 
 ## Who it's for
 
-- **Streamers & clippers**: clip your own VODs into highlight shorts right after the stream; the 24/7 **watch folder** turns finished recordings into clips while you sleep; live-chat density feeds straight into highlight detection
+- **Streamers & clippers**: clip your own VODs into highlight shorts right after the stream; the 24/7 **watch folder** turns finished recordings into clips while you sleep; live-chat density feeds straight into highlight detection (both Bilibili danmaku .xml and Douyin recorder .jsonl chat logs work)
 - **Podcasters**: audio-only episodes still become video — an **audiogram waveform** plus quote captions turns your podcast into vertical clips
 - **Educators & marketers**: lectures, webinars and demos become snackable clips with covers, titles and metadata — with a banned-words lint before publish
 - **Talking-head creators**: silences, ums and stutters removed automatically; click-to-fix transcripts and a custom-vocabulary glossary keep names right, episode after episode
@@ -110,7 +110,7 @@ Fast SenseVoice (5 languages, 170MB) / balanced Paraformer / most-accurate FireR
 - **Speaker diarization**: one toggle (local pyannote + 3D-Speaker, zero upload) labels who's speaking; the AI picks segments per speaker and never stitches two people out of context; bubble captions can color per speaker
 </details>
 
-### 🔥 AI highlights: six evidence channels, every cut with receipts
+### 🔥 AI highlights: eight evidence channels, every cut with receipts
 
 The LLM only picks *which part* and must quote the transcript; timestamps come from **reverse-aligning the word-level transcript** — the AI never guesses times. Every candidate ships with a virality score, hook, reasoning and four-dimension review; weak picks are flagged "not recommended".
 
@@ -120,7 +120,8 @@ The LLM only picks *which part* and must quote the transcript; timestamps come f
 - **AI review quality gate**: a strict second-pass blind reviewer scores hook / structure / value / trend with one-line rationales, plus a printable teaser line
 - **Virality score = ranking, not astrology**: dimension-weighted totals normalized by relative rank within the batch (76–99), immune to LLM scoring drift — honestly labeled a ranker, not a view-count oracle
 - **Audio-visual evidence**: loudness peaks and shot-change density collected locally and injected into judgment
-- **Live-chat density signal**: auto-discovers the danmaku .xml next to a recording (BililiveRecorder convention); sliding-window density with hype-word weighting — the audience voting second by second, the strongest evidence there is
+- **Live-chat density signal (Bilibili & Douyin)**: auto-discovers the chat file next to a recording — BililiveRecorder .xml and Douyin-recorder .jsonl both work; sliding-window density with hype-word weighting, plus interaction events (superchats, memberships, gifts, follows, like bursts) weighted on their own tier — money and action votes beat plain messages. Per-sender caps stop one spammer from faking a hot moment, and sudden surges score extra — the audience voting second by second, the strongest evidence there is
+- **Signal resonance & focused compute**: a moment is trusted when multiple signals fire together — loudness alone might be BGM, chat alone might be spam; loudness + chat + laughter lighting up at once is the real thing. Expensive models (facial emotion, vocal tone) spend their sampling budget where the chat explodes and the loudness peaks, so long streams scan both sharper and cheaper
 - **Facial-emotion peaks (zero-config)**: YuNet + FER+ (MIT-licensed, a few MB) find laughter/surprise/excitement peaks — visual evidence without installing anything
 - **Visual peak signal (optional)**: a local Ollama vision model samples frames for spectacle transcripts can't see; contact-sheet scoring drops VLM calls 20→3
 - **AI visual review (optional)**: after detection, top candidates get a contact-sheet look-over by a vision model — striking visuals boost the score, lifeless visuals demote signal-driven candidates, title/visual mismatches get flagged, and the scene note lands in the reasoning; free with local Ollama, or drop an API key into vision settings for a cloud model
