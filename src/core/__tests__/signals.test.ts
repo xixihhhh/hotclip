@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseEbur128, parseShowinfoTimes, loudnessPeaks, cutDensity } from "../signals";
+import { parseEbur128, parseShowinfoTimes, loudnessPeaks, cutDensity, planSignalGuidedTimes } from "../signals";
 
 describe("parseEbur128", () => {
   it("extracts t/M sample pairs and drops silence-floor readings", () => {
@@ -53,5 +53,25 @@ describe("cutDensity", () => {
 
   it("sparse cuts → no ranges", () => {
     expect(cutDensity([10, 40, 80], 15, 4)).toEqual([]);
+  });
+});
+
+describe("planSignalGuidedTimes", () => {
+  it("弹幕峰值参与引导:采样点密集落进观众炸锅的时段", () => {
+    const signals = {
+      loudPeaks: [],
+      cutDense: [],
+      danmakuPeaks: [{ startSec: 300, endSec: 320 }],
+    };
+    const times = planSignalGuidedTimes(3600, signals, 20, 5, 5);
+    const inPeak = times.filter((t) => t >= 300 && t <= 320);
+    // 弹幕窗按 5s 步长应拿到多个采样点,远密于均匀网格(3600s/20 点=180s 一个)
+    expect(inPeak.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("没有任何信号时退回均匀网格铺满", () => {
+    const times = planSignalGuidedTimes(600, { loudPeaks: [], cutDense: [] }, 10, 5, 5);
+    expect(times.length).toBe(10);
+    for (let i = 1; i < times.length; i++) expect(times[i]).toBeGreaterThan(times[i - 1]);
   });
 });

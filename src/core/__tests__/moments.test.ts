@@ -72,22 +72,36 @@ describe("fuseMoments", () => {
     expect(fuseMoments(empty, 600, { weights: MOMENT_WEIGHTS.visual, minSec: 10, maxSec: 30 })).toEqual([]);
   });
 
-  it("多路信号重合的位置排在最热", () => {
+  it("多路信号重合的位置排在最热;远弱于它的单路孤证不进清单", () => {
     const signals: MediaSignals = {
       loudPeaks: [r(100, 110)],
       cutDense: [r(100, 110)],
       visualPeaks: [r(100, 110)],
       danmakuPeaks: [r(100, 110)],
-      // 另一处只有一路孤证
+      // 另一处只有一路低权孤证——共振加成 + 噪声地板会把它挡在清单外
       emotionPeaks: [r(400, 410)],
     };
     const out = fuseMoments(signals, 600, { weights: MOMENT_WEIGHTS.visual, minSec: 10, maxSec: 30 });
-    expect(out.length).toBeGreaterThanOrEqual(2);
+    expect(out.length).toBeGreaterThanOrEqual(1);
     const hot = [...out].sort((a, b) => b.heat - a.heat)[0];
     expect(hot.startSec).toBeLessThan(120);
     expect(hot.endSec).toBeGreaterThan(100);
     // 证据链要列出参与的信号种类
     expect(hot.evidence).toEqual(expect.arrayContaining(["loud", "cut", "visual", "danmaku"]));
+    // 弱孤证被噪声地板挡掉(提示词本来就说"单路孤证可以放心丢",现在数学层直接兑现)
+    expect(out.every((m) => m.startSec < 300)).toBe(true);
+  });
+
+  it("共振加成:两路叠加压过权重和更高的单路", () => {
+    // reaction 权重:voice=3 单路;loud+cut = 2+1 = 3 同权重和,但有两路共振
+    const signals: MediaSignals = {
+      loudPeaks: [r(100, 110)],
+      cutDense: [r(100, 110)],
+      voiceEmotionPeaks: [r(400, 410)],
+    };
+    const out = fuseMoments(signals, 600, { weights: MOMENT_WEIGHTS.reaction, minSec: 10, maxSec: 30 });
+    const hot = [...out].sort((a, b) => b.heat - a.heat)[0];
+    expect(hot.startSec).toBeLessThan(200); // 共振处赢
   });
 
   it("时刻按时间排序并从 1 连续编号(LLM 按编号引用)", () => {
@@ -131,15 +145,35 @@ describe("fuseMoments", () => {
     expect(MOMENT_SATURATION).toBeLessThan(1);
   });
 
-  it("窗口长度落在目标片长附近,且不越过素材边界", () => {
+  it("窗口长度落在目标片长档内,且不越过素材边界", () => {
     const signals: MediaSignals = { loudPeaks: [r(2, 6)], cutDense: [], danmakuPeaks: [r(2, 6)] };
     const out = fuseMoments(signals, 60, { weights: MOMENT_WEIGHTS.reaction, minSec: 10, maxSec: 30 });
     expect(out).toHaveLength(1);
     expect(out[0].startSec).toBeGreaterThanOrEqual(0);
     expect(out[0].endSec).toBeLessThanOrEqual(60);
     const dur = out[0].endSec - out[0].startSec;
-    expect(dur).toBeGreaterThan(8);
+    expect(dur).toBeGreaterThanOrEqual(10); // 碎峰也要补到下限,凑出能看完整内容的窗
     expect(dur).toBeLessThanOrEqual(32);
+  });
+
+  it("窗口随内容伸缩:持续高潮给长窗,碎峰给短窗", () => {
+    const sustained: MediaSignals = {
+      loudPeaks: [r(100, 128)],
+      cutDense: [],
+      danmakuPeaks: [r(100, 128)],
+    };
+    const burst: MediaSignals = {
+      loudPeaks: [r(300, 304)],
+      cutDense: [],
+      danmakuPeaks: [r(300, 304)],
+    };
+    const long = fuseMoments(sustained, 600, { weights: MOMENT_WEIGHTS.reaction, minSec: 10, maxSec: 40 });
+    const short = fuseMoments(burst, 600, { weights: MOMENT_WEIGHTS.reaction, minSec: 10, maxSec: 40 });
+    const durOf = (m: { startSec: number; endSec: number }): number => m.endSec - m.startSec;
+    // 28 秒的持续高潮拿到接近其真实长度的窗;4 秒碎峰只补到下限附近
+    expect(durOf(long[0])).toBeGreaterThan(20);
+    expect(durOf(short[0])).toBeLessThan(durOf(long[0]));
+    expect(durOf(short[0])).toBeGreaterThanOrEqual(10);
   });
 
   it("画面类与反应类权重是反的:同一份信号选出的最热时刻不同", () => {

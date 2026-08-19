@@ -73,6 +73,20 @@ export function topMoments(moments: SignalMoment[], max = MOMENT_PROMPT_MAX): Si
  * 窗口都有笑声——一路信号如果全程都亮,它就不再有区分度。
  */
 export const MOMENT_SATURATION = 0.55;
+/**
+ * 多路共振加成:同一秒被越多种信号同时命中越可信——只有音量高可能是 BGM,
+ * 只有弹幕高可能是刷屏,音量+弹幕+笑声一起亮才是真爆点。每多一路乘一档。
+ * 提示词早就告诉 LLM「单路孤证可以放心丢」;这里把同一judgement落进曲线,
+ * 让共振时刻在排序上直接压过孤证。
+ */
+export const MOMENT_AGREEMENT_BONUS = 0.25;
+/**
+ * 峰值低于最强峰的该比例时停止取窗——弱尾巴是噪声(某路低权信号的一闪),
+ * 塞给 LLM 只会稀释真候选。相对比例而非绝对阈值:信号贫瘠的素材照样出峰。
+ */
+export const MOMENT_NOISE_FLOOR = 0.25;
+/** 取窗时向两侧扩到热度跌破峰值的该比例为止——窗口随内容伸缩,不再一刀切。 */
+export const MOMENT_WINDOW_REL_HEIGHT = 0.35;
 
 export interface SignalMoment {
   /** 1-based,给 LLM 引用用(它只需要报编号,不需要引用原话)。 */
@@ -168,8 +182,10 @@ export interface FuseOptions {
 /**
  * 融合七路信号 → 按热度排序的时刻清单。
  *
- * 取窗口的办法:反复取当前最热的一格,以它为中心向两侧扩到目标片长,
- * 然后把这一段(加上最小间隔)清零再取下一个——保证彼此不重叠、不扎堆。
+ * 取窗口的办法:反复取当前最热的一格,从峰向两侧扩到热度跌破峰值比例
+ * (窗口随内容伸缩:碎峰给短窗、持续高潮给长窗,都夹在目标片长档内),
+ * 然后把这一段(加上最小间隔)标记已取再找下一个——保证彼此不重叠、
+ * 不扎堆;峰值弱到只剩最强峰的零头时收工,弱尾噪声不进清单。
  */
 export function fuseMoments(
   signals: MediaSignals | undefined,
@@ -192,13 +208,20 @@ export function fuseMoments(
   addSignal(heat, hits, signals.audioEventPeaks, w.audioEvent, "audioEvent", binSec, durationSec);
   addSignal(heat, hits, signals.danmakuPeaks, w.danmaku, "danmaku", binSec, durationSec);
 
+  // 多路共振加成:加权求和之后,再按同秒命中的信号路数乘档——孤证不奖励
+  for (let i = 0; i < bins; i++) {
+    const extra = hits[i].size - 1;
+    if (extra > 0) heat[i] *= 1 + MOMENT_AGREEMENT_BONUS * extra;
+  }
+
   const curve = smooth(heat);
-  const targetSec = Math.min(options.maxSec, Math.max(options.minSec, (options.minSec + options.maxSec) / 2));
-  const halfBins = Math.max(1, Math.round(targetSec / binSec / 2));
+  const minBins = Math.max(1, Math.round(options.minSec / binSec));
+  const maxBins = Math.max(minBins, Math.round(options.maxSec / binSec));
   const gapBins = Math.max(1, Math.round(MOMENT_MIN_GAP_SEC / binSec));
 
   const out: SignalMoment[] = [];
   const taken = new Uint8Array(bins);
+  let strongest = 0;
   for (let n = 0; n < maxCount; n++) {
     let best = -1;
     let bestVal = 0;
@@ -210,21 +233,39 @@ export function fuseMoments(
       }
     }
     if (best < 0 || bestVal <= 0) break;
+    if (strongest === 0) strongest = bestVal;
+    else if (bestVal < strongest * MOMENT_NOISE_FLOOR) break; // 弱尾噪声收工
 
-    const from = Math.max(0, best - halfBins);
-    const to = Math.min(bins - 1, best + halfBins);
+    // 从峰向两侧扩:热度跌破峰值比例、撞上已取格或素材边界就停
+    const floor = bestVal * MOMENT_WINDOW_REL_HEIGHT;
+    let from = best;
+    let to = best;
+    while (to - from + 1 < maxBins) {
+      const left = from > 0 && !taken[from - 1] && curve[from - 1] >= floor ? curve[from - 1] : -1;
+      const right = to < bins - 1 && !taken[to + 1] && curve[to + 1] >= floor ? curve[to + 1] : -1;
+      if (left < 0 && right < 0) break;
+      if (right >= left) to++;
+      else from--;
+    }
+    // 碎峰太短的补到目标下限(仍不越过已取格/边界)——凑出能看完整内容的窗
+    while (to - from + 1 < minBins) {
+      const canLeft = from > 0 && !taken[from - 1];
+      const canRight = to < bins - 1 && !taken[to + 1];
+      if (!canLeft && !canRight) break;
+      if (canRight && (!canLeft || curve[to + 1] >= curve[from - 1])) to++;
+      else from--;
+    }
     // 证据取窗口内出现过的所有信号种类(而不是只看峰值那一格)
     const kinds = new Set<keyof MomentWeights>();
-    let heatSum = 0;
     for (let i = from; i <= to; i++) {
-      heatSum += curve[i];
       for (const k of hits[i]) kinds.add(k);
     }
     out.push({
       id: 0, // 排序后统一编号
       startSec: Number((from * binSec).toFixed(2)),
       endSec: Number(Math.min(durationSec, (to + 1) * binSec).toFixed(2)),
-      heat: Number(heatSum.toFixed(3)),
+      // 热度记峰值强度(不是窗内求和)——长窗不因长度占排序便宜
+      heat: Number(bestVal.toFixed(3)),
       evidence: [...kinds],
     });
     for (let i = Math.max(0, from - gapBins); i <= Math.min(bins - 1, to + gapBins); i++) taken[i] = 1;

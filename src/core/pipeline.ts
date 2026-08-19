@@ -99,34 +99,38 @@ export async function detectForPipeline(
 ): Promise<HighlightCandidate[]> {
   if (transcript.segments.length === 0) throw new Error("转写结果为空(可能是无人声素材)");
   const signals = await collectSignals(videoPath).catch(() => undefined);
+  // 弹幕热度(零配置):录播姬随录播落的同名 .xml 自动发现——录播监听场景的
+  // 主证据。它只是读个文件,先于贵信号采集:弹幕峰值(观众逐秒投的票)要
+  // 参与引导表情/语音情绪的采样预算,笑声和表情最该去观众炸锅的地方找
+  const danmaku = await collectDanmakuSignal(videoPath, transcript.durationSec);
+  const guided = danmaku
+    ? { loudPeaks: [], cutDense: [], ...signals, danmakuPeaks: danmaku.danmakuPeaks }
+    : signals;
   const emotion = await collectEmotionSignal({
     videoPath,
     durationSec: transcript.durationSec,
     modelsRoot: cfg.modelsRoot,
-    signals,
+    signals: guided,
   }).catch(() => null);
-  // 弹幕热度(零配置):录播姬随录播落的同名 .xml 自动发现——录播监听场景的主证据
-  const danmaku = await collectDanmakuSignal(videoPath, transcript.durationSec);
   // 语音情绪/笑声掌声(零配置,复用已装的 SenseVoice 权重):文字稿看不见的那半条证据
   const voice = await collectVoiceEmotionSignal({
     videoPath,
     durationSec: transcript.durationSec,
     modelsRoot: cfg.modelsRoot,
-    signals,
+    signals: guided,
   }).catch(() => null);
   const merged =
-    emotion || danmaku || voice
+    emotion || voice
       ? {
           loudPeaks: [],
           cutDense: [],
-          ...signals,
+          ...guided,
           ...(emotion ? { emotionPeaks: emotion.emotionPeaks } : {}),
-          ...(danmaku ? { danmakuPeaks: danmaku.danmakuPeaks } : {}),
           ...(voice
             ? { voiceEmotionPeaks: voice.voiceEmotionPeaks, audioEventPeaks: voice.audioEventPeaks }
             : {}),
         }
-      : signals;
+      : guided;
   const outcome = await detectHighlights(
     transcript, cfg.llm, cfg.signal, merged,
     undefined, undefined, undefined, cfg.reference, cfg.reviewMemory
