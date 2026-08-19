@@ -53,18 +53,18 @@
 ## Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/04-highlights.png" width="840" alt="AI highlight candidates with four-dimension virality scoring">
+  <img src="docs/screenshots/04-highlights.png" width="840" alt="Pro workbench: preview, signal timeline, candidate list and inspector in one screen">
 </p>
-<p align="center"><sub><b>The AI reads the whole transcript and nominates highlights</b> — each with a virality score, hook, four-dimension breakdown (hook / structure / value / trend), a teaser line, and word-accurate cut points. Weak picks are auto-flagged "not recommended"; you make the final call.</sub></p>
+<p align="center"><sub><b>A real workbench</b> — preview, timeline, candidate table and inspector on one screen: live-chat and loudness heat curves are drawn right on the timeline, and candidate segments sit on the peaks, so "why this segment" is visible at a glance. Every candidate ships a virality score, four-dimension breakdown and word-accurate cut points; weak picks are auto-flagged, and you make the final call.</sub></p>
 
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/01-import.png" alt="Import a long video"><br/><sub>① <b>Import</b> a podcast / livestream replay / lecture — everything is processed locally, nothing is uploaded</sub></td>
-    <td width="50%"><img src="docs/screenshots/02-engines.png" alt="Pick a transcription engine"><br/><sub>② <b>Pick an ASR engine</b> — three local tiers (SenseVoice / Paraformer / FireRedASR2) plus an optional cloud tier, privacy levels clearly labeled</sub></td>
+    <td width="50%"><img src="docs/screenshots/02-engines.png" alt="Pick a transcription engine"><br/><sub>② <b>Pick an ASR engine</b> — the source stays docked in the workbench; three local tiers (SenseVoice / Paraformer / FireRedASR2) plus an optional cloud tier</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/screenshots/03-transcript.png" alt="Word-level transcript"><br/><sub>③ <b>Word-level transcript</b> — timestamped, sentence by sentence; the foundation for highlight detection and captions</sub></td>
-    <td width="50%"><img src="docs/screenshots/05-export.png" alt="One-click export"><br/><sub>④ <b>One-click export</b> — vertical clips ready to post, with cover images and clips.json metadata</sub></td>
+    <td width="50%"><img src="docs/screenshots/03-transcript.png" alt="Word-level transcript"><br/><sub>③ <b>Transcript tab</b> — timestamped, click-to-fix, click a timecode to seek the preview; the foundation for highlights and captions</sub></td>
+    <td width="50%"><img src="docs/screenshots/05-export.png" alt="One-click export"><br/><sub>④ <b>One-click export</b> — reusable export schemes, vertical clips ready to post, with cover images and clips.json metadata</sub></td>
   </tr>
 </table>
 

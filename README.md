@@ -57,18 +57,18 @@
 ## 界面预览
 
 <p align="center">
-  <img src="docs/screenshots/04-highlights.png" width="840" alt="AI 爆点候选:四维打分 + 钩子 + 逐句边界微调">
+  <img src="docs/screenshots/04-highlights.png" width="840" alt="专业工作台:预览 + 信号时间轴 + 候选列表 + 详情栏一屏工作">
 </p>
-<p align="center"><sub><b>AI 通读全文挑爆点</b> —— 每条候选附爆款分、钩子、四维分项(钩子 / 结构 / 价值 / 热点)、悬念句与逐字精确切点;弱片自动标「不建议发布」,勾选取舍全在你手。</sub></p>
+<p align="center"><sub><b>专业工作台</b> —— 预览、时间轴、候选表、详情栏一屏工作:弹幕/响度热度曲线直接画在时间轴上,候选段就落在峰上,「为什么选这段」一眼可见;每条候选附爆款分、四维分项与逐字精确切点,弱片自动标「不建议发布」,勾选取舍全在你手。</sub></p>
 
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/01-import.png" alt="导入长视频"><br/><sub>① <b>导入</b> 播客 / 直播回放 / 课程 —— 全程本地处理,素材不上传</sub></td>
-    <td width="50%"><img src="docs/screenshots/02-engines.png" alt="选择转写引擎"><br/><sub>② <b>选转写引擎</b> —— 三档本地(SenseVoice / Paraformer / FireRedASR2)+ 可选云端,隐私分级明标</sub></td>
+    <td width="50%"><img src="docs/screenshots/02-engines.png" alt="选择转写引擎"><br/><sub>② <b>选转写引擎</b> —— 素材常驻工作台,三档本地(SenseVoice / Paraformer / FireRedASR2)+ 可选云端,隐私分级明标</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/screenshots/03-transcript.png" alt="逐字转写"><br/><sub>③ <b>逐字转写</b> —— 带时间戳的逐句稿,是找爆点和字幕的地基</sub></td>
-    <td width="50%"><img src="docs/screenshots/05-export.png" alt="一键出片"><br/><sub>④ <b>一键出片</b> —— 竖屏成片直接发,附封面图与 clips.json 元数据</sub></td>
+    <td width="50%"><img src="docs/screenshots/03-transcript.png" alt="逐字转写"><br/><sub>③ <b>逐句稿页签</b> —— 带时间戳、即点即改,点时间码画面直接跳过去;是找爆点和字幕的地基</sub></td>
+    <td width="50%"><img src="docs/screenshots/05-export.png" alt="一键出片"><br/><sub>④ <b>一键出片</b> —— 出片方案一键复用,竖屏成片直接发,附封面图与 clips.json 元数据</sub></td>
   </tr>
 </table>
 
