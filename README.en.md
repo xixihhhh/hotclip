@@ -146,6 +146,7 @@ Dynamic captions in multiple styles — keyword highlight, word pop, bubble, min
 - **Cold open (payoff first)**: the hottest hook line spliced to the very front, then the full clip — the standard retention trick, paywalled elsewhere; skipped when the hook can't be located (never done wrong rather than done badly)
 - **Flash-forward cold open**: flash the clip's most explosive 0.3-1s before the story starts, then cut back — only 0.04% of clips ship any visual hook; auto-coordinates with the climax-first cold open (one or the other), skipped when no safe peak exists
 - **Hormozi-style impact captions**: big bold chunks, hard shadows, word-by-word lighting
+- **Speaker-tag captions**: in multi-speaker footage, each speaker change opens with a colored "A:" / "B:" prefix (same per-speaker palette as bubble captions) so viewers never lose track of who's talking
 - **Bilingual captions**: full-sentence translation burned as a second track, remapped through jump-cut compression; competitors sell this as a paid tier
 - **SRT export**: timestamps already reflect the jump-cut/filler-removed output; line breaks match the burned captions exactly
 - **Post copy generation**: hooky title + 3-6 niche hashtags + description per clip (8 hook angles × 5 CTA types), saved as `.post.txt` and into clips.json
@@ -162,7 +163,7 @@ Face-tracked 9:16 reframing (three per-shot modes), silence jump cuts, filler-wo
 
 - **Face-tracked smart reframing**: locked / smooth-pan / One Euro tracking per shot; center-crop fallback when no face is found
 - **Screen-recording UI removal**: status bars and letterboxing detected via temporal variance and cropped out
-- **Silence jump cuts**: pauses cut and spliced with caption timeline remapped; requires *no words AND acoustic silence*, so laughter and applause survive
+- **Silence jump cuts**: pauses cut and spliced with caption timeline remapped; requires *no words AND acoustic silence*, so laughter and applause survive; optionally keep 0.25s breathing room — tight pacing without the suffocation
 - **Filler-word removal**: um/uh-class fillers and stutters cut (deliberately conservative), itemized in clips.json
 - **Loudness normalization**: -14 LUFS (EBU R128) per clip, measured on the spliced audio after jump cuts
 - **One-click denoise**: double highpass + spectral subtraction; measured -7.9dB noise floor with speech moved just 0.2dB — honest basic denoising, not AI audio repair
@@ -194,6 +195,22 @@ A clip review workbench (play in-app, drag cut points word-by-word on a waveform
 - **Render prefs memory + inline title editing**: toggle combos remembered across videos; titles editable in place with file names and copy following
 - **Settings page**: model storage visible and movable (cross-drive moves copy → verify → then delete), three export quality tiers (Compact measured 66% smaller), default caption style and export location
 - **Update notifications**: silent check on launch, a small badge when a new release exists; offline checks fail silently
+</details>
+
+### 🛡️ Publish & survive: compliance built for 2026
+
+Cutting well is half the game — the other half is surviving distribution: pixel-level repost detection, mandatory AIGC labeling, save-rate-weighted algorithms. This group handles that half.
+
+<details>
+<summary><b>Details</b>: transform score · AI covers · AI BGM · JianYing drafts · ledger & evidence · AIGC labeling · anti-fingerprint variants</summary>
+
+- **Transform score**: everything an export actually changed (reframe, jump cuts, captions, cards, SFX…) rolls into one score, previewed live before export, yellow card under 40 — pixel-level reposting is 2026's #1 takedown cause
+- **Two-tier AI covers (optional)**: big-type vertical covers generated from clip titles — volume tier ~$0.04, premium ~$0.14 per cover (reusing your Atlas key); saved alongside the frame-grab cover, use whichever
+- **AI BGM (optional)**: copyright-safe instrumental generated per stream genre, auto-wired into the voice-ducking mix chain — zero licensing risk from commercial libraries
+- **JianYing draft export**: each clip lands as a JianYing (CapCut CN) draft folder with every AI cut on the timeline — rough cut in HotClip, hand off to the editor for finishing without starting over
+- **Distribution ledger & evidence pack**: each clip's source range logged to a CSV ledger, optionally with a ±3-minute source archive — when an authorized clip gets challenged as a repost, you have receipts
+- **AIGC labeling helper**: per-platform label copy and entry-point pointers, one click to copy; a soft cap hint over 5 clips per stream (2026 algorithms reward quality over volume)
+- **Anti-fingerprint variants**: the last of your multi-version variants swaps in a flash-forward opening plus seeded template jitter (subtle font-size/baseline/margin differences) — multi-account posting without visual-fingerprint collisions, all real differentiation rather than pixel tricks
 </details>
 
 ### 🤖 Batch & ecosystem: CLI / MCP / Agent Skill
@@ -268,7 +285,8 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 | Desktop app · three local ASR tiers · AI highlights · vertical clips with captions · face tracking | ✅ Done |
 | Diarization · bubble captions · jump cuts · hands-off mode · installers | ✅ Done |
 | v0.5 – v0.9 (workbench · MCP · watch folder · QA/repair · feedback loop · settings) | ✅ Shipped |
-| Multi-platform publishing · CapCut draft export · English ASR upgrade (Parakeet) | 🗺️ [Planned](docs/PRODUCT-PLAN.md) |
+| v0.10 – v0.14 (multi-part stitching · genre criteria · quality gate · publish packs · variants · JianYing drafts · transform score · AI covers/BGM) | ✅ Shipped |
+| English ASR upgrade (Parakeet) · code signing · deeper unattended mode | 🗺️ [Planned](docs/PRODUCT-PLAN.md) |
 
 </details>
 
@@ -290,6 +308,9 @@ They're automatic — word-level timestamps drive dynamic captions burned into e
 
 **Can it remove filler words and silences?**
 Yes — silence jump cuts plus an um/uh filler pass, with caption timing remapped and every edit logged to clips.json.
+
+**Can live-chat data help pick highlights?**
+Yes — and it's the strongest evidence there is. HotClip auto-discovers the chat file sitting next to a recording (BililiveRecorder .xml and Douyin-recorder .jsonl both work); chat density plus superchats, memberships, gifts, follows and like bursts feed straight into highlight detection, with per-sender spam caps and surge bonuses. No chat file? Loudness, shot cuts, facial emotion, vocal tone and laughter signals cover for it.
 
 **Does it work for Chinese video?**
 Yes, exceptionally well — dedicated Chinese ASR engines (SenseVoice / Paraformer / FireRedASR2) cover dialects, Cantonese and code-switching; UI, captions and prompts are language-routed.
