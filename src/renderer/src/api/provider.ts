@@ -214,6 +214,26 @@ const browserMock: HotClipApi = {
     });
     return { values, startSec, hopSec };
   },
+  // 浏览器预览:确定性伪曲线——几处高斯峰叠底噪,时间轴的样子完整可看
+  async timelineData(_filePath, durationSec) {
+    await sleep(400);
+    const bins = Math.min(720, Math.max(120, Math.round(durationSec / 5)));
+    const peakAt = [0.14, 0.3, 0.42, 0.55, 0.68, 0.86];
+    const curve = (amp: number[], noise: number, width: number): number[] =>
+      Array.from({ length: bins }, (_, i) => {
+        const x = i / bins;
+        let v = 0;
+        for (let p = 0; p < peakAt.length; p++) v += amp[p % amp.length] * Math.exp(-((x - peakAt[p]) ** 2) / (2 * width * width));
+        v += noise * Math.abs(Math.sin(i * 12.9898) * 43758.5453 % 1);
+        return Math.min(1, v);
+      });
+    return {
+      loudness: curve([0.7, 0.5, 0.6, 0.4, 0.65, 0.55], 0.18, 0.03),
+      danmaku: curve([0.95, 0.7, 0.4, 0.55, 0.6, 0.8], 0.06, 0.018),
+      thumbs: [],
+      binSec: durationSec / bins,
+    };
+  },
   async selectDir() {
     await sleep(300);
     return "/demo/录播文件夹";

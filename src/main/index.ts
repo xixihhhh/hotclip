@@ -35,7 +35,9 @@ import { generateAiBgm } from "@core/bgm-ai";
 import { validPlatformIds } from "../shared/platform-specs";
 import { FolderWatcher, isVideoFile, isSeen, type SeenMap, type WatchedFile } from "@core/watch";
 import { startWebhookServer, type WebhookServerHandle } from "@core/webhook";
-import { collectDanmakuSignal } from "@core/danmaku";
+import { collectDanmakuSignal, readDanmakuItems, danmakuHeatCurve } from "@core/danmaku";
+import { loudnessCurve } from "@core/signals";
+import { extractFilmstrip } from "@core/filmstrip";
 import { collectVoiceEmotionSignal } from "@core/voice-emotion";
 import { checkForUpdate } from "@core/update-check";
 import { clipOutDir } from "@core/appenv";
@@ -240,6 +242,42 @@ ipcMain.handle("hotclip:audio-peaks", async (_event, filePath: unknown, startSec
   // 窗口封顶 10 分钟,防误传超大区间把内存打爆
   const track = await extractPeaks(filePath, from, Math.min(to, from + 600));
   return { values: Array.from(track.values), startSec: track.startSec, hopSec: track.hopSec };
+});
+
+// ---- IPC: 工作台时间轴数据(全场响度/弹幕热度曲线 + 缩略图胶片带) ----
+// 响度复用 warmSignals 缓存的 ebur128 采样(转写期已并行采过,不再解码一遍);
+// 弹幕读视频旁的弹幕文件;缩略图串行抽 8 帧。各路 fail-open。
+
+const timelineCache = new Map<string, Promise<import("../shared/api-types").TimelineData>>();
+
+ipcMain.handle("hotclip:timeline-data", async (_event, filePath: unknown, durationSec: unknown) => {
+  if (typeof filePath !== "string" || !filePath.trim()) throw new Error("timeline-data requires a file path");
+  const dur = typeof durationSec === "number" && Number.isFinite(durationSec) && durationSec > 0 ? durationSec : 0;
+  if (dur <= 0) throw new Error("timeline-data requires a duration");
+  const key = `${filePath}|${Math.round(dur)}`;
+  let p = timelineCache.get(key);
+  if (!p) {
+    p = (async () => {
+      const bins = Math.min(720, Math.max(120, Math.round(dur / 5)));
+      const [signals, items, thumbs] = await Promise.all([
+        warmSignals(filePath),
+        readDanmakuItems(filePath).catch(() => null),
+        extractFilmstrip(filePath, dur, 8).catch(() => [] as string[]),
+      ]);
+      return {
+        loudness: signals?.loudnessSamples ? loudnessCurve(signals.loudnessSamples, dur, bins) : [],
+        danmaku: items ? danmakuHeatCurve(items, dur, bins) : [],
+        thumbs,
+        binSec: dur / bins,
+      };
+    })();
+    timelineCache.set(key, p);
+    if (timelineCache.size > 4) {
+      const first = timelineCache.keys().next().value;
+      if (first !== undefined) timelineCache.delete(first);
+    }
+  }
+  return p;
 });
 
 // ---- IPC: 候选片段接触表(审阅台画面速览,复用 VLM 同款拼图) ----

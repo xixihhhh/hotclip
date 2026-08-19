@@ -32,6 +32,7 @@ const api: HotClipApi = {
   generateBgm: (config, genreId) => ipcRenderer.invoke("hotclip:generate-bgm", config, genreId),
   getAudioPeaks: (filePath, startSec, endSec) =>
     ipcRenderer.invoke("hotclip:audio-peaks", filePath, startSec, endSec),
+  timelineData: (filePath, durationSec) => ipcRenderer.invoke("hotclip:timeline-data", filePath, durationSec),
   contactSheet: (filePath, startSec, endSec) =>
     ipcRenderer.invoke("hotclip:contact-sheet", filePath, startSec, endSec),
   listLlmModels: (baseUrl, apiKey) => ipcRenderer.invoke("hotclip:llm-models", baseUrl, apiKey),

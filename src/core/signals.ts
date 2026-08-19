@@ -20,6 +20,12 @@ export interface MediaSignals {
   loudPeaks: TimeRange[];
   /** Windows with dense scene cuts (fast visual pace). */
   cutDense: TimeRange[];
+  /**
+   * ebur128 原始采样(t + momentary dB)。采集时顺手保留——工作台时间轴要画
+   * 全场响度曲线,不留的话同一条 2 小时音轨得再解码一遍。仅主进程内使用,
+   * 不进提示词也不进渲染层(时间轴 IPC 会把它压成每格一个值再发)。
+   */
+  loudnessSamples?: Array<{ t: number; m: number }>;
   /** 端侧视觉模型抽帧圈出的画面高能时段(可选,见 highlight/vision.ts)。 */
   visualPeaks?: TimeRange[];
   /** 表情峰值时段(YuNet+FER+,零配置;可选,见 emotion.ts)。 */
@@ -165,8 +171,33 @@ export async function collectSignals(inputPath: string): Promise<MediaSignals> {
     ]),
   ]);
 
+  const loudSamples = parseEbur128(loudErr);
   return {
-    loudPeaks: loudnessPeaks(parseEbur128(loudErr)).slice(0, MAX_RANGES),
+    loudPeaks: loudnessPeaks(loudSamples).slice(0, MAX_RANGES),
     cutDense: cutDensity(parseShowinfoTimes(sceneErr)).slice(0, MAX_RANGES),
+    loudnessSamples: loudSamples,
   };
+}
+
+/**
+ * 把 ebur128 采样压成时间轴曲线:每格取窗内最大响度,再按全场 5%~99% 分位
+ * 归一到 0..1(用分位不用 min/max——一声爆响不该把整条曲线压扁)。纯函数。
+ */
+export function loudnessCurve(
+  samples: Array<{ t: number; m: number }>,
+  durationSec: number,
+  bins: number
+): number[] {
+  if (!(durationSec > 0) || bins < 1) return [];
+  const out = new Float64Array(bins).fill(Number.NEGATIVE_INFINITY);
+  for (const s of samples) {
+    const i = Math.min(bins - 1, Math.max(0, Math.floor((s.t / durationSec) * bins)));
+    if (s.m > out[i]) out[i] = s.m;
+  }
+  const present = [...out].filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
+  if (present.length < 4) return new Array(bins).fill(0);
+  const lo = present[Math.floor(present.length * 0.05)];
+  const hi = present[Math.min(present.length - 1, Math.floor(present.length * 0.99))];
+  const span = Math.max(1, hi - lo);
+  return [...out].map((v) => (Number.isFinite(v) ? Math.min(1, Math.max(0, (v - lo) / span)) : 0));
 }

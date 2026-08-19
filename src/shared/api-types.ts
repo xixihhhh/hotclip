@@ -410,6 +410,21 @@ export interface AudioPeaks {
   hopSec: number;
 }
 
+/**
+ * 工作台时间轴数据:全场响度/弹幕热度曲线(每格 0..1)+ 缩略图胶片带。
+ * 曲线画在时间轴上,「为什么选这段」从一段文字变成一眼可见的峰。
+ * 各路 fail-open:没有的信号给空数组,时间轴照常渲染其余部分。
+ */
+export interface TimelineData {
+  /** 每格一个值(0..1);空数组 = 无此信号。 */
+  loudness: number[];
+  danmaku: number[];
+  /** 均匀抽帧的 JPEG base64(无 data: 前缀);空串格 = 该帧抽取失败。 */
+  thumbs: string[];
+  /** 曲线每格对应的秒数。 */
+  binSec: number;
+}
+
 /** 录播监听的过程事件(渲染层控制面板展示)。 */
 export interface WatchEvent {
   type: "found" | "transcribing" | "detecting" | "exporting" | "done" | "error";
@@ -483,6 +498,8 @@ export interface HotClipApi {
   generateBgm: (config: LlmConfig, genreId?: string) => Promise<string>;
   /** 取 [startSec, endSec] 的音频峰值轨——审阅台时间轴的波形。 */
   getAudioPeaks: (filePath: string, startSec: number, endSec: number) => Promise<AudioPeaks>;
+  /** 工作台时间轴数据:全场响度/弹幕热度曲线 + 缩略图胶片带(各路 fail-open)。 */
+  timelineData: (filePath: string, durationSec: number) => Promise<TimelineData>;
   /** 候选片段的 3×3 接触表(画面速览):返回 data URL;失败/不支持返回空串。 */
   contactSheet: (filePath: string, startSec: number, endSec: number) => Promise<string>;
   /** 问 LLM 端点要它当前真正提供的模型清单(GET /models);失败返回原因不抛。 */

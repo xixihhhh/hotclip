@@ -6,6 +6,7 @@ import {
   danmakuPeaks,
   danmakuPathFor,
   danmakuPathsFor,
+  danmakuHeatCurve,
   type DanmakuItem,
 } from "../danmaku";
 
@@ -210,5 +211,23 @@ describe("danmakuPathsFor", () => {
 
   it("视频名没有下划线时只有前两个候选", () => {
     expect(danmakuPathsFor("/rec/回放.flv")).toEqual(["/rec/回放.xml", "/rec/回放.jsonl"]);
+  });
+});
+
+describe("danmakuHeatCurve", () => {
+  it("按格加权计数并归一到 0..1,爆发格最热", () => {
+    const items: DanmakuItem[] = [];
+    for (let t = 0; t < 600; t += 10) items.push({ t, text: "普通聊天" });
+    for (let i = 0; i < 20; i++) items.push({ t: 300 + i * 0.3, text: "哈哈哈哈" });
+    const c = danmakuHeatCurve(items, 600, 120);
+    expect(c).toHaveLength(120);
+    expect(Math.max(...c)).toBe(1);
+    const peakBin = Math.floor((302 / 600) * 120);
+    expect(c[peakBin]).toBeGreaterThan(c[10]);
+  });
+
+  it("空输入/非法时长返回空", () => {
+    expect(danmakuHeatCurve([], 600, 120)).toEqual([]);
+    expect(danmakuHeatCurve([{ t: 1, text: "x" }], 0, 120)).toEqual([]);
   });
 });

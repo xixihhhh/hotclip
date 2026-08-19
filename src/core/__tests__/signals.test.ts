@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseEbur128, parseShowinfoTimes, loudnessPeaks, cutDensity, planSignalGuidedTimes } from "../signals";
+import { parseEbur128, parseShowinfoTimes, loudnessPeaks, cutDensity, planSignalGuidedTimes, loudnessCurve } from "../signals";
 
 describe("parseEbur128", () => {
   it("extracts t/M sample pairs and drops silence-floor readings", () => {
@@ -73,5 +73,27 @@ describe("planSignalGuidedTimes", () => {
     const times = planSignalGuidedTimes(600, { loudPeaks: [], cutDense: [] }, 10, 5, 5);
     expect(times.length).toBe(10);
     for (let i = 1; i < times.length; i++) expect(times[i]).toBeGreaterThan(times[i - 1]);
+  });
+});
+
+describe("loudnessCurve", () => {
+  it("每格取窗内最大响度并按分位归一;峰值格显著高于底噪格", () => {
+    const samples: Array<{ t: number; m: number }> = [];
+    for (let t = 0; t < 600; t += 0.5) samples.push({ t, m: -30 + Math.sin(t) * 2 });
+    for (let t = 300; t < 310; t += 0.5) samples.push({ t, m: -12 });
+    const c = loudnessCurve(samples, 600, 120);
+    expect(c).toHaveLength(120);
+    const peakBin = c[Math.floor((305 / 600) * 120)];
+    const quietBin = c[Math.floor((100 / 600) * 120)];
+    expect(peakBin).toBeGreaterThan(quietBin + 0.3);
+    for (const v of c) {
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("采样太少/时长非法返回安全值", () => {
+    expect(loudnessCurve([], 600, 120)).toEqual(new Array(120).fill(0));
+    expect(loudnessCurve([{ t: 1, m: -20 }], 0, 120)).toEqual([]);
   });
 });

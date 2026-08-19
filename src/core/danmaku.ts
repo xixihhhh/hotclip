@@ -269,21 +269,45 @@ export function danmakuPathsFor(videoPath: string): string[] {
 }
 
 /**
- * 零配置采集:按优先级逐个试视频旁的弹幕文件(B 站 .xml / 抖音 .jsonl)→
- * 解析 → 圈峰。任何失败(没文件/不是弹幕文件/太少)都试下一个,全部
- * 落空返回 null,绝不拖垮检测。
+ * 读视频旁的弹幕文件(按 danmakuPathsFor 优先级逐个试),解析出弹幕条目。
+ * 全部落空返回 null。时间轴曲线与峰值信号共用这一个入口。
  */
-export async function collectDanmakuSignal(videoPath: string, durationSec: number): Promise<DanmakuOutcome | null> {
+export async function readDanmakuItems(videoPath: string): Promise<DanmakuItem[] | null> {
   for (const path of danmakuPathsFor(videoPath)) {
     try {
       const raw = await readFile(path, "utf8");
       const items = path.endsWith(".xml") ? parseBiliDanmakuXml(raw) : parseDouyinDanmakuJsonl(raw);
-      if (items.length < 20) continue; // 太少不成信号,试下一个候选
-      const peaks = danmakuPeaks(items, durationSec);
-      return { danmakuPeaks: peaks, stats: { count: items.length, peakCount: peaks.length } };
+      if (items.length >= 20) return items; // 太少不成信号,试下一个候选
     } catch {
       // 该候选读不到/解析不了,试下一个
     }
   }
   return null;
+}
+
+/**
+ * 弹幕热度曲线:每格加权计数(与峰值信号同一套单条权重),按全场最大值
+ * 归一到 0..1——工作台时间轴用。纯函数。
+ */
+export function danmakuHeatCurve(items: DanmakuItem[], durationSec: number, bins: number): number[] {
+  if (!(durationSec > 0) || bins < 1 || items.length === 0) return [];
+  const out = new Float64Array(bins);
+  for (const item of items) {
+    if (item.t < 0 || item.t > durationSec) continue;
+    const i = Math.min(bins - 1, Math.floor((item.t / durationSec) * bins));
+    out[i] += itemWeight(item);
+  }
+  const max = Math.max(...out);
+  if (max <= 0) return [...out];
+  return [...out].map((v) => v / max);
+}
+
+/**
+ * 零配置采集:读弹幕 → 圈峰。任何失败都返回 null,绝不拖垮检测。
+ */
+export async function collectDanmakuSignal(videoPath: string, durationSec: number): Promise<DanmakuOutcome | null> {
+  const items = await readDanmakuItems(videoPath);
+  if (!items) return null;
+  const peaks = danmakuPeaks(items, durationSec);
+  return { danmakuPeaks: peaks, stats: { count: items.length, peakCount: peaks.length } };
 }
