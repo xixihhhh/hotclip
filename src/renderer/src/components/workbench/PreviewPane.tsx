@@ -39,7 +39,12 @@ export function PreviewPane({
   const cropRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
   const [now, setNow] = useState(0);
-  const src = filePath ? getApi().mediaUrl(filePath) : "";
+  // 同一 hotclip-media:// URL 被多个 <video> 同时加载会撞 Chromium 按 URL 共享的媒体缓冲,
+  // 自定义协议下两路一起失败且该 URL 本会话内不再可播——每个消费方用 query 区分独享缓冲
+  // (serveMedia 只取 pathname,query 不影响鉴权与读文件)
+  const srcBase = filePath ? getApi().mediaUrl(filePath) : "";
+  const src = srcBase ? `${srcBase}?view=main` : "";
+  const cropSrc = srcBase ? `${srcBase}?view=crop` : "";
 
   // 外部 seek 请求(时间轴点击/候选聚焦)
   useEffect(() => {
@@ -103,7 +108,7 @@ export function PreviewPane({
         {/* 竖屏 9:16 中心裁切:发光描边(主视觉海报的切片卡语言) */}
         <div className="relative w-[133px] shrink-0 overflow-hidden rounded-xl border-[1.5px] border-ember/60 bg-black shadow-[0_0_22px_-6px_rgba(255,100,40,0.5)]">
           {src ? (
-            <video ref={cropRef} src={src} muted className="h-full w-full object-cover" />
+            <video ref={cropRef} src={cropSrc} muted className="h-full w-full object-cover" />
           ) : (
             <div className="h-full bg-gradient-to-b from-panel-2 to-panel" />
           )}

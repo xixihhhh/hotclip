@@ -137,7 +137,11 @@ export function ClipReviewModal({
     () => (stitched ? piecesText(transcript, pieces) : clipText(transcript, startSec, endSec)),
     [transcript, stitched, pieces, startSec, endSec]
   );
-  const src = useMemo(() => (filePath ? getApi().mediaUrl(filePath) : ""), [filePath]);
+  // ?view=review:与工作台预览的两个 <video> 区分 URL,避免撞 Chromium 按 URL 共享的媒体缓冲(详见 PreviewPane)
+  const src = useMemo(() => {
+    const base = filePath ? getApi().mediaUrl(filePath) : "";
+    return base ? `${base}?view=review` : "";
+  }, [filePath]);
   // 成片时长:拼接片是各段之和,不是跨度
   const outDurationSec = stitched ? piecesDurationSec(pieces) : endSec - startSec;
   const dirty =
