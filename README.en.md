@@ -31,8 +31,9 @@
 - **Every cut comes with receipts**: virality score + opening hook + reasoning + four-dimension review, cut points aligned to the word; veto anything — the AI never guesses timestamps, and never makes the final call for you
 - **Live chat feeds highlight detection**: the chat log next to your recording is auto-discovered (BililiveRecorder .xml and Douyin-recorder .jsonl both work), gifts and superchats weighted, spam-proof — the audience voting second by second, evidence most tools never even look at
 - **Ready to post, not just cut**: vertical clips + dynamic captions + covers + post copy + per-platform publish packs, all in one run
-- **Built to survive distribution**: transform score against repost detection, AIGC labeling, a distribution ledger with evidence packs, anti-fingerprint variants — the other half of the 2026 game
-- **Clips while you sleep**: a 24/7 watch folder turns finished recordings into clips; CLI / MCP make it a one-sentence agent deliverable
+- **Interrupted work picks up safely**: source, transcript, candidates, selections and hand-tuned cuts recover after restart; folder watch and webhooks share a durable queue with retry and cancel
+- **Publishing teaches the next cut**: every export gets a stable content ID; imported view/engagement CSVs are correlated conservatively and winning or lagging patterns feed the next selection pass
+- **Clips while you sleep**: a 24/7 watch folder turns finished recordings into clips; one-click health diagnostics catch missing tools/models first, while CLI / MCP make it a one-sentence agent deliverable
 
 <!-- TODO(P0): 30-60s demo mp4 here (drag into GitHub's README web editor to get a user-attachments inline player):
      drop in a livestream replay → highlight candidate cards appear → one-click export → vertical clip with dynamic captions -->
@@ -193,11 +194,13 @@ Face-tracked 9:16 reframing (three per-shot modes), silence jump cuts, filler-wo
 A clip review workbench (play in-app, drag cut points word-by-word on a waveform), platform-accurate caption safe-zone masks, brand style presets, render prefs memory.
 
 <details>
-<summary><b>Details</b>: workbench · safe zones · publish packs · variants · brand templates · dual aspect · compilation · EDL · settings</summary>
+<summary><b>Details</b>: restart recovery · workbench · safe zones · publish packs · topic series · variants · brand templates · dual aspect · compilation · EDL · settings</summary>
 
+- **Restart-safe recovery**: the current source, transcript, candidates, selections and hand-tuned boundaries are checkpointed; reopening validates the source and restores the last stable state, never a transient detecting/exporting state
 - **Clip review workbench**: play candidates in-app, drag waveform handles to fine-tune word by word (snapping to word boundaries), one-click restore of AI cuts; manually tuned clips skip shot-snapping — the machine never overrides a human decision
 - **Caption safe-zone preview**: overlay each platform's real UI occlusion areas — nine presets from measured data (Douyin / Kuaishou / Bilibili / WeChat Channels / RedNote / TikTok / Reels / Shorts + generic union)
 - **Platform publish packs (post right after cutting)**: per-platform folders with the video hard-linked, the cover re-cropped to that platform's aspect (RedNote 3:4, Bilibili 16:10, Channels 6:7) and post copy trimmed to platform limits, plus a manifest of what was adapted — open the folder, upload platform by platform
+- **Topic-series packs (optional)**: when two or more original clips share a meaningful keyword, they are grouped and numbered in source-time order with root/per-topic manifests; variants never become fake episodes, and hard links avoid duplicate disk use
 - **Multi-version variants (real differentiation for multi-account posting)**: 2-3 packagings of each clip in one run — different hook-angle title cards, opening teasers, post copy, covers from different loudness peaks; built on added value, not the frame-dropping/mirroring tricks platforms now flag as reposts
 - **Brand style templates**: one highlight color, caption size/position, logo watermark — named presets applied to every clip, recorded in the receipt
 - **Dual aspect ratios in one click**: vertical 9:16 plus a landscape set in one run (title card dropped, captions switch layout) — competitors export one ratio per run
@@ -220,7 +223,9 @@ Cutting well is half the game — the other half is surviving distribution: pixe
 - **Two-tier AI covers (optional)**: big-type vertical covers generated from clip titles — volume tier ~$0.04, premium ~$0.14 per cover (reusing your Atlas key); saved alongside the frame-grab cover, use whichever
 - **AI BGM (optional)**: copyright-safe instrumental generated per stream genre, auto-wired into the voice-ducking mix chain — zero licensing risk from commercial libraries
 - **JianYing draft export**: each clip lands as a JianYing (CapCut CN) draft folder with every AI cut on the timeline — rough cut in HotClip, hand off to the editor for finishing without starting over
-- **Distribution ledger & evidence pack**: each clip's source range logged to a CSV ledger, optionally with a ±3-minute source archive — when an authorized clip gets challenged as a repost, you have receipts
+- **Publishing feedback ledger**: every export registers a stable content ID and publishing status; a prefilled metrics CSV comes back through conservative ID or unique title matching, while unmatched/ambiguous rows stay visible and measured patterns feed the next selection pass
+- **Distribution evidence pack**: each clip's source range is logged to CSV, optionally with a ±3-minute source archive — when an authorized clip gets challenged as a repost, you have receipts
+- **Transcript-timed audio muting (optional)**: mute a local editable list of sensitive terms while preserving the original transcript and captions; timing remains accurate across silence cuts and multi-piece clips
 - **AIGC labeling helper**: per-platform label copy and entry-point pointers, one click to copy; a soft cap hint over 5 clips per stream (2026 algorithms reward quality over volume)
 - **Anti-fingerprint variants**: the last of your multi-version variants swaps in a flash-forward opening plus seeded template jitter (subtle font-size/baseline/margin differences) — multi-account posting without visual-fingerprint collisions, all real differentiation rather than pixel tricks
 </details>
@@ -230,9 +235,11 @@ Cutting well is half the game — the other half is surviving distribution: pixe
 One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server — **the only local, no-upload clipping toolchain for coding agents**.
 
 <details>
-<summary><b>Details</b>: watch folder · CLI · MCP · Claude Code skill · doctor</summary>
+<summary><b>Details</b>: durable task queue · watch folder · health diagnostics · CLI · MCP · Claude Code skill</summary>
 
-- **Recording watch folder (24/7)**: point it at your OBS/recorder output dir; recordings are transcribed, mined and exported the moment they finish writing ("two rounds of stable size" — half-written files are never cut); failures are skipped, never retried in a loop
+- **Durable task center**: folder watch and webhooks share one single-concurrency queue with persisted stages, history and attempt counts; tasks can be cancelled or explicitly retried, in-flight work becomes "interrupted" after restart, and credentials are never stored in history
+- **Recording watch folder (24/7)**: point it at your OBS/recorder output dir; recordings are transcribed, mined and exported the moment they finish writing ("two rounds of stable size" — half-written files are never cut)
+- **Desktop health diagnostics**: one click checks FFmpeg/FFprobe, downloader integrity, nine model roles, LLM connectivity/auth/routing, disk and cache; missing core models can be prepared explicitly with cancel and resume
 - **Headless CLI** (same outputs as the desktop app):
 
   ```bash

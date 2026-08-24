@@ -17,12 +17,12 @@
 <meta property="og:site_name" content="HotClip 爆款切片">
 <meta property="og:locale" content="zh_CN">
 <meta property="og:title" content="HotClip 爆款切片 — 直播切片/长视频一键切成爆款竖屏短视频">
-<meta property="og:description" content="免费开源 · 本地运行 · 无水印 · 无积分制 · 不限时长。AI 找爆点 + 横屏转竖屏 + 卡拉OK逐字字幕,Windows/macOS/Linux 双击即用。">
+<meta property="og:description" content="免费开源 · 本地运行 · 无水印 · 无积分制 · 不限时长。AI 找爆点 + 横屏转竖屏 + 动态逐词点亮字幕,任务可恢复、发布效果可回流。">
 <meta property="og:image" content="https://xixihhhh.github.io/hotclip/social-preview.png">
 <meta property="og:url" content="https://xixihhhh.github.io/hotclip/">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="HotClip 爆款切片 — 直播切片/长视频一键切成爆款竖屏短视频">
-<meta name="twitter:description" content="免费开源 · 本地运行 · 无水印 · 无积分制 · 不限时长。AI 找爆点 + 横屏转竖屏 + 卡拉OK逐字字幕。">
+<meta name="twitter:description" content="免费开源 · 本地运行 · 无水印 · 无积分制 · 不限时长。AI 找爆点 + 横屏转竖屏 + 动态逐词点亮字幕,任务可恢复、发布效果可回流。">
 <meta name="twitter:image" content="https://xixihhhh.github.io/hotclip/social-preview.png">
 <script type="application/ld+json">
 {
@@ -32,11 +32,11 @@
   "alternateName": "HotClip 爆款切片",
   "operatingSystem": "Windows, macOS, Linux",
   "applicationCategory": "MultimediaApplication",
-  "softwareVersion": "0.14.1",
+  "softwareVersion": "0.15.0",
   "inLanguage": ["zh-CN", "en"],
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
   "description": "免费开源、本地运行的 AI 视频切片 / 直播切片软件:长视频、直播回放一键切成爆款竖屏短视频。AI 找爆点、弹幕热度进爆点判断、横屏转竖屏 9:16、逐词点亮动态字幕,无积分制、无水印、素材不上传。",
-  "featureList": "AI 找爆点(八路证据链,附爆款分与理由)、弹幕热度进爆点判断(B站/抖音弹幕,礼物SC点赞计权)、横屏转竖屏 9:16 人脸跟随、自动加字幕(关键词高亮/逐词点亮)、去气口剪口头禅、说话人分离、录播监听、一键全托管、平台发布包、剪映草稿导出、SRT/双语字幕导出",
+  "featureList": "AI 找爆点(八路证据链,附爆款分与理由)、弹幕热度进爆点判断、横屏转竖屏 9:16 人脸跟随、动态逐词点亮字幕、去气口剪口头禅、敏感词音频静音、重启恢复、持久自动化任务队列、桌面健康检查、发布反馈台账、主题系列整理、平台发布包、SRT/双语字幕导出",
   "url": "https://xixihhhh.github.io/hotclip/",
   "downloadUrl": "https://github.com/xixihhhh/hotclip/releases/latest",
   "screenshot": "https://xixihhhh.github.io/hotclip/screenshots/04-highlights.png",
@@ -52,7 +52,7 @@
   "description": "用免费开源的 HotClip 把直播回放、播客、长视频一键切成爆款竖屏短视频的三个步骤。",
   "tool": [{ "@type": "HowToTool", "name": "HotClip(免费开源,Windows/macOS/Linux)" }],
   "step": [
-    { "@type": "HowToStep", "position": 1, "name": "导入长视频", "text": "把播客、直播回放、课程、Vlog 拖进 HotClip(支持 MP4/MKV/MOV/FLV/TS,纯音频也可以),数小时的直播回放直接进,全程本地处理不上传。" },
+    { "@type": "HowToStep", "position": 1, "name": "导入长视频", "text": "把播客、直播回放、课程、Vlog 拖进 HotClip(支持 MP4/MKV/MOV/FLV/TS,纯音频也可以),或粘贴 B站/YouTube 等公开视频地址;源视频落到本机后进入同一套处理流程。" },
     { "@type": "HowToStep", "position": 2, "name": "AI 找爆点", "text": "本地逐字转写后,AI 通读全文挑出金句、冲突、高能片段,每条附爆款分、开场钩子和推荐理由,切点精确到词,看不顺眼的取消勾选即可。" },
     { "@type": "HowToStep", "position": 3, "name": "一键出片", "text": "一键导出竖屏 9:16 成片:人脸跟随取景、逐词点亮动态字幕、标题贴片、响度归一,附封面图和发布文案,直接发抖音、快手、B站、视频号、小红书、TikTok。" }
   ]
@@ -132,14 +132,14 @@
 <header class="hero">
   <span class="eyebrow"><span class="dot"></span>开源 AGPL-3.0 · 无需注册 · 下载双击即用</span>
   <h1 id="hero-title">直播切片 · 长视频剪辑<br>一键切出<span class="hl">爆款竖屏短视频</span></h1>
-  <p class="sub">播客、直播回放、课程、Vlog 丢进来,<strong>AI 自动找爆点</strong> → <strong>横屏转竖屏 9:16</strong> + <strong>卡拉OK逐字字幕</strong> → 直接发抖音 / 快手 / B站 / 视频号 / 小红书 / TikTok。<br>免费开源 · 本地运行不上传 · 无水印 · 无积分制 · 不限时长。</p>
+  <p class="sub">播客、直播回放、课程、Vlog 丢进来,<strong>AI 自动找爆点</strong> → <strong>横屏转竖屏 9:16</strong> + <strong>动态逐词点亮字幕</strong> → 直接发抖音 / 快手 / B站 / 视频号 / 小红书 / TikTok。<br>免费开源 · 本地运行不上传 · 无水印 · 无积分制 · 不限时长。</p>
   <div class="cta">
     <a class="btn btn-primary" href="https://github.com/xixihhhh/hotclip/releases/latest"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> 免费下载(Windows / macOS / Linux)</a>
     <a class="btn btn-ghost" href="https://github.com/xixihhhh/hotclip">GitHub 源码</a>
   </div>
   <p class="note">不用 Python、不用 Docker、连账号都不用注册——下载安装包,双击即用</p>
   <div class="meta-badges">
-    <span>最新版本 <b id="gh-version">v0.9.4</b></span>
+    <span>最新版本 <b id="gh-version">v0.15.0</b></span>
     <span>GitHub <b id="gh-stars">★</b></span>
     <span>Windows · macOS · Linux</span>
   </div>
@@ -209,13 +209,13 @@
         <div class="st-copy">
           <span class="st-k">STEP 01 · 导入</span>
           <h3>几小时的回放,整个丢进来</h3>
-          <p>播客、直播回放、课程、Vlog——<b>纯音频也行</b>。数小时的录播直接进,<b>全程本地处理</b>,素材不出你的电脑。</p>
-          <div class="st-chips"><span>MP4</span><span>MKV</span><span>MOV</span><span>FLV</span><span>TS</span><span>纯音频</span></div>
+          <p>播客、直播回放、课程、Vlog——<b>纯音频也行</b>,也可粘贴 B站 / YouTube 等公开视频地址。源视频落到本机后进入同一套流程。</p>
+          <div class="st-chips"><span>MP4</span><span>MKV</span><span>MOV</span><span>FLV</span><span>纯音频</span><span>公开视频 URL</span></div>
         </div>
         <div class="st-visual">
           <div class="import-tray">
             <div class="tray-icon"><svg class="ic" aria-hidden="true"><use href="#i-tray"/></svg></div>
-            <div class="tray-text">拖进来就开始——不用切段、不用转码</div>
+            <div class="tray-text">拖入文件或粘贴公开视频地址</div>
           </div>
           <span class="file-chip fc-1"><svg class="ic" aria-hidden="true"><use href="#i-film"/></svg> 直播回放.flv <small>· 3h12m</small></span>
           <span class="file-chip fc-2"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg> 播客第41期.mp3 <small>· 1h48m</small></span>
@@ -251,7 +251,7 @@
         <div class="st-copy">
           <span class="st-k">STEP 03 · 一键出片</span>
           <h3>出来就是能发的成片</h3>
-          <p><b>人脸跟随</b>横转竖 9:16、<b>卡拉OK逐字字幕</b>烧进画面、标题贴片、去气口、响度归一 -14 LUFS——每条附封面图和发布文案,打开就能发。</p>
+          <p><b>人脸跟随</b>横转竖 9:16、<b>动态逐词点亮字幕</b>烧进画面、标题贴片、去气口、响度归一 -14 LUFS——每条附封面图和发布文案,打开就能发。</p>
           <div class="st-chips"><span>抖音</span><span>快手</span><span>B站</span><span>视频号</span><span>小红书</span><span>TikTok</span></div>
         </div>
         <div class="st-visual">
@@ -275,9 +275,9 @@
   </div>
 </section>
 
-<div class="karaoke-demo" role="region" aria-label="卡拉OK逐字字幕效果演示">
+<div class="karaoke-demo" role="region" aria-label="动态逐词点亮字幕效果演示">
   <p class="kd-line" id="karaoke-line">爆点一开口,字幕就跟着点亮</p>
-  <p class="kd-sub">↑ 卡拉OK逐字字幕(自动加字幕)· 成片效果演示,实际直接烧录进视频画面,SRT 可导出</p>
+  <p class="kd-sub">↑ 动态逐词点亮字幕 · 成片效果演示,实际直接烧录进视频画面,SRT 可导出</p>
 </div>
 
 <section id="features">
@@ -307,7 +307,7 @@
         <div class="upload-zero">0<small>次上传 · 全程本地 · 代码可查(AGPL-3.0)</small></div>
       </div>
     </div>
-    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-caption"/></svg></span><h3>自动加字幕 · 卡拉OK逐字点亮</h3><p>词级时间戳驱动,语义断行不「拦腰截断」;<b>SRT 可导出</b>,双语字幕一键开。</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-caption"/></svg></span><h3>自动加动态字幕 · 逐词点亮</h3><p>词级时间戳驱动,语义断行不「拦腰截断」;<b>SRT 可导出</b>,双语字幕一键开。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-reframe"/></svg></span><h3>横屏转竖屏 9:16</h3><p><b>人脸跟随取景</b>(镜头级三模式),无人脸自动回退居中;一键双画幅竖横同出。</p></div>
     <div class="b-cell b-wave" data-reveal>
       <span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-scissors"/></svg></span><h3>口播剪辑:去气口、剪口头禅</h3><p>自动删停顿、剪掉嗯/呃,响度归一 <b>-14 LUFS</b>,成片像人剪的。</p>
@@ -316,7 +316,11 @@
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-voice"/></svg></span><h3>说话人分离</h3><p>访谈、连麦一键标注<b>谁在说话</b>(本地零上传),字幕还能按人上色。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-globe"/></svg></span><h3>中文原生</h3><p>SenseVoice / Paraformer / FireRedASR2 专用引擎,方言、粤语、中英混说都稳。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg></span><h3>每一刀都可审计</h3><p>切点理由、剪了哪些口头禅、用了什么样式——<b>clips.json 回执</b>全记录,可否决可推翻。</p></div>
-    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>一键全托管 + 录播监听</h3><p>点一个按钮全自动出片;录播监听 <b>7×24 无人值守</b>,主播睡觉切片机干活。</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>任务断了,重开接着做</h3><p>素材、逐字稿、候选与手调切点自动恢复;录播监听和 webhook 共用<b>持久任务队列</b>,可取消、可重试。</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span><h3>出片前一键健康检查</h3><p>检查 FFmpeg、解析工具、9 类模型、LLM 连通性、磁盘与缓存;核心模型可取消、可续传地准备。</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-scissors"/></svg></span><h3>敏感词只静音,原文仍可审</h3><p>自定义词表按逐字稿时间精准静音,跳剪/多片段也能映射;<b>字幕与逐字稿保留原文</b>。</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg></span><h3>发布效果回流下一刀</h3><p>稳定内容 ID + 预填指标 CSV 保守对账;待回填/已统计状态清楚,未匹配和歧义不藏起来。</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-film"/></svg></span><h3>同场爆点自动排成系列</h3><p>共享有效关键词的原版成片按源片时间编号成集,附 manifest;变体不充数,硬链接不重复占空间。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-tag"/></svg></span><h3>真免费,没有套路</h3><p>无积分制、无水印、不限时长、不锁功能,连账号都没有。</p></div>
     <div class="b-cell b-full b-shot" data-reveal>
       <div class="shot-copy">
