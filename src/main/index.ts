@@ -52,6 +52,7 @@ import {
   summarizePerformance,
 } from "@core/performance-memory";
 import { importMediaUrl as downloadMediaUrl } from "@core/url-import";
+import { clearSessionCheckpoint, readSessionCheckpoint, saveSessionCheckpoint } from "@core/session-checkpoint";
 import { applyGlossaryToTranscript } from "../shared/glossary";
 import { tagTranscribeError } from "../shared/transcribe-errors";
 import { autoClip, analyzeReferenceVideo } from "@core/pipeline";
@@ -190,6 +191,25 @@ ipcMain.handle("hotclip:import-media-url", async (event, url: unknown) => {
 ipcMain.on("hotclip:url-import-cancel", () => {
   urlImportAbort?.abort();
 });
+
+let sessionCheckpointOps: Promise<void> = Promise.resolve();
+function queueSessionCheckpoint<T>(operation: () => Promise<T>): Promise<T> {
+  const result = sessionCheckpointOps.then(operation, operation);
+  sessionCheckpointOps = result.then(() => undefined, () => undefined);
+  return result;
+}
+
+ipcMain.handle("hotclip:session-checkpoint-get", () => queueSessionCheckpoint(async () => {
+  const checkpoint = await readSessionCheckpoint(app.getPath("userData"));
+  if (checkpoint) allowedMedia.add(checkpoint.file.path);
+  return checkpoint;
+}));
+ipcMain.handle("hotclip:session-checkpoint-save", (_event, checkpoint: unknown) =>
+  queueSessionCheckpoint(() => saveSessionCheckpoint(app.getPath("userData"), checkpoint))
+);
+ipcMain.handle("hotclip:session-checkpoint-clear", () =>
+  queueSessionCheckpoint(() => clearSessionCheckpoint(app.getPath("userData")))
+);
 
 // ---- IPC:真实发布表现反馈(设置中心) ----
 

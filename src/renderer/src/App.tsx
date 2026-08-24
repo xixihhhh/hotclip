@@ -4,7 +4,7 @@
  * 视图任何时刻可达。会话状态全部在 session store,视图切换不丢结果。
  * Electron(IPC)与纯浏览器(mock)双跑,后者是设计预览通路。
  */
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   LuCheck,
   LuCircleArrowUp,
@@ -21,13 +21,12 @@ import {
 import { useT, useLocaleStore } from "./i18n/store";
 import { LOCALE_LIST, REGISTRY } from "./i18n/messages";
 import { getApi } from "./api/provider";
-import { useSession } from "./stores/session-store";
+import { sessionCheckpointFromState, useSession } from "./stores/session-store";
 import { LogoMark, LogoWordmark } from "./components/Logo";
 import { Workbench } from "./components/Workbench";
 import { SettingsView } from "./components/SettingsView";
 import { WatchFolderModal } from "./components/WatchFolderModal";
 import type { UpdateInfo, UrlImportProgressEvent } from "../../shared/api-types";
-import { useEffect } from "react";
 import "./app.css";
 
 function displayName(path: string): string {
@@ -272,6 +271,56 @@ export default function App(): React.JSX.Element {
   const session = useSession();
   const { file, transcript, candidates, detecting, exporting, settingsOpen, auto } = session;
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+  const [restored, setRestored] = useState(false);
+  const [checkpointWarning, setCheckpointWarning] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void getApi().sessionCheckpointGet()
+      .then((checkpoint) => {
+        if (!active) return;
+        if (checkpoint) {
+          useSession.getState().restore(checkpoint);
+          setRestored(true);
+        }
+      })
+      .catch(() => {})
+      .finally(() => { if (active) setHydrated(true); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = useSession.subscribe((state) => {
+      if (timer) clearTimeout(timer);
+      if (!state.file) {
+        setCheckpointWarning(false);
+        void getApi().sessionCheckpointClear().catch(() => {});
+        return;
+      }
+      timer = setTimeout(() => {
+        const checkpoint = sessionCheckpointFromState(useSession.getState());
+        if (checkpoint) {
+          void getApi().sessionCheckpointSave(checkpoint)
+            .then((saved) => setCheckpointWarning(!saved))
+            .catch(() => setCheckpointWarning(true));
+        }
+      }, 650);
+    });
+    return () => {
+      unsubscribe();
+      if (timer) clearTimeout(timer);
+    };
+  }, [hydrated]);
+
+  useEffect(() => {
+    if (!restored) return;
+    const timer = setTimeout(() => setRestored(false), 4500);
+    return () => clearTimeout(timer);
+  }, [restored]);
+
   useEffect(() => {
     void getApi()
       .checkUpdate()
@@ -283,6 +332,10 @@ export default function App(): React.JSX.Element {
 
   const nextLocale = LOCALE_LIST[(LOCALE_LIST.indexOf(locale) + 1) % LOCALE_LIST.length];
   const noDrag = { WebkitAppRegion: "no-drag" } as React.CSSProperties;
+
+  if (!hydrated) {
+    return <div role="status" aria-live="polite" className="flex h-full items-center justify-center text-sm text-mut">{tc("restoringSession")}</div>;
+  }
 
   return (
     <div className="relative flex h-full flex-col">
@@ -310,7 +363,7 @@ export default function App(): React.JSX.Element {
                 style={noDrag}
                 className="shrink-0 rounded p-1 text-mut transition-colors hover:text-fg"
               >
-                <LuX className="h-3.5 w-3.5" />
+                <LuX aria-hidden="true" className="h-3.5 w-3.5" />
               </button>
             </div>
           </>
@@ -376,6 +429,16 @@ export default function App(): React.JSX.Element {
 
       {/* ---- 视图分派:设置中心 > 工作台 > 导入页 ---- */}
       {settingsOpen ? <SettingsView /> : file ? <Workbench /> : <ImportStage />}
+      {restored && (
+        <div role="status" aria-live="polite" className="pointer-events-none fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-lg border border-emerald-400/25 bg-panel/95 px-4 py-2.5 text-xs font-medium text-emerald-300 shadow-xl backdrop-blur">
+          {tc("sessionRestored")}
+        </div>
+      )}
+      {checkpointWarning && (
+        <div role="alert" className="fixed bottom-5 left-1/2 z-50 max-w-lg -translate-x-1/2 rounded-lg border border-amber-400/30 bg-panel/95 px-4 py-2.5 text-xs font-medium text-amber-200 shadow-xl backdrop-blur">
+          {tc("sessionSaveFailed")}
+        </div>
+      )}
     </div>
   );
 }

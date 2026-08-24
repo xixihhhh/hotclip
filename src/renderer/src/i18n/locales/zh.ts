@@ -15,6 +15,9 @@ export const zh = {
     next: "下一步",
     language: "语言",
     settings: "设置",
+    restoringSession: "正在恢复上次工作现场…",
+    sessionRestored: "已恢复上次未完成的剪辑现场",
+    sessionSaveFailed: "当前工作仍可继续，但本次现场无法保存；请确认源文件仍存在且磁盘可写",
   },
 
   settings: {

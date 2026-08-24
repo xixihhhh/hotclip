@@ -421,6 +421,28 @@ export interface ReferenceInfo {
   zh: boolean;
 }
 
+/** Stable, restart-safe subset of the renderer's active editing session. */
+export interface SessionCheckpoint {
+  file: MediaInfo & { path: string };
+  transcript: Transcript | null;
+  candidates: HighlightCandidate[] | null;
+  selected: number[];
+  focusedId: number | null;
+  stats: {
+    funnel: FunnelStats | null;
+    vision: VisionStats | null;
+    emotion: EmotionStats | null;
+    danmaku: DanmakuStats | null;
+    voice: VoiceTagStats | null;
+    reference: ReferenceInfo | null;
+    referenceError: string | null;
+  };
+  diarize: boolean;
+  referencePath: string | null;
+  paramsDirty: boolean;
+  savedAt: string;
+}
+
 /** One exported clip file on disk. */
 export interface ExportedClip {
   id: number;
@@ -504,6 +526,12 @@ export interface HotClipApi {
   onUrlImportProgress: (cb: (p: UrlImportProgressEvent) => void) => () => void;
   /** 取消当前地址导入；已完整下载的旧文件不受影响。 */
   cancelUrlImport: () => void;
+  /** Restore the last stable editing session when the source fingerprint still matches. */
+  sessionCheckpointGet: () => Promise<SessionCheckpoint | null>;
+  /** Atomically save one active editing session; false means it exceeded the safety cap. */
+  sessionCheckpointSave: (checkpoint: SessionCheckpoint) => Promise<boolean>;
+  /** Forget the active session after the user deliberately starts over. */
+  sessionCheckpointClear: () => Promise<void>;
   /** Probe a media file (duration/streams/fps); throws on unreadable input. */
   probeMedia: (filePath: string) => Promise<MediaInfo>;
   /** List selectable transcription engines with install state. */

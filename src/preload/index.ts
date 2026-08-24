@@ -14,6 +14,9 @@ const api: HotClipApi = {
     return () => ipcRenderer.removeListener("hotclip:url-import-progress", listener);
   },
   cancelUrlImport: () => ipcRenderer.send("hotclip:url-import-cancel"),
+  sessionCheckpointGet: () => ipcRenderer.invoke("hotclip:session-checkpoint-get"),
+  sessionCheckpointSave: (checkpoint) => ipcRenderer.invoke("hotclip:session-checkpoint-save", checkpoint),
+  sessionCheckpointClear: () => ipcRenderer.invoke("hotclip:session-checkpoint-clear"),
   probeMedia: (filePath) => ipcRenderer.invoke("hotclip:probe-media", filePath),
   listAsrEngines: () => ipcRenderer.invoke("hotclip:list-asr-engines"),
   transcribeMedia: (filePath, engineId, apiKey) => ipcRenderer.invoke("hotclip:transcribe", filePath, engineId, apiKey),

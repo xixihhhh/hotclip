@@ -12,6 +12,9 @@ export const en = {
     next: "Next",
     language: "Language",
     settings: "Settings",
+    restoringSession: "Restoring your previous session…",
+    sessionRestored: "Your unfinished editing session was restored",
+    sessionSaveFailed: "You can keep working, but this session could not be saved. Check that the source still exists and the disk is writable.",
   },
 
   settings: {

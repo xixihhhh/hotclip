@@ -18,6 +18,7 @@ import type {
   PerformanceEntry,
   PerformanceSummary,
   UrlImportProgressEvent,
+  SessionCheckpoint,
 } from "../../../shared/api-types";
 import { applyGlossaryToTranscript, sanitizeGlossary } from "../../../shared/glossary";
 
@@ -78,6 +79,7 @@ const emitWatch = (e: Omit<WatchEvent, "at">): void => {
 };
 let mockExportCancelled = false;
 let mockUrlImportCancelled = false;
+let mockSessionCheckpoint: SessionCheckpoint | null = null;
 let mockPerformanceEntries: PerformanceEntry[] = [
   { title: "三分钟讲清直播间投流误区", hook: "投流越多,为什么人反而越少?", platform: "bilibili", views: 128_000, likes: 8_240, comments: 611, shares: 1_420, saves: 3_180, durationSec: 43, keywords: ["投流", "直播运营"], importedAt: "2026-08-20T00:00:00Z" },
   { title: "纸巾吸水实测", hook: "半杯水倒下去会发生什么", platform: "douyin", views: 86_000, likes: 5_600, comments: 288, shares: 932, saves: 1_410, durationSec: 24, keywords: ["实测", "生活用品"], importedAt: "2026-08-21T00:00:00Z" },
@@ -135,6 +137,16 @@ const browserMock: HotClipApi = {
   },
   cancelUrlImport() {
     mockUrlImportCancelled = true;
+  },
+  async sessionCheckpointGet() {
+    return mockSessionCheckpoint ? structuredClone(mockSessionCheckpoint) : null;
+  },
+  async sessionCheckpointSave(checkpoint) {
+    mockSessionCheckpoint = structuredClone(checkpoint);
+    return true;
+  },
+  async sessionCheckpointClear() {
+    mockSessionCheckpoint = null;
   },
   async listAsrEngines() {
     await sleep(200);

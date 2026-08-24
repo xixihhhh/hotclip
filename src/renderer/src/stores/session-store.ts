@@ -3,7 +3,7 @@
  * 原先这些活在 App.tsx 与 HighlightsView 的 useState 里——回退一步候选就全丢,
  * 重新检测又是一轮 LLM 花费。进 store 后视图随便切,结果一直在。
  *
- * 不持久化:候选与逐句稿绑定具体素材,跨启动恢复意义不大且易脏;
+ * 可恢复字段由主进程按源文件指纹原子保存;进行中任务和弹层等瞬态不恢复。
  * 出片偏好等长期记忆仍在 render-prefs / llm / asr 各自的 store 里。
  */
 import { create } from "zustand";
@@ -18,6 +18,7 @@ import type {
   DanmakuStats,
   VoiceTagStats,
   ReferenceInfo,
+  SessionCheckpoint,
 } from "../../../shared/api-types";
 
 export interface ProbedFile extends MediaInfo {
@@ -85,6 +86,8 @@ interface SessionState {
   setReferencePath: (p: string | null) => void;
   markParamsDirty: (v: boolean) => void;
   setExporting: (v: { clips: HighlightCandidate[]; options: RenderToggles } | null) => void;
+  /** 从已验证的磁盘检查点恢复稳定字段，并把所有瞬态重置为空闲。 */
+  restore: (checkpoint: SessionCheckpoint) => void;
   /** 换素材/重开:回到导入态,清空一切会话状态。 */
   reset: () => void;
 }
@@ -129,6 +132,25 @@ export const useSession = create<SessionState>((set, get) => ({
   setReferencePath: (referencePath) => set({ referencePath }),
   markParamsDirty: (paramsDirty) => set({ paramsDirty }),
   setExporting: (exporting) => set({ exporting }),
+  restore: (checkpoint) => {
+    const ids = new Set((checkpoint.candidates ?? []).map((candidate) => candidate.id));
+    set({
+      file: checkpoint.file,
+      transcript: checkpoint.transcript,
+      auto: false,
+      settingsOpen: false,
+      candidates: checkpoint.candidates,
+      selected: new Set(checkpoint.selected.filter((id) => ids.has(id))),
+      focusedId: checkpoint.focusedId !== null && ids.has(checkpoint.focusedId) ? checkpoint.focusedId : null,
+      detecting: false,
+      detectError: null,
+      stats: checkpoint.stats,
+      diarize: checkpoint.diarize,
+      referencePath: checkpoint.referencePath,
+      paramsDirty: checkpoint.paramsDirty,
+      exporting: null,
+    });
+  },
   reset: () =>
     set({
       file: null,
@@ -146,3 +168,20 @@ export const useSession = create<SessionState>((set, get) => ({
       exporting: null,
     }),
 }));
+
+/** Project the Zustand state onto the stable, JSON-safe persistence contract. */
+export function sessionCheckpointFromState(state: SessionState = useSession.getState()): SessionCheckpoint | null {
+  if (!state.file) return null;
+  return {
+    file: state.file,
+    transcript: state.transcript,
+    candidates: state.candidates,
+    selected: [...state.selected],
+    focusedId: state.focusedId,
+    stats: state.stats,
+    diarize: state.diarize,
+    referencePath: state.referencePath,
+    paramsDirty: state.paramsDirty,
+    savedAt: new Date().toISOString(),
+  };
+}
