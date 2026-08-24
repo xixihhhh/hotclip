@@ -278,6 +278,7 @@ export function ExportPanel({
               />
             </div>
             <SwitchRow label={th("optJitter")} hint={th("optJitterHint")} on={prefs.templateJitter} onToggle={() => setPref({ templateJitter: !prefs.templateJitter })} />
+            <SwitchRow label={th("optSeriesPack")} hint={th("optSeriesPackHint")} on={prefs.seriesPack} onToggle={() => setPref({ seriesPack: !prefs.seriesPack })} />
             <SwitchRow label={th("optPack")} hint={th("optPackHint")} on={prefs.publishPack} onToggle={() => setPref({ publishPack: !prefs.publishPack })} />
             {prefs.publishPack && (
               <div className="mt-1 flex flex-wrap items-center gap-1">

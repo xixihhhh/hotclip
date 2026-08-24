@@ -54,6 +54,8 @@ export interface RenderPrefs {
   evidencePack: boolean;
   /** 平台发布包:每平台一个「拿起来就能发」的齐套文件夹。 */
   publishPack: boolean;
+  /** 主题系列包:共同关键词的原版成片整理成连续发布目录。 */
+  seriesPack: boolean;
   /** 发布包选中的平台 id(platform-specs.ts)。 */
   packPlatforms: string[];
   /** 一片多版:总版本数(1=关,2/3=同一切片出几版差异化包装)。 */
@@ -111,6 +113,7 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   aigcLabel: false,
   evidencePack: false, // 留证段占磁盘(每条约 6 分钟源片),默认关按需开
   publishPack: false, // 发布包产生一堆文件夹,默认关由用户按需开
+  seriesPack: false, // 只有同场多条同主题时有意义,默认关
   packPlatforms: ["douyin", "xiaohongshu", "channels"], // 中文矩阵最常见的三件套
   variants: 1, // 多版=多倍导出时间+一次 LLM 调用,默认关
   clipLength: "standard",

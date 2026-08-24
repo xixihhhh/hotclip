@@ -18,6 +18,7 @@ import { perturbLayout } from "../shared/perturb";
 import { clampTranslationLines, remapTranslationLines, type TranslationLine } from "./translate";
 import { postTextFile, type PublishCopy } from "./publish";
 import { buildPublishPacks, coverFilter, type PackSummary } from "./publish-pack";
+import { buildSeriesPack, type SeriesPackSummary } from "./series-pack";
 import { buildSrt, srtLinesFromWords } from "./srt";
 import { buildEdl, type EdlClip } from "./edl";
 import { buildDraftContent, buildDraftMetaInfo } from "./jianying";
@@ -319,6 +320,8 @@ export interface ExportRenderOptions {
   evidencePack?: boolean;
   /** 平台发布包:按平台规格整理齐套素材到 `发布包/<平台>/`(见 publish-pack.ts)。 */
   publishPack?: string[];
+  /** 主题系列包:按重复关键词把原版成片整理为有顺序的系列目录。 */
+  seriesPack?: boolean;
   /**
    * 出片自我质检(默认开):每条成片渲染后解码扫描黑屏/长静音/响度/时长
    * 偏差,复核切点是否压在词中间,并扫标题/钩子/文案/字幕的平台违禁词;
@@ -1136,6 +1139,24 @@ export async function exportClips(
       }
     }
 
+    // 主题系列包:只收原版,避免一片多版被误当成连续剧集;按源时间排序。
+    // 归组/文件失败均 fail-open,不影响已经完成的成片。
+    let seriesSummary: SeriesPackSummary | null = null;
+    if (options.seriesPack && compResults.length > 1) {
+      seriesSummary = await buildSeriesPack(
+        outDir,
+        compResults.map((result) => {
+          const spec = clips.find((clip) => clip.id === result.id);
+          return {
+            file: result.path,
+            title: result.title,
+            keywords: spec?.keywords,
+            sourceStartSec: spec?.startSec,
+          };
+        })
+      ).catch(() => null);
+    }
+
     // 时间线 EDL:切点(含跳剪内部剪)交给剪辑软件重链源片精修;失败不拖垮导出
     if (options.timeline && edlClips.length > 0) {
       const fps = srcInfo && srcInfo.fps > 0 ? srcInfo.fps : 30;
@@ -1300,6 +1321,9 @@ export async function exportClips(
           packSummaries.length > 0
             ? packSummaries.map((p) => ({ platform: p.platform, name: p.name, clipCount: p.clipCount, truncatedTitles: p.truncatedTitles }))
             : null,
+        seriesPack: seriesSummary
+          ? { seriesCount: seriesSummary.seriesCount, clipCount: seriesSummary.clipCount, topics: seriesSummary.series.map((item) => item.topic) }
+          : null,
       },
       clips: results.map((r) => {
         const spec = clips.find((c) => c.id === r.id);
@@ -1376,7 +1400,7 @@ export async function exportClips(
         // 标题贴片/悬念句大字是竖屏短视频形态,横屏版去掉(标题交给平台标题字段);
         // 字幕沿用横屏布局(底部小号),封面/回执/SRT 在子目录各自成套
         // publishPack 只在主目录打一次(横屏版在包 manifest 的备注里指路)
-        { ...options, vertical: false, alsoLandscape: false, faceTrack: false, compilation: false, timeline: false, titleCard: false, openingHook: false, publishPack: undefined },
+        { ...options, vertical: false, alsoLandscape: false, faceTrack: false, compilation: false, timeline: false, titleCard: false, openingHook: false, publishPack: undefined, seriesPack: false },
         onProgress
           ? (p) => onProgress({ ...p, current: p.current + clips.length, total: totalUnits })
           : undefined,

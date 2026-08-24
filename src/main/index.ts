@@ -972,6 +972,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
           : undefined,
       // 平台发布包:未知平台 id 直接过滤(不猜),空清单等于没开
       publishPack: Array.isArray(opts.publishPack) ? validPlatformIds(opts.publishPack.filter((p): p is string => typeof p === "string")) : undefined,
+      seriesPack: Boolean(opts.seriesPack),
       modelsRoot: modelsRoot(),
       fontsDir,
       renderOverlay: renderCaptionOverlay,

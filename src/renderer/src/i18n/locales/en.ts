@@ -366,6 +366,8 @@ export const en = {
     optVariantsHint: "Export 2-3 genuinely different packagings of each clip (different hook-angle title card / opening teaser / post copy, cover pulled from a different peak) — differentiate multi-account posts with real variation, not frame-dropping tricks platforms now flag as reposts; click to cycle off → 2 → 3, uses your configured AI model, export time scales with versions",
     optPack: "Platform packs",
     optPackHint: "After export, organize ready-to-upload bundles under 发布包/: one folder per platform with the video + a cover cropped to that platform's aspect (RedNote 3:4, Bilibili 16:10, Channels 6:7) + post copy trimmed to platform limits (RedNote title capped at 20 chars, hashtag counts per platform); videos are hard-linked so no double disk usage",
+    optSeriesPack: "Organize topic series",
+    optSeriesPackHint: "When at least two original clips share a keyword, organize them under 系列/topic/ in source order with a manifest.json. Variants are not treated as episodes, and videos are hard-linked when possible.",
     packPlatformsLabel: "Post to:",
     optDiarize: "Multi-speaker",
     optDiarizeHint: "Label who is speaking so the AI picks per-speaker clips and avoids cross-speaker quote-mining; captions color by speaker (first use downloads ~47MB speaker models)",

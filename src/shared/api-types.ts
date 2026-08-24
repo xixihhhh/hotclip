@@ -403,6 +403,8 @@ export interface ExportOptions {
   evidencePack?: boolean;
   /** 平台发布包:选中的平台 id 清单(platform-specs.ts);每平台落一个齐套文件夹。 */
   publishPack?: string[];
+  /** 主题系列包:按重复关键词整理原版成片并生成顺序清单。 */
+  seriesPack?: boolean;
   /** 一片多版:同一切片出 count 版差异化包装(含原版,2 或 3);需要 LLM。 */
   variants?: { count: number; llm: LlmConfig };
   /** 成片导出根目录(成片仍落其下的 <片名>/ 子目录);空/缺省 = 系统默认 ~/影片/HotClip。 */

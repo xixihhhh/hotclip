@@ -52,6 +52,7 @@ export function buildRenderToggles(opts: {
     aigcLabel: prefs.aigcLabel,
     evidencePack: prefs.evidencePack,
     publishPack: prefs.publishPack && prefs.packPlatforms.length > 0 ? prefs.packPlatforms : undefined,
+    seriesPack: prefs.seriesPack,
     variants: prefs.variants > 1 ? { count: prefs.variants, llm: config } : undefined,
     aiCover: prefs.aiCover !== "off" && atlasReady ? { tier: prefs.aiCover, llm: config } : undefined,
     outDir: prefs.outDir,

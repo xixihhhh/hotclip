@@ -18,7 +18,7 @@ export const SCHEME_KEYS = [
   "openingHook", "coldOpen", "flashForward",
   "normalizeLoudness", "denoise", "muteSensitive", "sfx",
   "captionStyle", "speakerLabels", "translate", "subtitleFile",
-  "publishCopy", "aiCover", "aigcLabel", "evidencePack", "publishPack", "packPlatforms",
+  "publishCopy", "aiCover", "aigcLabel", "evidencePack", "publishPack", "packPlatforms", "seriesPack",
   "jianyingDraft", "timeline", "compilation",
   "variants", "templateJitter",
 ] as const satisfies readonly (keyof RenderPrefs)[];
@@ -49,6 +49,7 @@ export const BUILTIN_SCHEMES: Scheme[] = [
     prefs: snap({
       publishCopy: true,
       publishPack: true,
+      seriesPack: true,
       aigcLabel: true,
       evidencePack: true,
       variants: 2,
