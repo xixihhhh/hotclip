@@ -43,9 +43,9 @@ import { Switch, SwitchRow } from "./ui";
 import { GlossaryModal } from "./GlossaryModal";
 import { BrandStyleModal } from "./BrandStyleModal";
 import { WatchFolderModal } from "./WatchFolderModal";
-import type { AsrEngineInfo, CaptionStyleChoice, ExportQuality, ModelsInfo, PerformanceEntry, PerformanceMatchSummary, PerformanceSummary } from "../../../shared/api-types";
+import type { AsrEngineInfo, CaptionStyleChoice, DiagnosticsProgressEvent, DiagnosticsReport, ExportQuality, ModelsInfo, PerformanceEntry, PerformanceMatchSummary, PerformanceSummary } from "../../../shared/api-types";
 
-type NavKey = "ai" | "asr" | "storage" | "performance" | "brand" | "glossary" | "watch" | "lang";
+type NavKey = "ai" | "asr" | "storage" | "diagnostics" | "performance" | "brand" | "glossary" | "watch" | "lang";
 
 const QUALITY_ORDER: ExportQuality[] = ["high", "standard", "compact"];
 const CAPTION_ORDER: CaptionStyleChoice[] = ["keyword", "pop", "minimal", "hormozi", "bubble", "karaoke", "none"];
@@ -817,6 +817,116 @@ function StorageSection(): React.JSX.Element {
   );
 }
 
+function DiagnosticsSection(): React.JSX.Element {
+  const t = useT("diagnostics");
+  const { locale } = useLocaleStore();
+  const { config } = useLlmStore();
+  const [report, setReport] = useState<DiagnosticsReport | null>(null);
+  const [running, setRunning] = useState(false);
+  const [repairing, setRepairing] = useState(false);
+  const [progress, setProgress] = useState<DiagnosticsProgressEvent | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => getApi().onDiagnosticsProgress(setProgress), []);
+
+  const run = useCallback(async (): Promise<void> => {
+    setRunning(true);
+    setError("");
+    try {
+      setReport(await getApi().diagnosticsRun(config.baseUrl && config.model ? config : null, locale));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRunning(false);
+    }
+  }, [config, locale]);
+
+  const repair = useCallback(async (): Promise<void> => {
+    setRepairing(true);
+    setProgress(null);
+    setError("");
+    try {
+      setReport(await getApi().diagnosticsPrepareModels(config.baseUrl && config.model ? config : null, locale));
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (!/abort/i.test(message)) setError(message);
+    } finally {
+      setRepairing(false);
+      setProgress(null);
+    }
+  }, [config, locale]);
+
+  const failures = report?.checks.filter((check) => check.status === "fail").length ?? 0;
+  const warnings = report?.checks.filter((check) => check.status === "warn").length ?? 0;
+
+  return (
+    <div className="flex flex-col gap-5" aria-busy={running || repairing}>
+      <section>
+        <h3 className="flex items-center gap-2 text-[13.5px] font-bold">
+          <LuGauge aria-hidden="true" className="h-4 w-4 text-ember" />
+          {t("title")}
+        </h3>
+        <p className="mt-1 text-[12px] leading-relaxed text-mut">{t("desc")}</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" disabled={running || repairing} onClick={() => void run()} className="btn-flame inline-flex min-h-10 items-center gap-2 rounded-lg px-4 py-2 text-[12.5px] font-bold text-white disabled:opacity-50">
+            {running ? <LuLoaderCircle className="h-4 w-4 animate-spin" /> : <LuGauge className="h-4 w-4" />}
+            {running ? t("running") : t("run")}
+          </button>
+          {report && report.missingCoreModels > 0 && (
+            <button type="button" disabled={running || repairing} onClick={() => void repair()} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-line px-4 py-2 text-[12.5px] font-semibold text-fg hover:border-ember/50 disabled:opacity-50">
+              {repairing ? <LuLoaderCircle className="h-4 w-4 animate-spin" /> : <LuDownload className="h-4 w-4" />}
+              {repairing ? t("preparing") : t("prepare", { n: report.missingCoreModels })}
+            </button>
+          )}
+          {repairing && (
+            <button type="button" onClick={() => getApi().diagnosticsCancelRepair()} className="min-h-10 rounded-lg border border-line px-3 py-2 text-[12px] font-semibold text-mut hover:text-fg">
+              {t("cancel")}
+            </button>
+          )}
+        </div>
+        {progress && repairing && (
+          <div className="mt-3" aria-live="polite">
+            <div className="flex justify-between text-[10.5px] text-mut">
+              <span>{t(progress.phase === "extract" ? "extracting" : "downloading", { current: progress.current, total: progress.total })}</span>
+              <span>{Math.round(progress.fraction * 100)}%</span>
+            </div>
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/8"><div className="h-full rounded-full bg-ember transition-[width]" style={{ width: `${progress.fraction * 100}%` }} /></div>
+            <p className="mt-1 font-mono text-[10px] text-mut/70">{progress.modelId}</p>
+          </div>
+        )}
+        {error && <p role="alert" className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-[11.5px] break-all text-red-300">{error}</p>}
+      </section>
+
+      {!report ? (
+        <div className="rounded-xl border border-dashed border-line px-5 py-8 text-center text-[12px] text-mut">{t("empty")}</div>
+      ) : (
+        <section>
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px]">
+            <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-emerald-300">{t("okCount", { n: report.checks.length - failures - warnings })}</span>
+            {warnings > 0 && <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-amber-300">{t("warnCount", { n: warnings })}</span>}
+            {failures > 0 && <span className="rounded-full bg-red-500/10 px-2.5 py-1 text-red-300">{t("failCount", { n: failures })}</span>}
+          </div>
+          <ul className="space-y-2">
+            {report.checks.map((check) => (
+              <li key={check.id} className="rounded-xl border border-line bg-panel-2 px-3.5 py-3">
+                <div className="flex items-start gap-2.5">
+                  {check.status === "ok" ? <LuCircleCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" /> : <LuTriangleAlert className={`mt-0.5 h-4 w-4 shrink-0 ${check.status === "fail" ? "text-red-400" : "text-amber-400"}`} />}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12px] font-semibold text-fg">{check.name}</p>
+                    <p className="mt-0.5 text-[10.5px] break-words text-mut">{check.detail}</p>
+                    {check.fix && <p className="mt-1.5 rounded-md bg-white/4 px-2 py-1.5 text-[10.5px] leading-relaxed text-fg/80">{t("fixPrefix")}{check.fix}</p>}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-[10.5px] text-mut/70">{t("privacy")}</p>
+        </section>
+      )}
+    </div>
+  );
+}
+
 export function SettingsView(): React.JSX.Element {
   const t = useT("workbench");
   const tb = useT("brand");
@@ -833,6 +943,7 @@ export function SettingsView(): React.JSX.Element {
     { key: "ai", label: t("navAi"), Icon: LuBot },
     { key: "asr", label: t("navAsr"), Icon: LuMic },
     { key: "storage", label: t("navStorage"), Icon: LuHardDrive },
+    { key: "diagnostics", label: t("navDiagnostics"), Icon: LuGauge },
     { key: "performance", label: t("navPerformance"), Icon: LuChartNoAxesCombined },
     { key: "brand", label: t("navBrand"), Icon: LuPalette },
     { key: "glossary", label: t("navGlossary"), Icon: LuBookOpen },
@@ -880,6 +991,7 @@ export function SettingsView(): React.JSX.Element {
           {nav === "ai" && <AiSection />}
           {nav === "asr" && <AsrSection />}
           {nav === "storage" && <StorageSection />}
+          {nav === "diagnostics" && <DiagnosticsSection />}
           {nav === "performance" && <PerformanceSection />}
           {nav === "brand" && entry(tb("desc"), tb("title"), () => setShowBrand(true))}
           {nav === "glossary" && entry(tg("desc"), tg("title"), () => setShowGlossary(true))}

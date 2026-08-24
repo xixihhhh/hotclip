@@ -57,6 +57,7 @@ import { importMediaUrl as downloadMediaUrl } from "@core/url-import";
 import { clearSessionCheckpoint, readSessionCheckpoint, saveSessionCheckpoint } from "@core/session-checkpoint";
 import { loadAutomationTasks, normalizeAutomationTasks, saveAutomationTasks } from "@core/automation-history";
 import { sanitizeSensitiveWords } from "@core/sensitive-words";
+import { runDoctor } from "@core/doctor";
 import { applyGlossaryToTranscript } from "../shared/glossary";
 import { tagTranscribeError } from "../shared/transcribe-errors";
 import { autoClip, analyzeReferenceVideo } from "@core/pipeline";
@@ -261,6 +262,63 @@ ipcMain.handle("hotclip:performance-template", async () => {
 ipcMain.handle("hotclip:performance-clear", async () => {
   const userData = app.getPath("userData");
   await Promise.all([clearPerformanceMemory(userData), clearPublishMetrics(userData)]);
+});
+
+// ---- IPC:桌面健康检查与安全修复 ----
+
+const diagnosticsConfig = (value: unknown): LlmConfig | null => {
+  if (!value || typeof value !== "object") return null;
+  const config = value as Partial<LlmConfig>;
+  if (typeof config.baseUrl !== "string" || !config.baseUrl.trim() || typeof config.model !== "string" || !config.model.trim()) return null;
+  return { baseUrl: config.baseUrl.trim(), model: config.model.trim(), apiKey: typeof config.apiKey === "string" ? config.apiKey : "" };
+};
+
+async function desktopDiagnostics(llm: LlmConfig | null, zh = true) {
+  const report = await runDoctor({
+    modelsRoot: modelsRoot(),
+    cacheDir: transcriptCacheDir(),
+    toolsDir: join(app.getPath("userData"), "tools", "yt-dlp"),
+    llm,
+    zh,
+  });
+  return { checks: report.checks, missingCoreModels: report.missingCoreModels.length, generatedAt: new Date().toISOString() };
+}
+
+ipcMain.handle("hotclip:diagnostics-run", (_event, llm: unknown, locale: unknown) => desktopDiagnostics(diagnosticsConfig(llm), locale !== "en"));
+
+let diagnosticsRepairAbort: AbortController | null = null;
+ipcMain.on("hotclip:diagnostics-repair-cancel", () => diagnosticsRepairAbort?.abort());
+ipcMain.handle("hotclip:diagnostics-prepare-models", async (event, llm: unknown, locale: unknown) => {
+  if (diagnosticsRepairAbort) throw new Error("model preparation is already running");
+  const config = diagnosticsConfig(llm);
+  const before = await runDoctor({
+    modelsRoot: modelsRoot(),
+    cacheDir: transcriptCacheDir(),
+    toolsDir: join(app.getPath("userData"), "tools", "yt-dlp"),
+    llm: config,
+    zh: locale !== "en",
+  });
+  const controller = new AbortController();
+  diagnosticsRepairAbort = controller;
+  try {
+    for (let index = 0; index < before.missingCoreModels.length; index++) {
+      const asset = before.missingCoreModels[index];
+      await ensureModel(modelsRoot(), asset, (progress) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send("hotclip:diagnostics-progress", {
+            modelId: asset.id,
+            current: index + 1,
+            total: before.missingCoreModels.length,
+            phase: progress.phase,
+            fraction: progress.totalBytes > 0 ? Math.min(1, progress.downloadedBytes / progress.totalBytes) : 0,
+          });
+        }
+      }, controller.signal);
+    }
+    return await desktopDiagnostics(config, locale !== "en");
+  } finally {
+    diagnosticsRepairAbort = null;
+  }
 });
 
 // 出厂导出根目录:~/影片/HotClip——新手在文件管理器里找得到(issue #3)

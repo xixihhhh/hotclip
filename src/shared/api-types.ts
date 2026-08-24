@@ -572,6 +572,28 @@ export interface UrlImportResult {
   filePath: string;
 }
 
+export interface DiagnosticsCheck {
+  id: string;
+  name: string;
+  status: "ok" | "warn" | "fail";
+  detail: string;
+  fix?: string;
+}
+
+export interface DiagnosticsReport {
+  checks: DiagnosticsCheck[];
+  missingCoreModels: number;
+  generatedAt: string;
+}
+
+export interface DiagnosticsProgressEvent {
+  modelId: string;
+  current: number;
+  total: number;
+  phase: "download" | "extract";
+  fraction: number;
+}
+
 export interface HotClipApi {
   /** Open a file picker; resolves to a path/handle or null when cancelled. */
   selectMedia: () => Promise<string | null>;
@@ -649,6 +671,12 @@ export interface HotClipApi {
   performanceTemplate: () => Promise<{ count: number; path: string } | null>;
   /** 清空真实发布表现记忆;不影响主观审阅偏好。 */
   performanceClear: () => Promise<void>;
+  /** 运行只读环境健康检查。 */
+  diagnosticsRun: (llm: LlmConfig | null, locale?: "zh" | "en") => Promise<DiagnosticsReport>;
+  /** 显式预下载缺失的默认管线模型;支持断点续传。 */
+  diagnosticsPrepareModels: (llm: LlmConfig | null, locale?: "zh" | "en") => Promise<DiagnosticsReport>;
+  onDiagnosticsProgress: (cb: (p: DiagnosticsProgressEvent) => void) => () => void;
+  diagnosticsCancelRepair: () => void;
   /** 选择一个文件夹(录播监听用);取消返回 null。 */
   selectDir: () => Promise<string | null>;
   /** 出厂导出根目录(~/影片/HotClip),用户没自选时界面显示的就是它。 */

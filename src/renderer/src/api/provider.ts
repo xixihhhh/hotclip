@@ -315,6 +315,41 @@ const browserMock: HotClipApi = {
     await sleep(250);
     mockPerformanceEntries = [];
   },
+  async diagnosticsRun(llm) {
+    await sleep(450);
+    return {
+      generatedAt: new Date().toISOString(),
+      missingCoreModels: 1,
+      checks: [
+        { id: "binary:ffmpeg", name: "ffmpeg", status: "ok" as const, detail: "ffmpeg 7.1 bundled" },
+        { id: "binary:ffprobe", name: "ffprobe", status: "ok" as const, detail: "ffprobe 7.1 bundled" },
+        { id: "model:sensevoice-2024-07-17", name: "SenseVoice", status: "warn" as const, detail: "未安装(约 1.1GB)", fix: "可预先下载,也可首次转写时自动下载" },
+        { id: "disk", name: "磁盘空间", status: "ok" as const, detail: "可用 86.4GB" },
+        { id: "llm", name: "LLM 端点", status: llm ? "ok" as const : "warn" as const, detail: llm ? `${llm.model} endpoint reachable` : "未配置" },
+        { id: "cache", name: "转写缓存", status: "ok" as const, detail: "248MB" },
+      ],
+    };
+  },
+  async diagnosticsPrepareModels(llm) {
+    await sleep(1200);
+    return {
+      generatedAt: new Date().toISOString(),
+      missingCoreModels: 0,
+      checks: [
+        { id: "binary:ffmpeg", name: "ffmpeg", status: "ok" as const, detail: "ffmpeg 7.1 bundled" },
+        { id: "binary:ffprobe", name: "ffprobe", status: "ok" as const, detail: "ffprobe 7.1 bundled" },
+        { id: "model:sensevoice-2024-07-17", name: "SenseVoice", status: "ok" as const, detail: "已安装" },
+        { id: "disk", name: "磁盘空间", status: "ok" as const, detail: "可用 85.3GB" },
+        { id: "llm", name: "LLM 端点", status: llm ? "ok" as const : "warn" as const, detail: llm ? `${llm.model} endpoint reachable` : "未配置" },
+        { id: "cache", name: "转写缓存", status: "ok" as const, detail: "248MB" },
+      ],
+    };
+  },
+  onDiagnosticsProgress(cb) {
+    const timer = window.setTimeout(() => cb({ modelId: "sensevoice-2024-07-17", current: 1, total: 1, phase: "download", fraction: 0.72 }), 300);
+    return () => window.clearTimeout(timer);
+  },
+  diagnosticsCancelRepair() {},
   async getAudioPeaks(_filePath, startSec, endSec) {
     await sleep(250);
     const hopSec = 1 / 30;

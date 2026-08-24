@@ -3,7 +3,7 @@
  * The renderer never touches ipcRenderer — only this typed bridge.
  */
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
-import type { HotClipApi, TranscribeProgressEvent, ExportProgressEvent, UrlImportProgressEvent, WatchEvent } from "../shared/api-types";
+import type { HotClipApi, TranscribeProgressEvent, ExportProgressEvent, UrlImportProgressEvent, WatchEvent, DiagnosticsProgressEvent } from "../shared/api-types";
 
 const api: HotClipApi = {
   selectMedia: () => ipcRenderer.invoke("hotclip:select-media"),
@@ -51,6 +51,14 @@ const api: HotClipApi = {
   performanceImport: () => ipcRenderer.invoke("hotclip:performance-import"),
   performanceTemplate: () => ipcRenderer.invoke("hotclip:performance-template"),
   performanceClear: () => ipcRenderer.invoke("hotclip:performance-clear"),
+  diagnosticsRun: (llm, locale) => ipcRenderer.invoke("hotclip:diagnostics-run", llm, locale),
+  diagnosticsPrepareModels: (llm, locale) => ipcRenderer.invoke("hotclip:diagnostics-prepare-models", llm, locale),
+  onDiagnosticsProgress: (cb) => {
+    const listener = (_e: IpcRendererEvent, p: DiagnosticsProgressEvent): void => cb(p);
+    ipcRenderer.on("hotclip:diagnostics-progress", listener);
+    return () => ipcRenderer.removeListener("hotclip:diagnostics-progress", listener);
+  },
+  diagnosticsCancelRepair: () => ipcRenderer.send("hotclip:diagnostics-repair-cancel"),
   selectDir: () => ipcRenderer.invoke("hotclip:select-dir"),
   defaultOutDir: () => ipcRenderer.invoke("hotclip:default-out-dir"),
   modelsInfo: () => ipcRenderer.invoke("hotclip:models-info"),

@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { mkdtemp, mkdir, rm, writeFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
+import { createHash } from "crypto";
 import { runDoctor, dirSize } from "../doctor";
 
 let root: string;
@@ -49,7 +50,7 @@ describe("runDoctor", () => {
     const sv = report.checks.find((c) => c.name.includes("SenseVoice"));
     expect(sv?.status).toBe("warn");
     expect(sv?.detail).toContain("未安装");
-    expect(sv?.fix).toContain("--download");
+    expect(sv?.fix).toContain("预下载");
 
     // 可选模型缺失不告警
     const fireRed = report.checks.find((c) => c.name.includes("FireRed"));
@@ -79,7 +80,7 @@ describe("runDoctor", () => {
     });
     const ffprobe = report.checks.find((c) => c.name === "ffprobe");
     expect(ffprobe?.status).toBe("fail");
-    expect(ffprobe?.fix).toContain("pnpm install");
+    expect(ffprobe?.fix).toContain("重新安装应用");
   });
 
   it("已装模型报体积;断点文件报续传量", async () => {
@@ -99,13 +100,50 @@ describe("runDoctor", () => {
     expect(report.missingCoreModels.map((a) => a.id)).not.toContain("yunet-2023mar");
   });
 
-  it("LLM 端点:收到 HTTP 响应算可达,网络错误算连不上", async () => {
+  it("下载器缺失不告警,已缓存时校验完整性", async () => {
+    const { modelsRoot, cacheDir } = await freshRoot();
+    const toolsDir = join(root, "tools");
+    let report = await runDoctor({ modelsRoot, cacheDir, toolsDir, llm: null, resolveBinaries: fakeBins, probeBinaryVersion: fakeProbe });
+    expect(report.checks.find((c) => c.id === "downloader")).toMatchObject({ status: "ok" });
+
+    await mkdir(toolsDir, { recursive: true });
+    const binary = join(toolsDir, process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp");
+    const bytes = Buffer.from("verified-tool");
+    await writeFile(binary, bytes);
+    await writeFile(`${binary}.sha256`, `${createHash("sha256").update(bytes).digest("hex")}\n`);
+    report = await runDoctor({ modelsRoot, cacheDir, toolsDir, llm: null, resolveBinaries: fakeBins, probeBinaryVersion: fakeProbe });
+    expect(report.checks.find((c) => c.id === "downloader")).toMatchObject({ status: "ok", detail: expect.stringContaining("校验通过") });
+
+    await writeFile(`${binary}.sha256`, "bad");
+    report = await runDoctor({ modelsRoot, cacheDir, toolsDir, llm: null, resolveBinaries: fakeBins, probeBinaryVersion: fakeProbe });
+    expect(report.checks.find((c) => c.id === "downloader")).toMatchObject({ status: "warn", fix: expect.stringContaining("自动删除") });
+  });
+
+  it("英文桌面报告不混入中文操作文案", async () => {
+    const { modelsRoot, cacheDir } = await freshRoot();
+    const report = await runDoctor({ modelsRoot, cacheDir, llm: null, zh: false, resolveBinaries: fakeBins, probeBinaryVersion: fakeProbe });
+    expect(report.checks.find((c) => c.id.startsWith("model:"))).toMatchObject({ name: expect.stringContaining("transcription"), detail: expect.stringContaining("Not installed") });
+    expect(report.checks.find((c) => c.id === "llm")).toMatchObject({ name: "LLM configuration", fix: expect.stringContaining("AI model settings") });
+    expect(report.checks.find((c) => c.id === "cache")?.detail).toContain("Empty");
+  });
+
+  it("LLM 端点:区分成功、路由错误、凭据错误和网络错误", async () => {
     const { modelsRoot, cacheDir } = await freshRoot();
     const llm = { baseUrl: "http://127.0.0.1:1/v1", apiKey: "k", model: "m" };
 
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 404 })));
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
     let report = await runDoctor({ modelsRoot, cacheDir, llm, resolveBinaries: fakeBins, probeBinaryVersion: fakeProbe });
     expect(report.checks.find((c) => c.name === "LLM 端点")?.status).toBe("ok");
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/models"), expect.objectContaining({ headers: { Authorization: "Bearer k" } }));
+
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 404 })));
+    report = await runDoctor({ modelsRoot, cacheDir, llm, resolveBinaries: fakeBins, probeBinaryVersion: fakeProbe });
+    expect(report.checks.find((c) => c.name === "LLM 端点")).toMatchObject({ status: "warn", id: "llm" });
+
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 401 })));
+    report = await runDoctor({ modelsRoot, cacheDir, llm, resolveBinaries: fakeBins, probeBinaryVersion: fakeProbe });
+    expect(report.checks.find((c) => c.name === "LLM 端点")).toMatchObject({ status: "fail", id: "llm" });
 
     vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new Error("ECONNREFUSED"))));
     report = await runDoctor({ modelsRoot, cacheDir, llm, resolveBinaries: fakeBins, probeBinaryVersion: fakeProbe });
