@@ -175,6 +175,17 @@ export function ExportPanel({
           <Group title={t("groupAudio")}>
             <SwitchRow label={th("optLoudness")} hint={th("optLoudnessHint")} on={prefs.normalizeLoudness} onToggle={() => setPref({ normalizeLoudness: !prefs.normalizeLoudness })} />
             <SwitchRow label={th("optDenoise")} hint={th("optDenoiseHint")} on={prefs.denoise} onToggle={() => setPref({ denoise: !prefs.denoise })} />
+            <SwitchRow label={th("optMuteSensitive")} hint={th("optMuteSensitiveHint")} on={prefs.muteSensitive} onToggle={() => setPref({ muteSensitive: !prefs.muteSensitive })} />
+            {prefs.muteSensitive && (
+              <label className="mb-1 flex items-center gap-2 pl-2 text-[11px] text-mut">
+                <span className="shrink-0">{th("sensitiveWordsLabel")}</span>
+                <input
+                  value={prefs.sensitiveWords.join(", ")}
+                  onChange={(event) => setPref({ sensitiveWords: event.target.value.split(/[,，\n]/).map((term) => term.trim()).filter(Boolean).slice(0, 100) })}
+                  className="min-w-0 flex-1 rounded-md border border-line bg-panel px-2 py-1 text-[11px] text-fg outline-none focus:border-ember/60"
+                />
+              </label>
+            )}
             <SwitchRow label={th("optSfx")} hint={th("optSfxHint")} on={prefs.sfx} onToggle={() => setPref({ sfx: !prefs.sfx })} />
             <div className="flex min-h-7.5 items-center gap-2.5" title={prefs.bgmPath ? th("optBgmOn", { name: bgmName }) : th("optBgmHint")}>
               <span className="min-w-0 flex-1 truncate text-[12.5px] text-fg/90">

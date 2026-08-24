@@ -55,6 +55,7 @@ import {
 import { importMediaUrl as downloadMediaUrl } from "@core/url-import";
 import { clearSessionCheckpoint, readSessionCheckpoint, saveSessionCheckpoint } from "@core/session-checkpoint";
 import { loadAutomationTasks, normalizeAutomationTasks, saveAutomationTasks } from "@core/automation-history";
+import { sanitizeSensitiveWords } from "@core/sensitive-words";
 import { applyGlossaryToTranscript } from "../shared/glossary";
 import { tagTranscribeError } from "../shared/transcribe-errors";
 import { autoClip, analyzeReferenceVideo } from "@core/pipeline";
@@ -741,7 +742,8 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
   const jumpCut = Boolean(opts.jumpCut && opts.transcript);
   const cleanFillers = Boolean(opts.cleanFillers && opts.transcript);
   const cutRetakes = Boolean(opts.cutRetakes && opts.transcript);
-  const needWords = Boolean(style) || jumpCut || cleanFillers || cutRetakes;
+  const muteTerms = sanitizeSensitiveWords(opts.muteTerms);
+  const needWords = Boolean(style) || jumpCut || cleanFillers || cutRetakes || muteTerms.length > 0;
   const sourceName = sanitizeFilename(basename(filePath, extname(filePath)), "video");
   const outDir = clipOutDir(opts.outDir, app.getPath("videos"), sourceName);
   // bundled caption font: packaged → resources/fonts, dev → repo resources/fonts
@@ -855,6 +857,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       // 修复:这四个开关此前从未传进导出层——UI 点了没效果,被 fail-open
       // 语义掩盖(降噪/合集/横屏版/高潮前置在桌面端一直是死开关)
       denoise: Boolean(opts.denoise),
+      muteTerms: muteTerms.length > 0 ? muteTerms : undefined,
       compilation: Boolean(opts.compilation),
       coldOpen: Boolean(opts.coldOpen),
       alsoLandscape: Boolean(opts.alsoLandscape),

@@ -38,6 +38,12 @@ export const LOUDNORM_OUT_RATE = "48000";
  */
 export const DENOISE_FILTER = "highpass=f=80,highpass=f=80,afftdn=nr=24:nf=-40:tn=1";
 
+export function muteRangeFilters(ranges?: Array<{ startSec: number; endSec: number }>): string[] {
+  return (ranges ?? [])
+    .filter((range) => Number.isFinite(range.startSec) && range.endSec > range.startSec)
+    .map((range) => `volume=enable='between(t,${Math.max(0, range.startSec).toFixed(3)},${range.endSec.toFixed(3)})':volume=0`);
+}
+
 /**
  * 切点边缘音频淡化时长:重编码切割的边界几乎必然落在波形非零点上,
  * 产生可闻的「咔哒」爆音;30ms 短到听不出淡化,却足以把边界钳到零附近。
@@ -89,6 +95,8 @@ export interface CutOptions {
   normalizeLoudness?: boolean;
   /** 基础降噪:压直播回放常见的底噪/电流声(高通×2 + afftdn,先于 loudnorm)。 */
   denoise?: boolean;
+  /** Clip-output-relative ranges whose spoken audio should be muted. */
+  muteRanges?: Array<{ startSec: number; endSec: number }>;
   /** 品牌水印:PNG 烧进画面一角(在字幕之上)。 */
   watermark?: WatermarkSpec;
   /** 容器元数据(如 AIGC 隐式标识);copy 模式同样写入。 */
@@ -264,6 +272,7 @@ export function buildCutArgs(
   const audioChain = [
     ...(options.denoise ? [DENOISE_FILTER] : []),
     ...(options.normalizeLoudness ? [LOUDNORM_FILTER] : []),
+    ...muteRangeFilters(options.muteRanges),
     ...edgeFadeFilters(duration),
   ];
   return [
@@ -319,6 +328,7 @@ export function buildJumpCutArgs(
   const audioChain = [
     ...(options.denoise ? [DENOISE_FILTER] : []),
     ...(options.normalizeLoudness ? [LOUDNORM_FILTER] : []),
+    ...muteRangeFilters(options.muteRanges),
   ];
   const audioOut = audioChain.length > 0 ? "[araw]" : "[aout]";
   parts.push(`${labels.join("")}concat=n=${segments.length}:v=1:a=1${concatOut}${audioOut}`);

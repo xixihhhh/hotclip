@@ -6,6 +6,7 @@
 import { create } from "zustand";
 import type { CaptionStyleChoice, ClipLength, ExportQuality } from "../../../shared/api-types";
 import { validPlatformIds } from "../../../shared/platform-specs";
+import { DEFAULT_SENSITIVE_WORDS, sanitizeSensitiveWords } from "../../../core/sensitive-words";
 
 const STORAGE_KEY = "hotclip-render-prefs";
 
@@ -31,6 +32,8 @@ export interface RenderPrefs {
   openingHook: boolean;
   normalizeLoudness: boolean;
   denoise: boolean;
+  muteSensitive: boolean;
+  sensitiveWords: string[];
   compilation: boolean;
   coldOpen: boolean;
   /** 爆点闪现:峰值画面 0.3-1s 前置(视觉钩子)。 */
@@ -92,6 +95,8 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   openingHook: true,
   normalizeLoudness: true,
   denoise: false, // 素材千差万别,降噪宁保守默认关
+  muteSensitive: false,
+  sensitiveWords: DEFAULT_SENSITIVE_WORDS,
   compilation: false, // 合集是额外产物,默认关
   coldOpen: false, // 高潮前置改变成片结构,默认关由用户选择
   flashForward: false, // 爆点闪现同理:强风格开场,默认关
@@ -139,6 +144,9 @@ function load(): RenderPrefs {
       out.products = Array.isArray(out.products)
         ? out.products.filter((x): x is string => typeof x === "string" && x.trim().length > 0).slice(0, 20)
         : [];
+      out.sensitiveWords = Array.isArray(out.sensitiveWords)
+        ? sanitizeSensitiveWords(out.sensitiveWords)
+        : [...RENDER_PREF_DEFAULTS.sensitiveWords];
       // 老版本的商品词存在独立的 localStorage key 里,迁移进偏好后不再回头读
       if (out.products.length === 0) {
         try {

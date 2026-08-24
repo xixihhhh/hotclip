@@ -52,6 +52,7 @@ import { buildOverlayPayload, isWebCaptionStyle, type OverlayRenderFn, type WebC
 import { probeMedia } from "./probe";
 import { runClipQa, maxVisualGapSec, missingHookPayoffs, type ClipQaReport } from "./qa";
 import { lintClipContent } from "./content-lint";
+import { mapSensitiveRanges } from "./sensitive-words";
 import { planRepair, applyRepair } from "./repair";
 import { applyBrandToLayout } from "./brand";
 import type { TranscriptWord, BrandStyle } from "../shared/api-types";
@@ -207,6 +208,8 @@ export interface ClipRenderOutcome {
   loudnessNormalized: boolean;
   /** True 表示走了基础降噪链(高通×2+afftdn)。 */
   denoised: boolean;
+  /** Number of transcript-timed sensitive-language windows muted. */
+  sensitiveMutes?: number;
   /** 高潮前置迷你片时长(秒);没开/钩子定位失败/被守卫跳过为 null。 */
   coldOpenSec: number | null;
   /** True 表示前置的迷你片是「爆点闪现」(0.3-1s 画面钩子)而非钩子句。 */
@@ -276,6 +279,8 @@ export interface ExportRenderOptions {
   normalizeLoudness?: boolean;
   /** 基础降噪:压直播回放常见底噪/电流声(高通×2+afftdn,先于响度标准化)。 */
   denoise?: boolean;
+  /** User-controlled terms muted at transcript word timestamps. */
+  muteTerms?: string[];
   /** 精华合集:导出的切片按时间序流复制拼成一支合集(≥2 条才生成)。 */
   compilation?: boolean;
   /** 高潮前置:钩子句剪成迷你片拼到切片开头再接完整正片(cold-open)。 */
@@ -691,8 +696,12 @@ export async function exportClips(
               emphasisAtSec: peakEventsOut.slice(0, 4).sort((a, b) => a - b),
             }
           : undefined;
+      const sensitiveMuteRanges =
+        options.muteTerms && clip.words
+          ? mapSensitiveRanges(clip.words, options.muteTerms, plan?.segments ?? [{ startSec: clip.startSec, endSec: clip.endSec }])
+          : undefined;
       const cutOptions = trackPlan
-        ? { trackPlan, autoZoom, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, watermark, metadata: aigcMeta, crf: options.crf, encoder: videoEncoder }
+        ? { trackPlan, autoZoom, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, muteRanges: sensitiveMuteRanges, watermark, metadata: aigcMeta, crf: options.crf, encoder: videoEncoder }
         : {
             uiCrop,
             vertical: options.vertical,
@@ -701,6 +710,7 @@ export async function exportClips(
             fontsDir: subtitlePath ? options.fontsDir : undefined,
             normalizeLoudness: options.normalizeLoudness,
             denoise: options.denoise,
+            muteRanges: sensitiveMuteRanges,
             watermark,
             metadata: aigcMeta,
             crf: options.crf,
@@ -719,6 +729,7 @@ export async function exportClips(
             fontsDir: subtitlePath ? options.fontsDir : undefined,
             normalizeLoudness: options.normalizeLoudness,
             denoise: options.denoise,
+            muteRanges: sensitiveMuteRanges,
             watermark,
             metadata: aigcMeta,
             crf: options.crf,
@@ -833,8 +844,8 @@ export async function exportClips(
               }
             }
             const miniCutOptions = miniTrack
-              ? { trackPlan: miniTrack, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, watermark, crf: options.crf, encoder: videoEncoder }
-              : { uiCrop, vertical: options.vertical, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, watermark, crf: options.crf, encoder: videoEncoder };
+              ? { trackPlan: miniTrack, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, muteRanges: options.muteTerms && clip.words ? mapSensitiveRanges(clip.words, options.muteTerms, [{ startSec: coPlan.startSec, endSec: coPlan.endSec }]) : undefined, watermark, crf: options.crf, encoder: videoEncoder }
+              : { uiCrop, vertical: options.vertical, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, muteRanges: options.muteTerms && clip.words ? mapSensitiveRanges(clip.words, options.muteTerms, [{ startSec: coPlan.startSec, endSec: coPlan.endSec }]) : undefined, watermark, crf: options.crf, encoder: videoEncoder };
             await rename(outPath, bodyPath);
             await cutClip(inputPath, miniPath, coPlan.startSec, coPlan.endSec, miniCutOptions, signal);
             // 硬切拼接(通行做法);AIGC 隐式标识补到最终容器上
@@ -1078,6 +1089,7 @@ export async function exportClips(
         stitchedPieces: stitched ? pieces.length : 0,
         loudnessNormalized: Boolean(options.normalizeLoudness),
         denoised: Boolean(options.denoise),
+        sensitiveMutes: sensitiveMuteRanges?.length ?? 0,
         coldOpenSec,
         flashForward: flashForwardUsed,
         openingHookBurned: Boolean(openingHook),

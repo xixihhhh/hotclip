@@ -8,7 +8,7 @@
  * 成品音频生成波形(所以跳剪后的波形与声音天然同步)。纯参数构建可单测;
  * ffmpeg 执行隔离在 runAudiogram。
  */
-import { escapeFilterPath, watermarkStages, metadataArgs, runFfmpeg, DENOISE_FILTER, edgeFadeFilters, type WatermarkSpec } from "./cut";
+import { escapeFilterPath, watermarkStages, metadataArgs, runFfmpeg, DENOISE_FILTER, edgeFadeFilters, muteRangeFilters, type WatermarkSpec } from "./cut";
 import { isValidHex } from "./brand";
 
 /** 深色底(与应用「灼热片场」底色同源)。 */
@@ -51,6 +51,7 @@ export interface AudiogramOptions {
   normalizeLoudness?: boolean;
   /** 基础降噪(与视频路径同一条链,先于响度标准化)。 */
   denoise?: boolean;
+  muteRanges?: Array<{ startSec: number; endSec: number }>;
   watermark?: WatermarkSpec;
   /** 容器元数据(如 AIGC 隐式标识)。 */
   metadata?: Record<string, string>;
@@ -103,6 +104,11 @@ export function buildAudiogramArgs(
   if (options.normalizeLoudness) {
     parts.push(`${audioLabel}${LOUDNORM},aresample=48000[anorm]`);
     audioLabel = "[anorm]";
+  }
+  const mute = muteRangeFilters(options.muteRanges);
+  if (mute.length > 0) {
+    parts.push(`${audioLabel}${mute.join(",")}[amute]`);
+    audioLabel = "[amute]";
   }
   // 3) 一份出声,一份画波形
   parts.push(`${audioLabel}asplit=2[aout][awave]`);

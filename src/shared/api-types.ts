@@ -343,6 +343,8 @@ export interface ExportOptions {
   normalizeLoudness?: boolean;
   /** 基础降噪:压直播回放常见底噪/电流声(高通×2+afftdn,先于响度标准化)。 */
   denoise?: boolean;
+  /** Mute transcript-timed occurrences of these user-controlled terms. */
+  muteTerms?: string[];
   /** 精华合集:切片按时间序流复制拼成一支合集,附章节时间戳文本。 */
   compilation?: boolean;
   /** 高潮前置:钩子句剪成迷你片拼到切片开头再接完整正片(cold-open)。 */
