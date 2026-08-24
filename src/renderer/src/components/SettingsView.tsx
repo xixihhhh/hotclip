@@ -13,6 +13,8 @@ import {
   LuBot,
   LuCaptions,
   LuCircleCheck,
+  LuChartNoAxesCombined,
+  LuDatabase,
   LuDownload,
   LuExternalLink,
   LuFolderOpen,
@@ -23,7 +25,11 @@ import {
   LuLoaderCircle,
   LuMic,
   LuPalette,
+  LuTrendingDown,
   LuTriangleAlert,
+  LuTrash2,
+  LuTrophy,
+  LuUpload,
 } from "react-icons/lu";
 import { useT, useLocaleStore } from "../i18n/store";
 import { LOCALE_LIST, REGISTRY } from "../i18n/messages";
@@ -37,9 +43,9 @@ import { Switch, SwitchRow } from "./ui";
 import { GlossaryModal } from "./GlossaryModal";
 import { BrandStyleModal } from "./BrandStyleModal";
 import { WatchFolderModal } from "./WatchFolderModal";
-import type { AsrEngineInfo, CaptionStyleChoice, ExportQuality, ModelsInfo } from "../../../shared/api-types";
+import type { AsrEngineInfo, CaptionStyleChoice, ExportQuality, ModelsInfo, PerformanceEntry, PerformanceSummary } from "../../../shared/api-types";
 
-type NavKey = "ai" | "asr" | "storage" | "brand" | "glossary" | "watch" | "lang";
+type NavKey = "ai" | "asr" | "storage" | "performance" | "brand" | "glossary" | "watch" | "lang";
 
 const QUALITY_ORDER: ExportQuality[] = ["high", "standard", "compact"];
 const CAPTION_ORDER: CaptionStyleChoice[] = ["keyword", "pop", "minimal", "hormozi", "bubble", "karaoke", "none"];
@@ -65,6 +71,206 @@ function formatBytes(bytes: number): string {
   if (bytes >= 1024 ** 2) return `${Math.round(bytes / 1024 ** 2)} MB`;
   if (bytes > 0) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return "—";
+}
+
+function formatMetric(value: number, locale: string): string {
+  return new Intl.NumberFormat(locale === "zh" ? "zh-CN" : "en-US", {
+    notation: value >= 10_000 ? "compact" : "standard",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+function PerformanceRow({ entry, weak = false }: { entry: PerformanceEntry; weak?: boolean }): React.JSX.Element {
+  const t = useT("performance");
+  const { locale } = useLocaleStore();
+  const interactions = entry.likes + entry.comments + entry.shares + entry.saves;
+  const rate = ((interactions / Math.max(1, entry.views)) * 100).toFixed(2);
+  return (
+    <li className="rounded-xl border border-line/80 bg-panel-2 px-3.5 py-3">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-[12.5px] font-semibold text-fg">{entry.title}</p>
+          {entry.hook && <p className="mt-0.5 line-clamp-1 text-[11px] text-mut">{entry.hook}</p>}
+        </div>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${weak ? "bg-amber-500/10 text-amber-300" : "bg-emerald-500/10 text-emerald-300"}`}>
+          {entry.platform}
+        </span>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10.5px] tabular-nums text-mut">
+        <span>{t("views", { n: formatMetric(entry.views, locale) })}</span>
+        <span>{t("engagement", { n: rate })}</span>
+        {entry.durationSec && <span>{t("duration", { n: Math.round(entry.durationSec) })}</span>}
+      </div>
+    </li>
+  );
+}
+
+/** Local audience-outcome feedback: import → explain what was learned → manage memory. */
+function PerformanceSection(): React.JSX.Element {
+  const t = useT("performance");
+  const [summary, setSummary] = useState<PerformanceSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const refresh = useCallback(async (): Promise<void> => {
+    setLoading(true);
+    setError("");
+    try {
+      setSummary(await getApi().performanceGet());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const importFile = useCallback(async (): Promise<void> => {
+    setImporting(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await getApi().performanceImport();
+      if (!result) return;
+      setSummary(await getApi().performanceGet());
+      setNotice(t("importSuccess", { imported: result.imported, skipped: result.skipped, total: result.total }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setImporting(false);
+    }
+  }, [t]);
+
+  const clear = useCallback(async (): Promise<void> => {
+    if (!confirmClear) {
+      setConfirmClear(true);
+      setNotice("");
+      return;
+    }
+    setClearing(true);
+    setError("");
+    try {
+      await getApi().performanceClear();
+      setSummary(await getApi().performanceGet());
+      setNotice(t("clearSuccess"));
+      setConfirmClear(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setClearing(false);
+    }
+  }, [confirmClear, t]);
+
+  return (
+    <div className="flex flex-col gap-5" aria-busy={loading || importing || clearing}>
+      <section>
+        <h3 className="flex items-center gap-2 text-[13.5px] font-bold">
+          <LuChartNoAxesCombined aria-hidden="true" className="h-4 w-4 text-ember" />
+          {t("title")}
+        </h3>
+        <p className="mt-1 text-[12.5px] leading-relaxed text-mut">{t("desc")}</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={importing || clearing}
+            onClick={() => void importFile()}
+            className="btn-flame inline-flex min-h-10 items-center gap-2 rounded-lg px-4 py-2 text-[12.5px] font-bold text-white disabled:opacity-50"
+          >
+            {importing ? <LuLoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <LuUpload aria-hidden="true" className="h-4 w-4" />}
+            {importing ? t("importing") : t("importButton")}
+          </button>
+          <span className="text-[11px] text-mut/80">{t("formats")}</span>
+        </div>
+        {notice && (
+          <p aria-live="polite" className="mt-3 flex items-start gap-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-[11.5px] text-emerald-300">
+            <LuCircleCheck aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            {notice}
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="mt-3 flex items-start gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-[11.5px] break-all text-red-300">
+            <LuTriangleAlert aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            {error}
+          </p>
+        )}
+      </section>
+
+      {loading ? (
+        <div className="flex min-h-36 items-center justify-center rounded-xl border border-line bg-panel-2 text-[12px] text-mut">
+          <LuLoaderCircle aria-hidden="true" className="mr-2 h-4 w-4 animate-spin" />
+          {t("loading")}
+        </div>
+      ) : !summary || summary.total === 0 ? (
+        <div className="rounded-xl border border-dashed border-line px-5 py-8 text-center">
+          <LuDatabase aria-hidden="true" className="mx-auto h-7 w-7 text-mut/50" />
+          <p className="mt-3 text-[13px] font-semibold text-fg">{t("emptyTitle")}</p>
+          <p className="mx-auto mt-1 max-w-md text-[11.5px] leading-relaxed text-mut">{t("emptyDesc")}</p>
+        </div>
+      ) : (
+        <>
+          <section className="grid grid-cols-3 gap-2">
+            <div className="rounded-xl border border-line bg-panel-2 px-3.5 py-3">
+              <p className="text-[10.5px] font-semibold text-mut">{t("totalLabel")}</p>
+              <p className="mt-1 text-xl font-black tabular-nums text-fg">{summary.total}</p>
+            </div>
+            <div className="rounded-xl border border-line bg-panel-2 px-3.5 py-3">
+              <p className="text-[10.5px] font-semibold text-mut">{t("platformLabel")}</p>
+              <p className="mt-1 text-xl font-black tabular-nums text-fg">{summary.platforms.length}</p>
+            </div>
+            <div className="rounded-xl border border-line bg-panel-2 px-3.5 py-3">
+              <p className="text-[10.5px] font-semibold text-mut">{t("signalLabel")}</p>
+              <p className="mt-1 text-xl font-black tabular-nums text-fg">{summary.winners.length + summary.laggards.length}</p>
+            </div>
+          </section>
+
+          <div className="flex flex-wrap gap-1.5">
+            {summary.platforms.map((platform) => <span key={platform} className="chip rounded-full px-2.5 py-1 text-[10.5px] text-mut">{platform}</span>)}
+          </div>
+
+          <section>
+            <h4 className="flex items-center gap-2 text-[12.5px] font-bold text-emerald-300">
+              <LuTrophy aria-hidden="true" className="h-4 w-4" />
+              {t("winnersTitle")}
+            </h4>
+            <p className="mt-1 text-[11px] leading-relaxed text-mut">{t("winnersDesc")}</p>
+            <ul className="mt-2.5 space-y-2">{summary.winners.map((entry, i) => <PerformanceRow key={`${entry.platform}-${entry.id ?? entry.title}-${i}`} entry={entry} />)}</ul>
+          </section>
+
+          {summary.laggards.length > 0 && (
+            <section>
+              <h4 className="flex items-center gap-2 text-[12.5px] font-bold text-amber-300">
+                <LuTrendingDown aria-hidden="true" className="h-4 w-4" />
+                {t("laggardsTitle")}
+              </h4>
+              <p className="mt-1 text-[11px] leading-relaxed text-mut">{t("laggardsDesc")}</p>
+              <ul className="mt-2.5 space-y-2">{summary.laggards.map((entry, i) => <PerformanceRow key={`${entry.platform}-${entry.id ?? entry.title}-${i}`} entry={entry} weak />)}</ul>
+            </section>
+          )}
+
+          <section className="border-t border-line/70 pt-4">
+            <button
+              type="button"
+              disabled={clearing}
+              onClick={() => void clear()}
+              onBlur={() => setConfirmClear(false)}
+              className={`inline-flex min-h-10 items-center gap-2 rounded-lg border px-3.5 py-2 text-[12px] font-semibold transition-colors disabled:opacity-50 ${confirmClear ? "border-red-500/60 bg-red-500/10 text-red-300" : "border-line text-mut hover:border-red-500/40 hover:text-red-300"}`}
+            >
+              {clearing ? <LuLoaderCircle aria-hidden="true" className="h-3.5 w-3.5 animate-spin" /> : <LuTrash2 aria-hidden="true" className="h-3.5 w-3.5" />}
+              {confirmClear ? t("clearConfirm") : t("clearButton")}
+            </button>
+            <p className="mt-1.5 text-[10.5px] text-mut/70">{t("clearHint")}</p>
+          </section>
+        </>
+      )}
+    </div>
+  );
 }
 
 const inputCls = "mt-1 w-full rounded-lg border border-line bg-panel-2 px-3 py-2 text-[13px] outline-none focus:border-ember/60";
@@ -552,6 +758,7 @@ export function SettingsView(): React.JSX.Element {
     { key: "ai", label: t("navAi"), Icon: LuBot },
     { key: "asr", label: t("navAsr"), Icon: LuMic },
     { key: "storage", label: t("navStorage"), Icon: LuHardDrive },
+    { key: "performance", label: t("navPerformance"), Icon: LuChartNoAxesCombined },
     { key: "brand", label: t("navBrand"), Icon: LuPalette },
     { key: "glossary", label: t("navGlossary"), Icon: LuBookOpen },
     { key: "watch", label: t("navWatch"), Icon: LuFolderSearch },
@@ -576,7 +783,7 @@ export function SettingsView(): React.JSX.Element {
           onClick={() => setSettingsOpen(false)}
           className="mb-2 flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-[12px] font-semibold text-mut transition-colors hover:text-fg"
         >
-          <LuArrowLeft className="h-3.5 w-3.5" />
+          <LuArrowLeft aria-hidden="true" className="h-3.5 w-3.5" />
           {t("backHome")}
         </button>
         {NAV.map(({ key, label, Icon }) => (
@@ -588,7 +795,7 @@ export function SettingsView(): React.JSX.Element {
               nav === key ? "border border-ember/40 bg-ember/10 text-ember" : "border border-transparent text-mut hover:text-fg"
             }`}
           >
-            <Icon className="h-4 w-4" />
+            <Icon aria-hidden="true" className="h-4 w-4" />
             {label}
           </button>
         ))}
@@ -598,6 +805,7 @@ export function SettingsView(): React.JSX.Element {
           {nav === "ai" && <AiSection />}
           {nav === "asr" && <AsrSection />}
           {nav === "storage" && <StorageSection />}
+          {nav === "performance" && <PerformanceSection />}
           {nav === "brand" && entry(tb("desc"), tb("title"), () => setShowBrand(true))}
           {nav === "glossary" && entry(tg("desc"), tg("title"), () => setShowGlossary(true))}
           {nav === "watch" && entry(twatch("desc"), twatch("title"), () => setShowWatch(true))}

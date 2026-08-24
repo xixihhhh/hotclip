@@ -45,7 +45,12 @@ import { defaultModelsRoot, readAppSettings, resolveModelsRoot, writeAppSettings
 import { inspectModels, moveModelsDir } from "@core/models-inventory";
 import { loadGlossary, saveGlossary } from "@core/glossary-store";
 import { loadReviewMemory, recordReview, type ReviewedCandidate } from "@core/review-memory";
-import { loadPerformanceMemory } from "@core/performance-memory";
+import {
+  clearPerformanceMemory,
+  importPerformanceFile,
+  loadPerformanceMemory,
+  summarizePerformance,
+} from "@core/performance-memory";
 import { applyGlossaryToTranscript } from "../shared/glossary";
 import { tagTranscribeError } from "../shared/transcribe-errors";
 import { autoClip, analyzeReferenceVideo } from "@core/pipeline";
@@ -159,6 +164,29 @@ ipcMain.handle("hotclip:select-media", async () => {
   if (result.canceled || result.filePaths.length === 0) return null;
   return result.filePaths[0];
 });
+
+// ---- IPC:真实发布表现反馈(设置中心) ----
+
+ipcMain.handle("hotclip:performance-get", async () =>
+  summarizePerformance(await loadPerformanceMemory(app.getPath("userData")))
+);
+
+ipcMain.handle("hotclip:performance-import", async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ["openFile"],
+    filters: [
+      { name: "Platform metrics", extensions: ["csv", "json"] },
+      { name: "All Files", extensions: ["*"] },
+    ],
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  const imported = await importPerformanceFile(app.getPath("userData"), result.filePaths[0]);
+  return { imported: imported.imported, skipped: imported.skipped, total: imported.total };
+});
+
+ipcMain.handle("hotclip:performance-clear", async () =>
+  clearPerformanceMemory(app.getPath("userData"))
+);
 
 // 出厂导出根目录:~/影片/HotClip——新手在文件管理器里找得到(issue #3)
 ipcMain.handle("hotclip:default-out-dir", async () => join(app.getPath("videos"), "HotClip"));

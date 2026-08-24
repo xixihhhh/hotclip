@@ -4,6 +4,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 import {
   importPerformanceFile,
+  clearPerformanceMemory,
   loadPerformanceMemory,
   metricNumber,
   normalizePerformanceRows,
@@ -11,6 +12,7 @@ import {
   performanceExamples,
   performanceMemorySection,
   savePerformanceMemory,
+  summarizePerformance,
   type PerformanceEntry,
 } from "../performance-memory";
 import { highlightSystemPrompt } from "../highlight/prompt";
@@ -70,6 +72,12 @@ describe("performance prompt feedback", () => {
     const dir = await freshDir();
     await savePerformanceMemory(dir, rows);
     expect(await loadPerformanceMemory(dir)).toHaveLength(4);
+    expect(summarizePerformance(rows)).toMatchObject({
+      total: 4,
+      platforms: ["bilibili"],
+    });
+    await clearPerformanceMemory(dir);
+    expect(await loadPerformanceMemory(dir)).toEqual([]);
   });
 
   it("is wired into the highlight system prompt", () => {

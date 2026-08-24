@@ -235,6 +235,37 @@ export interface ReviewedCandidate {
   keywords?: string[];
 }
 
+/** 一条平台发布结果;只含内容表现,不含账号凭据或本地目录。 */
+export interface PerformanceEntry {
+  id?: string;
+  title: string;
+  hook?: string;
+  platform: string;
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  saves: number;
+  durationSec?: number;
+  keywords?: string[];
+  publishedAt?: string;
+  importedAt: string;
+}
+
+export interface PerformanceImportResult {
+  imported: number;
+  skipped: number;
+  total: number;
+}
+
+/** 设置中心展示的数据摘要;赢家/弱项使用同一套本地质量分排序。 */
+export interface PerformanceSummary {
+  total: number;
+  platforms: string[];
+  winners: PerformanceEntry[];
+  laggards: PerformanceEntry[];
+}
+
 /** Burned-in caption style choices (none = no captions; bubble = web-rendered). */
 export type CaptionStyleChoice = "none" | "karaoke" | "keyword" | "pop" | "hormozi" | "minimal" | "bubble";
 
@@ -506,6 +537,12 @@ export interface HotClipApi {
   listLlmModels: (baseUrl: string, apiKey: string) => Promise<ModelListResult>;
   /** 审阅反馈回流:导出时记录本场采用/否决的候选(本地偏好档,下次检测注入)。 */
   recordReview: (video: string, kept: ReviewedCandidate[], rejected: ReviewedCandidate[]) => Promise<void>;
+  /** 真实发布表现摘要(本地 performance-memory.json)。 */
+  performanceGet: () => Promise<PerformanceSummary>;
+  /** 选择并导入平台 CSV/JSON;用户取消返回 null。 */
+  performanceImport: () => Promise<PerformanceImportResult | null>;
+  /** 清空真实发布表现记忆;不影响主观审阅偏好。 */
+  performanceClear: () => Promise<void>;
   /** 选择一个文件夹(录播监听用);取消返回 null。 */
   selectDir: () => Promise<string | null>;
   /** 出厂导出根目录(~/影片/HotClip),用户没自选时界面显示的就是它。 */

@@ -3,32 +3,11 @@
  * 下一轮找爆点时把强/弱样例注入提示词。与 review-memory 的主观采用/否决
  * 互补:前者回答「我喜欢什么」,这里回答「观众真的看了什么」。
  */
-import { mkdir, readFile, rename, writeFile } from "fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "fs/promises";
 import { basename, dirname, extname, join } from "path";
+import type { PerformanceEntry, PerformanceImportResult, PerformanceSummary } from "../shared/api-types";
 
-export interface PerformanceEntry {
-  /** 平台视频 id;没有时用标题参与去重。 */
-  id?: string;
-  title: string;
-  hook?: string;
-  platform: string;
-  views: number;
-  likes: number;
-  comments: number;
-  shares: number;
-  saves: number;
-  durationSec?: number;
-  keywords?: string[];
-  publishedAt?: string;
-  importedAt: string;
-}
-
-export interface PerformanceImportResult {
-  imported: number;
-  skipped: number;
-  total: number;
-  entries: PerformanceEntry[];
-}
+export type { PerformanceEntry, PerformanceImportResult, PerformanceSummary };
 
 const MAX_ENTRIES = 500;
 const MAX_PROMPT_EXAMPLES = 5;
@@ -178,7 +157,14 @@ export async function savePerformanceMemory(userDataDir: string, incoming: Perfo
   return all;
 }
 
-export async function importPerformanceFile(userDataDir: string, inputPath: string): Promise<PerformanceImportResult> {
+export async function clearPerformanceMemory(userDataDir: string): Promise<void> {
+  await rm(memoryPath(userDataDir), { force: true });
+}
+
+export async function importPerformanceFile(
+  userDataDir: string,
+  inputPath: string
+): Promise<PerformanceImportResult & { entries: PerformanceEntry[] }> {
   const text = await readFile(inputPath, "utf8");
   const ext = extname(inputPath).toLowerCase();
   let rows: Row[];
@@ -219,6 +205,16 @@ export function performanceExamples(entries: PerformanceEntry[]): { winners: Per
     ? []
     : [...sorted].reverse().filter((e) => !winnerKeys.has(entryKey(e))).slice(0, MAX_PROMPT_EXAMPLES);
   return { winners, laggards };
+}
+
+export function summarizePerformance(entries: PerformanceEntry[]): PerformanceSummary {
+  const { winners, laggards } = performanceExamples(entries);
+  return {
+    total: entries.length,
+    platforms: [...new Set(entries.map((e) => e.platform))].sort(),
+    winners,
+    laggards,
+  };
 }
 
 const compactMetric = (n: number, zh: boolean): string => {

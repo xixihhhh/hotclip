@@ -15,6 +15,8 @@ import type {
   ExportProgressEvent,
   WatchEvent,
   GlossaryEntry,
+  PerformanceEntry,
+  PerformanceSummary,
 } from "../../../shared/api-types";
 import { applyGlossaryToTranscript, sanitizeGlossary } from "../../../shared/glossary";
 
@@ -72,6 +74,27 @@ const emitWatch = (e: Omit<WatchEvent, "at">): void => {
   if (watchRunning) watchListeners.forEach((cb) => cb({ ...e, at: Date.now() }));
 };
 let mockExportCancelled = false;
+let mockPerformanceEntries: PerformanceEntry[] = [
+  { title: "三分钟讲清直播间投流误区", hook: "投流越多,为什么人反而越少?", platform: "bilibili", views: 128_000, likes: 8_240, comments: 611, shares: 1_420, saves: 3_180, durationSec: 43, keywords: ["投流", "直播运营"], importedAt: "2026-08-20T00:00:00Z" },
+  { title: "纸巾吸水实测", hook: "半杯水倒下去会发生什么", platform: "douyin", views: 86_000, likes: 5_600, comments: 288, shares: 932, saves: 1_410, durationSec: 24, keywords: ["实测", "生活用品"], importedAt: "2026-08-21T00:00:00Z" },
+  { title: "主播闲聊片段", platform: "bilibili", views: 2_100, likes: 33, comments: 4, shares: 1, saves: 2, durationSec: 58, importedAt: "2026-08-22T00:00:00Z" },
+  { title: "今天给大家介绍一下", platform: "douyin", views: 1_280, likes: 12, comments: 1, shares: 0, saves: 1, durationSec: 37, importedAt: "2026-08-22T00:00:00Z" },
+];
+
+function mockPerformanceSummary(): PerformanceSummary {
+  const sorted = [...mockPerformanceEntries].sort((a, b) => {
+    const score = (e: PerformanceEntry): number =>
+      (e.likes + e.comments * 2 + e.shares * 3 + e.saves * 3) / (e.views + 200);
+    return score(b) - score(a);
+  });
+  const half = Math.max(1, Math.floor(sorted.length / 2));
+  return {
+    total: sorted.length,
+    platforms: [...new Set(sorted.map((e) => e.platform))].sort(),
+    winners: sorted.slice(0, half),
+    laggards: sorted.length >= 4 ? sorted.slice(half).reverse() : [],
+  };
+}
 // 浏览器预览的词表持久化:localStorage 模拟主进程的 glossary.json
 const GLOSSARY_LS_KEY = "hotclip-glossary";
 function mockGlossaryLoad(): GlossaryEntry[] {
@@ -201,6 +224,23 @@ const browserMock: HotClipApi = {
   },
   // 浏览器预览没有本地偏好档——记录静默丢弃
   async recordReview() {},
+  async performanceGet() {
+    await sleep(180);
+    return mockPerformanceSummary();
+  },
+  async performanceImport() {
+    await sleep(700);
+    const at = new Date().toISOString();
+    mockPerformanceEntries = [
+      ...mockPerformanceEntries,
+      { title: "新导入的高收藏教程", hook: "这个设置九成人都开错了", platform: "xiaohongshu", views: 45_000, likes: 3_600, comments: 190, shares: 740, saves: 2_900, durationSec: 31, keywords: ["教程", "设置"], importedAt: at },
+    ];
+    return { imported: 1, skipped: 0, total: mockPerformanceEntries.length };
+  },
+  async performanceClear() {
+    await sleep(250);
+    mockPerformanceEntries = [];
+  },
   async getAudioPeaks(_filePath, startSec, endSec) {
     await sleep(250);
     const hopSec = 1 / 30;
