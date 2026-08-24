@@ -58,6 +58,10 @@ const api: HotClipApi = {
   watchStart: (dir, llm, outDir) => ipcRenderer.invoke("hotclip:watch-start", dir, llm, outDir),
   watchStop: () => ipcRenderer.invoke("hotclip:watch-stop"),
   watchStatus: () => ipcRenderer.invoke("hotclip:watch-status"),
+  automationTasksGet: () => ipcRenderer.invoke("hotclip:automation-tasks-get"),
+  automationTaskRetry: (id, llm, outDir) => ipcRenderer.invoke("hotclip:automation-task-retry", id, llm, outDir),
+  automationTaskCancel: (id) => ipcRenderer.invoke("hotclip:automation-task-cancel", id),
+  automationTasksClear: () => ipcRenderer.invoke("hotclip:automation-tasks-clear"),
   webhookStart: (dir, llm, outDir, port, token) =>
     ipcRenderer.invoke("hotclip:webhook-start", dir, llm, outDir, port, token),
   webhookStop: () => ipcRenderer.invoke("hotclip:webhook-stop"),

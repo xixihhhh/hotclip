@@ -490,6 +490,29 @@ export interface WatchEvent {
   /** error:一句话原因。 */
   message?: string;
   at: number;
+  /** Durable automation task correlated with this live event. */
+  taskId?: string;
+}
+
+export type AutomationTaskStatus = "queued" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
+export type AutomationTaskStage = "queued" | "transcribing" | "detecting" | "exporting";
+
+/** Local-only task/history item for unattended recording processing. */
+export interface AutomationTask {
+  id: string;
+  sourcePath: string;
+  sourceName: string;
+  sourceSize: number;
+  sourceMtimeMs: number;
+  trigger: "folder" | "webhook" | "retry";
+  status: AutomationTaskStatus;
+  stage: AutomationTaskStage;
+  attempts: number;
+  clips?: number;
+  outDir?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ExportProgressEvent {
@@ -606,6 +629,14 @@ export interface HotClipApi {
   watchStart: (dir: string, llm: LlmConfig, outDir?: string) => Promise<void>;
   watchStop: () => Promise<void>;
   watchStatus: () => Promise<{ running: boolean; dir: string | null }>;
+  /** Durable unattended-processing queue and history (newest first). */
+  automationTasksGet: () => Promise<AutomationTask[]>;
+  /** Retry one failed/interrupted/cancelled task with the current LLM settings. */
+  automationTaskRetry: (id: string, llm: LlmConfig, outDir?: string) => Promise<boolean>;
+  /** Cancel a queued/running task. */
+  automationTaskCancel: (id: string) => Promise<boolean>;
+  /** Remove terminal task history; active tasks remain. */
+  automationTasksClear: () => Promise<void>;
   /**
    * 起录播 webhook 端点(录播姬/blrec 下播回调即出片)。只绑 127.0.0.1;
    * 回调里的文件路径必须落在 dir 之下。返回实际监听端口。

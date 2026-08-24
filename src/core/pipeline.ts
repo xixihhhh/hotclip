@@ -61,8 +61,10 @@ export async function transcribeCached(
   videoPath: string,
   modelsRoot: string,
   cacheDir: string,
-  glossary?: GlossaryEntry[]
+  glossary?: GlossaryEntry[],
+  signal?: AbortSignal
 ): Promise<Transcript> {
+  signal?.throwIfAborted();
   const s = await stat(videoPath).catch(() => null);
   if (!s || !s.isFile()) throw new Error(`文件不存在或不可读: ${videoPath}`);
   const fileStat = { size: s.size, mtimeMs: s.mtimeMs };
@@ -70,7 +72,7 @@ export async function transcribeCached(
   const cached = await readTranscriptCache(cacheDir, videoPath, fileStat, "sensevoice");
   if (cached) return applied(cached);
   const engine = new SenseVoiceEngine(modelsRoot);
-  const t = await engine.transcribe(videoPath);
+  const t = await engine.transcribe(videoPath, { signal });
   await writeTranscriptCache(cacheDir, videoPath, fileStat, "sensevoice", t).catch(() => {});
   return applied(t);
 }
@@ -83,7 +85,7 @@ export async function analyzeReferenceVideo(
   refPath: string,
   cfg: Pick<AutoClipConfig, "modelsRoot" | "cacheDir" | "glossary" | "signal">
 ): Promise<ReferenceProfile> {
-  const transcript = await transcribeCached(refPath, cfg.modelsRoot, cfg.cacheDir, cfg.glossary);
+  const transcript = await transcribeCached(refPath, cfg.modelsRoot, cfg.cacheDir, cfg.glossary, cfg.signal);
   const durationSec =
     transcript.durationSec > 0
       ? transcript.durationSec
@@ -145,10 +147,13 @@ export async function detectForPipeline(
 
 /** 全托管一条龙:转写 → 找爆点 → 导出推荐条(竖屏/字幕/跳剪/响度默认全开)。 */
 export async function autoClip(videoPath: string, cfg: AutoClipConfig): Promise<AutoClipResult> {
+  cfg.signal?.throwIfAborted();
   cfg.onStage?.("transcribing");
-  const transcript = await transcribeCached(videoPath, cfg.modelsRoot, cfg.cacheDir, cfg.glossary);
+  const transcript = await transcribeCached(videoPath, cfg.modelsRoot, cfg.cacheDir, cfg.glossary, cfg.signal);
+  cfg.signal?.throwIfAborted();
   cfg.onStage?.("detecting");
   const candidates = await detectForPipeline(videoPath, transcript, cfg);
+  cfg.signal?.throwIfAborted();
   // 无人值守只发「建议发」档:质量门判需人审/弃的没有人看过,不能自动发出去
   // (gate 缺省 = 信号候选/复评没跑,沿用 recommended 的老语义)
   const publishable = candidates.filter((c) => c.recommended && (c.gate === undefined || c.gate === "publish"));

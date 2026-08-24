@@ -9,6 +9,7 @@ import { basename, extname } from "path";
 import { stat, readFile, writeFile, readdir } from "fs/promises";
 import { createReadStream } from "fs";
 import { Readable } from "stream";
+import { randomUUID } from "crypto";
 import { extractPeaks } from "@core/audio-peaks";
 import { createClipAligner } from "@core/align";
 import { resolveByteRange } from "@core/media-range";
@@ -53,6 +54,7 @@ import {
 } from "@core/performance-memory";
 import { importMediaUrl as downloadMediaUrl } from "@core/url-import";
 import { clearSessionCheckpoint, readSessionCheckpoint, saveSessionCheckpoint } from "@core/session-checkpoint";
+import { loadAutomationTasks, normalizeAutomationTasks, saveAutomationTasks } from "@core/automation-history";
 import { applyGlossaryToTranscript } from "../shared/glossary";
 import { tagTranscribeError } from "../shared/transcribe-errors";
 import { autoClip, analyzeReferenceVideo } from "@core/pipeline";
@@ -64,7 +66,7 @@ import { wordsInPieces } from "../shared/pieces";
 import { snapContextAround } from "@core/shots";
 import { renderCaptionOverlay } from "./overlay-renderer";
 import { QUALITY_CRF } from "../shared/api-types";
-import type { Transcript, TranscriptWord, LlmConfig, HighlightCandidate, ExportOptions, VisionStats, EmotionStats, DanmakuStats, VoiceTagStats, WatchEvent, UpdateInfo } from "../shared/api-types";
+import type { Transcript, TranscriptWord, LlmConfig, HighlightCandidate, ExportOptions, VisionStats, EmotionStats, DanmakuStats, VoiceTagStats, WatchEvent, UpdateInfo, AutomationTask, AutomationTaskStage } from "../shared/api-types";
 
 const VIDEO_EXTENSIONS = ["mp4", "mkv", "mov", "flv", "ts", "webm", "avi", "m4v"];
 const AUDIO_EXTENSIONS = ["mp3", "m4a", "wav", "aac", "flac"];
@@ -900,6 +902,9 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
 const WATCH_POLL_MS = 15_000;
 let watchTimer: NodeJS.Timeout | null = null;
 let watchDirPath: string | null = null;
+let webhookHandle: WebhookServerHandle | null = null;
+let webhookInfo: { port: number; dir: string } | null = null;
+let webhookChain: Promise<void> = Promise.resolve();
 
 const watchSeenPath = (): string => join(app.getPath("userData"), "watch-seen.json");
 
@@ -911,48 +916,144 @@ async function loadWatchSeen(): Promise<SeenMap> {
   }
 }
 
+let automationTasksCache: AutomationTask[] | null = null;
+let automationHistoryOps: Promise<void> = Promise.resolve();
+let automationChain: Promise<void> = Promise.resolve();
+const automationControllers = new Map<string, AbortController>();
+
+function withAutomationTasks<T>(operation: (tasks: AutomationTask[]) => T | Promise<T>): Promise<T> {
+  const result = automationHistoryOps.then(async () => {
+    if (!automationTasksCache) {
+      automationTasksCache = await loadAutomationTasks(app.getPath("userData"), true);
+      await saveAutomationTasks(app.getPath("userData"), automationTasksCache);
+    }
+    const value = await operation(automationTasksCache);
+    automationTasksCache = normalizeAutomationTasks(automationTasksCache);
+    await saveAutomationTasks(app.getPath("userData"), automationTasksCache);
+    return value;
+  });
+  automationHistoryOps = result.then(() => undefined, () => undefined);
+  return result;
+}
+
+async function patchAutomationTask(id: string, patch: Partial<AutomationTask>): Promise<AutomationTask | null> {
+  return withAutomationTasks((tasks) => {
+    const task = tasks.find((item) => item.id === id);
+    if (!task) return null;
+    Object.assign(task, patch, { updatedAt: new Date().toISOString() });
+    return { ...task };
+  });
+}
+
+async function readAutomationTasks(): Promise<AutomationTask[]> {
+  return withAutomationTasks((tasks) => tasks.map((task) => ({ ...task })));
+}
+
 /**
  * 一个录播文件的完整处理(转写→找爆点→导出),watch 文件夹与 webhook 共用。
- * 成败都记 seen:失败重试要用户手动触发,不能无人值守下反复烧 LLM 花费。
+ * 所有来源进入同一持久队列;成败都记 seen,失败只允许用户显式重试。
  */
 function makeRecordingProcessor(
   seen: SeenMap,
   config: LlmConfig,
   outDir: unknown,
-  emit: (e: Omit<WatchEvent, "at">) => void
-): (f: WatchedFile) => Promise<void> {
+  emit: (e: Omit<WatchEvent, "at">) => void,
+  trigger: AutomationTask["trigger"]
+): (f: WatchedFile, existingId?: string) => Promise<void> {
   const fontsDir = app.isPackaged
     ? join(process.resourcesPath, "fonts")
     : join(app.getAppPath(), "resources", "fonts");
-  return async (f: WatchedFile) => {
+  return async (f: WatchedFile, existingId?: string) => {
     const file = basename(f.path);
-    emit({ type: "found", file, path: f.path });
+    const now = new Date().toISOString();
+    const taskId = existingId ?? randomUUID();
+    if (existingId) {
+      await withAutomationTasks((tasks) => {
+        const task = tasks.find((item) => item.id === taskId);
+        if (!task) throw new Error("automation task not found");
+        if (!["failed", "cancelled", "interrupted"].includes(task.status)) throw new Error("automation task is not retryable");
+        Object.assign(task, {
+          sourceSize: f.size,
+          sourceMtimeMs: f.mtimeMs,
+          trigger: "retry",
+          status: "queued",
+          stage: "queued",
+          attempts: task.attempts + 1,
+          clips: undefined,
+          outDir: undefined,
+          error: undefined,
+          updatedAt: now,
+        } satisfies Partial<AutomationTask>);
+      });
+    } else {
+      await withAutomationTasks((tasks) => tasks.push({
+        id: taskId,
+        sourcePath: f.path,
+        sourceName: file,
+        sourceSize: f.size,
+        sourceMtimeMs: f.mtimeMs,
+        trigger,
+        status: "queued",
+        stage: "queued",
+        attempts: 1,
+        createdAt: now,
+        updatedAt: now,
+      }));
+    }
+    emit({ type: "found", file, path: f.path, taskId });
     const markSeen = async (): Promise<void> => {
       seen[f.path] = { size: f.size, mtimeMs: f.mtimeMs };
       await writeFile(watchSeenPath(), JSON.stringify(seen), "utf8").catch(() => {});
     };
-    try {
-      const outcome = await autoClip(f.path, {
-        // 用户自选过导出位置就照办;没选过保持老行为(成片落录播文件旁边)
-        outDir:
-          typeof outDir === "string" && outDir.trim()
-            ? join(outDir.trim(), sanitizeFilename(basename(f.path, extname(f.path)), "video"))
-            : undefined,
-        modelsRoot: modelsRoot(),
-        cacheDir: transcriptCacheDir(),
-        llm: config,
-        fontsDir,
-        glossary: await loadGlossary(app.getPath("userData")),
-        reviewMemory: await loadReviewMemory(app.getPath("userData")),
-        performanceMemory: await loadPerformanceMemory(app.getPath("userData")),
-        onStage: (stage) => emit({ type: stage, file, path: f.path }),
+
+    const run = automationChain.then(async () => {
+      const controller = new AbortController();
+      automationControllers.set(taskId, controller);
+      const claimed = await withAutomationTasks((tasks) => {
+        const task = tasks.find((item) => item.id === taskId);
+        if (!task || task.status !== "queued") return task?.status ?? null;
+        Object.assign(task, { status: "running", stage: "transcribing", error: undefined, updatedAt: new Date().toISOString() });
+        return "running" as const;
       });
-      await markSeen();
-      emit({ type: "done", file, path: f.path, clips: outcome.exported.length, outDir: outcome.outDir });
-    } catch (e) {
-      await markSeen();
-      emit({ type: "error", file, path: f.path, message: e instanceof Error ? e.message : String(e) });
-    }
+      if (claimed !== "running") {
+        automationControllers.delete(taskId);
+        if (claimed === "cancelled") await markSeen();
+        return;
+      }
+      try {
+        const outcome = await autoClip(f.path, {
+          outDir:
+            typeof outDir === "string" && outDir.trim()
+              ? join(outDir.trim(), sanitizeFilename(basename(f.path, extname(f.path)), "video"))
+              : undefined,
+          modelsRoot: modelsRoot(),
+          cacheDir: transcriptCacheDir(),
+          llm: config,
+          fontsDir,
+          glossary: await loadGlossary(app.getPath("userData")),
+          reviewMemory: await loadReviewMemory(app.getPath("userData")),
+          performanceMemory: await loadPerformanceMemory(app.getPath("userData")),
+          onStage: (stage) => {
+            void patchAutomationTask(taskId, { status: "running", stage: stage as AutomationTaskStage });
+            emit({ type: stage, file, path: f.path, taskId });
+          },
+          signal: controller.signal,
+        });
+        controller.signal.throwIfAborted();
+        await patchAutomationTask(taskId, { status: "completed", clips: outcome.exported.length, outDir: outcome.outDir, error: undefined });
+        emit({ type: "done", file, path: f.path, clips: outcome.exported.length, outDir: outcome.outDir, taskId });
+      } catch (error) {
+        const cancelled = controller.signal.aborted;
+        const message = cancelled ? undefined : error instanceof Error ? error.message : String(error);
+        await patchAutomationTask(taskId, { status: cancelled ? "cancelled" : "failed", error: message });
+        if (!cancelled) emit({ type: "error", file, path: f.path, message, taskId });
+      } finally {
+        automationControllers.delete(taskId);
+        await markSeen();
+      }
+    });
+    automationChain = run.catch(() => {});
+    await run;
   };
 }
 
@@ -960,6 +1061,9 @@ ipcMain.handle("hotclip:watch-start", async (event, dir: unknown, llm: unknown, 
   if (typeof dir !== "string" || !dir.trim()) throw new Error("watch requires a directory");
   const config = llm as LlmConfig;
   if (!config?.baseUrl || !config?.model) throw new Error("请先在设置里配置 LLM(baseUrl/model)");
+  await webhookHandle?.close();
+  webhookHandle = null;
+  webhookInfo = null;
   if (watchTimer) {
     clearInterval(watchTimer);
     watchTimer = null;
@@ -968,7 +1072,7 @@ ipcMain.handle("hotclip:watch-start", async (event, dir: unknown, llm: unknown, 
   const emit = (e: Omit<WatchEvent, "at">): void => {
     if (!event.sender.isDestroyed()) event.sender.send("hotclip:watch-event", { ...e, at: Date.now() });
   };
-  const process = makeRecordingProcessor(seen, config, outDir, emit);
+  const process = makeRecordingProcessor(seen, config, outDir, emit, "folder");
   const watcher = new FolderWatcher({
     listDir: async () => {
       const names = await readdir(dir);
@@ -996,19 +1100,53 @@ ipcMain.handle("hotclip:watch-stop", async () => {
 
 ipcMain.handle("hotclip:watch-status", async () => ({ running: watchTimer !== null, dir: watchDirPath }));
 
+ipcMain.handle("hotclip:automation-tasks-get", () => readAutomationTasks());
+
+ipcMain.handle("hotclip:automation-task-cancel", async (_event, id: unknown) => {
+  if (typeof id !== "string") return false;
+  const cancelled = await withAutomationTasks((tasks) => {
+    const task = tasks.find((item) => item.id === id);
+    if (!task || !["queued", "running"].includes(task.status)) return false;
+    Object.assign(task, { status: "cancelled", error: undefined, updatedAt: new Date().toISOString() });
+    return true;
+  });
+  if (cancelled) automationControllers.get(id)?.abort();
+  return cancelled;
+});
+
+ipcMain.handle("hotclip:automation-tasks-clear", () => withAutomationTasks((tasks) => {
+  const active = tasks.filter((task) => task.status === "queued" || task.status === "running");
+  tasks.splice(0, tasks.length, ...active);
+}));
+
+ipcMain.handle("hotclip:automation-task-retry", async (event, id: unknown, llm: unknown, outDir: unknown) => {
+  if (typeof id !== "string") return false;
+  const config = llm as LlmConfig;
+  if (!config?.baseUrl || !config?.model) throw new Error("请先在设置里配置 LLM(baseUrl/model)");
+  const task = (await readAutomationTasks()).find((item) => item.id === id);
+  if (!task || ["queued", "running", "completed"].includes(task.status)) return false;
+  const info = await stat(task.sourcePath).catch(() => null);
+  if (!info?.isFile()) throw new Error("源文件不存在或不可读");
+  const seen = await loadWatchSeen();
+  const emit = (e: Omit<WatchEvent, "at">): void => {
+    if (!event.sender.isDestroyed()) event.sender.send("hotclip:watch-event", { ...e, at: Date.now() });
+  };
+  const process = makeRecordingProcessor(seen, config, outDir, emit, "retry");
+  void process({ path: task.sourcePath, size: info.size, mtimeMs: info.mtimeMs }, id).catch(() => {});
+  return true;
+});
+
 // ---- 录播 webhook:录播姬/blrec 下播回调即出片(比轮询更实时) ----
 // 只绑回环;回调给的路径必须落在用户指定的录播目录内(外部输入不可信)。
-let webhookHandle: WebhookServerHandle | null = null;
-let webhookInfo: { port: number; dir: string } | null = null;
-/** 串行队列:录播机同时只跑一条切片管线,不打爆 CPU(与 watch 的 drain 同思路)。 */
-let webhookChain: Promise<void> = Promise.resolve();
-
 ipcMain.handle(
   "hotclip:webhook-start",
   async (event, dir: unknown, llm: unknown, outDir: unknown, port: unknown, token: unknown) => {
     if (typeof dir !== "string" || !dir.trim()) throw new Error("webhook 需要指定录播目录");
     const config = llm as LlmConfig;
     if (!config?.baseUrl || !config?.model) throw new Error("请先在设置里配置 LLM(baseUrl/model)");
+    if (watchTimer) clearInterval(watchTimer);
+    watchTimer = null;
+    watchDirPath = null;
     const recDir = dir.trim();
     const s = await stat(recDir).catch(() => null);
     if (!s?.isDirectory()) throw new Error(`录播目录不存在: ${recDir}`);
@@ -1019,7 +1157,7 @@ ipcMain.handle(
     const emit = (e: Omit<WatchEvent, "at">): void => {
       if (!event.sender.isDestroyed()) event.sender.send("hotclip:watch-event", { ...e, at: Date.now() });
     };
-    const process = makeRecordingProcessor(seen, config, outDir, emit);
+    const process = makeRecordingProcessor(seen, config, outDir, emit, "webhook");
     const wanted = Number(port);
     webhookHandle = await startWebhookServer({
       port: Number.isFinite(wanted) && wanted > 0 && wanted < 65536 ? Math.round(wanted) : 17650,

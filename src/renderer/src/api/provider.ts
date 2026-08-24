@@ -19,6 +19,7 @@ import type {
   PerformanceSummary,
   UrlImportProgressEvent,
   SessionCheckpoint,
+  AutomationTask,
 } from "../../../shared/api-types";
 import { applyGlossaryToTranscript, sanitizeGlossary } from "../../../shared/glossary";
 
@@ -80,6 +81,10 @@ const emitWatch = (e: Omit<WatchEvent, "at">): void => {
 let mockExportCancelled = false;
 let mockUrlImportCancelled = false;
 let mockSessionCheckpoint: SessionCheckpoint | null = null;
+let mockAutomationTasks: AutomationTask[] = [
+  { id: "demo-done", sourcePath: "/demo/访谈回放.mp4", sourceName: "访谈回放.mp4", sourceSize: 1_200_000_000, sourceMtimeMs: 1, trigger: "folder", status: "completed", stage: "exporting", attempts: 1, clips: 5, outDir: "/demo/访谈回放-hotclip", createdAt: "2026-08-23T02:10:00Z", updatedAt: "2026-08-23T02:18:00Z" },
+  { id: "demo-failed", sourcePath: "/demo/断流回放.flv", sourceName: "断流回放.flv", sourceSize: 420_000_000, sourceMtimeMs: 2, trigger: "webhook", status: "failed", stage: "transcribing", attempts: 1, error: "媒体文件尾部不完整", createdAt: "2026-08-22T12:00:00Z", updatedAt: "2026-08-22T12:01:00Z" },
+];
 let mockPerformanceEntries: PerformanceEntry[] = [
   { title: "三分钟讲清直播间投流误区", hook: "投流越多,为什么人反而越少?", platform: "bilibili", views: 128_000, likes: 8_240, comments: 611, shares: 1_420, saves: 3_180, durationSec: 43, keywords: ["投流", "直播运营"], importedAt: "2026-08-20T00:00:00Z" },
   { title: "纸巾吸水实测", hook: "半杯水倒下去会发生什么", platform: "douyin", views: 86_000, likes: 5_600, comments: 288, shares: 932, saves: 1_410, durationSec: 24, keywords: ["实测", "生活用品"], importedAt: "2026-08-21T00:00:00Z" },
@@ -147,6 +152,25 @@ const browserMock: HotClipApi = {
   },
   async sessionCheckpointClear() {
     mockSessionCheckpoint = null;
+  },
+  async automationTasksGet() {
+    return structuredClone(mockAutomationTasks);
+  },
+  async automationTaskRetry(id) {
+    const task = mockAutomationTasks.find((item) => item.id === id);
+    if (!task || ["queued", "running", "completed"].includes(task.status)) return false;
+    Object.assign(task, { status: "queued", stage: "queued", attempts: task.attempts + 1, error: undefined, updatedAt: new Date().toISOString() });
+    return true;
+  },
+  async automationTaskCancel(id) {
+    const task = mockAutomationTasks.find((item) => item.id === id);
+    if (!task || !["queued", "running"].includes(task.status)) return false;
+    task.status = "cancelled";
+    task.updatedAt = new Date().toISOString();
+    return true;
+  },
+  async automationTasksClear() {
+    mockAutomationTasks = mockAutomationTasks.filter((task) => task.status === "queued" || task.status === "running");
   },
   async listAsrEngines() {
     await sleep(200);

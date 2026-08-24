@@ -4,13 +4,13 @@
  *  - webhook:录播姬/blrec 下播回调直接推过来,更实时、不用猜文件写没写完。
  * 触发后都走同一条全托管管线(转写→找爆点→出片),7×24 无人值守。
  */
-import { useEffect, useRef, useState } from "react";
-import { LuFolderSearch, LuX, LuPlay, LuSquare, LuCircleCheck, LuCircleAlert, LuLoaderCircle, LuFileVideo, LuCopy, LuCheck } from "react-icons/lu";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { LuFolderSearch, LuX, LuPlay, LuSquare, LuCircleCheck, LuCircleAlert, LuLoaderCircle, LuCopy, LuCheck, LuRotateCcw, LuTrash2 } from "react-icons/lu";
 import { useT } from "../i18n/store";
 import { getApi, isElectron } from "../api/provider";
 import { useLlmStore, isLlmReady } from "../stores/llm-store";
 import { useRenderPrefs } from "../stores/render-prefs-store";
-import type { WatchEvent } from "../../../shared/api-types";
+import type { AutomationTask, WatchEvent } from "../../../shared/api-types";
 import { ModalShell } from "./ui";
 
 function fmtTime(at: number): string {
@@ -25,11 +25,17 @@ export function WatchFolderModal({ onClose }: { onClose: () => void }): React.JS
   const [dir, setDir] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [events, setEvents] = useState<WatchEvent[]>([]);
+  const [tasks, setTasks] = useState<AutomationTask[]>([]);
+  const [activityView, setActivityView] = useState<"tasks" | "events">("tasks");
   const [mode, setMode] = useState<"folder" | "webhook">("folder");
   const [port, setPort] = useState("17650");
   const [token, setToken] = useState("");
   const [copied, setCopied] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+
+  const refreshTasks = useCallback(async (): Promise<void> => {
+    setTasks(await getApi().automationTasksGet());
+  }, []);
 
   useEffect(() => {
     const api = getApi();
@@ -48,10 +54,12 @@ export function WatchFolderModal({ onClose }: { onClose: () => void }): React.JS
         if (s.dir) setDir(s.dir);
       }
     });
+    void refreshTasks();
     return api.onWatchEvent((e) => {
       setEvents((prev) => [...prev.slice(-199), e]);
+      void refreshTasks();
     });
-  }, []);
+  }, [refreshTasks]);
 
   /** 给录播姬/blrec 填的回调地址。 */
   const hookUrl = `http://127.0.0.1:${port.trim() || "17650"}/${token.trim() ? `?token=${encodeURIComponent(token.trim())}` : ""}`;
@@ -92,6 +100,22 @@ export function WatchFolderModal({ onClose }: { onClose: () => void }): React.JS
     });
   };
 
+  const retryTask = async (id: string): Promise<void> => {
+    const outDir = useRenderPrefs.getState().prefs.outDir || undefined;
+    await getApi().automationTaskRetry(id, config, outDir);
+    await refreshTasks();
+  };
+
+  const cancelTask = async (id: string): Promise<void> => {
+    await getApi().automationTaskCancel(id);
+    await refreshTasks();
+  };
+
+  const clearTasks = async (): Promise<void> => {
+    await getApi().automationTasksClear();
+    await refreshTasks();
+  };
+
   const EVENT_META: Record<WatchEvent["type"], { label: string; cls: string; spin?: boolean }> = {
     found: { label: t("evFound"), cls: "text-sky-400" },
     transcribing: { label: t("evTranscribing"), cls: "text-amber-300", spin: true },
@@ -104,7 +128,7 @@ export function WatchFolderModal({ onClose }: { onClose: () => void }): React.JS
   return (
     <ModalShell onClose={onClose}>
       <section
-        className="card w-full max-w-xl rounded-2xl p-6"
+        className="card w-full max-w-2xl rounded-2xl p-6"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label={t("title")}
@@ -207,37 +231,65 @@ export function WatchFolderModal({ onClose }: { onClose: () => void }): React.JS
           </div>
         )}
 
-        <div ref={listRef} className="mt-4 h-56 overflow-y-auto rounded-xl border border-line bg-panel-2 p-3">
-          {events.length === 0 ? (
-            <p className="mt-20 text-center text-[12px] text-mut">{running ? t("waiting") : t("empty")}</p>
-          ) : (
-            <ul className="space-y-1.5">
-              {events.map((e, i) => {
-                const meta = EVENT_META[e.type];
-                return (
-                  <li key={`${e.path}-${e.type}-${i}`} className="flex items-start gap-2 text-[12px]">
-                    <span className="shrink-0 font-mono text-[11px] text-mut">{fmtTime(e.at)}</span>
-                    {e.type === "done" ? (
-                      <LuCircleCheck className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${meta.cls}`} />
-                    ) : e.type === "error" ? (
-                      <LuCircleAlert className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${meta.cls}`} />
-                    ) : meta.spin ? (
-                      <LuLoaderCircle className={`mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin ${meta.cls}`} />
-                    ) : (
-                      <LuFileVideo className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${meta.cls}`} />
-                    )}
-                    <span className="min-w-0">
-                      <span className={`font-semibold ${meta.cls}`}>{meta.label}</span>
-                      <span className="ml-1.5 break-all text-fg/90">{e.file}</span>
-                      {e.type === "done" && <span className="ml-1.5 text-mut">{t("doneClips", { n: e.clips ?? 0 })}</span>}
-                      {e.type === "error" && e.message && <span className="ml-1.5 break-all text-mut">{e.message}</span>}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <div className="flex gap-1 rounded-lg border border-line bg-panel-2 p-1" role="tablist" aria-label={t("activityTitle")}>
+            {(["tasks", "events"] as const).map((view) => (
+              <button key={view} type="button" role="tab" aria-selected={activityView === view} onClick={() => setActivityView(view)} className={`rounded-md px-3 py-1 text-[11.5px] font-semibold ${activityView === view ? "bg-ember/15 text-ember" : "text-mut hover:text-fg"}`}>
+                {t(view === "tasks" ? "taskHistory" : "liveEvents")}
+              </button>
+            ))}
+          </div>
+          {activityView === "tasks" && tasks.some((task) => !["queued", "running"].includes(task.status)) && (
+            <button type="button" onClick={() => void clearTasks()} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-mut hover:text-fg">
+              <LuTrash2 aria-hidden="true" className="h-3.5 w-3.5" />{t("clearHistory")}
+            </button>
           )}
         </div>
+
+        {activityView === "tasks" ? (
+          <div className="mt-2 h-56 overflow-y-auto rounded-xl border border-line bg-panel-2 p-3" aria-live="polite">
+            {tasks.length === 0 ? <p className="mt-20 text-center text-[12px] text-mut">{t("taskEmpty")}</p> : (
+              <ul className="space-y-2">
+                {tasks.map((task) => {
+                  const active = task.status === "queued" || task.status === "running";
+                  const retryable = ["failed", "cancelled", "interrupted"].includes(task.status);
+                  return (
+                    <li key={task.id} className="rounded-lg border border-line/70 bg-panel px-3 py-2.5 text-[12px]">
+                      <div className="flex items-start gap-2.5">
+                        {active ? <LuLoaderCircle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-amber-300" /> : task.status === "completed" ? <LuCircleCheck aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" /> : <LuCircleAlert aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate font-semibold text-fg" title={task.sourcePath}>{task.sourceName}</span>
+                            <span className="shrink-0 rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-mut">{t(`task_${task.status}`)}</span>
+                            {task.attempts > 1 && <span className="shrink-0 text-[10px] text-mut">{t("attempts", { n: task.attempts })}</span>}
+                          </div>
+                          <p className="mt-1 truncate text-[11px] text-mut" title={task.error}>{task.status === "completed" ? t("doneClips", { n: task.clips ?? 0 }) : task.status === "interrupted" ? t("interruptedHint") : task.error ?? t(`stage_${task.stage}`)}</p>
+                        </div>
+                        {active && <button type="button" onClick={() => void cancelTask(task.id)} className="rounded-md border border-line px-2 py-1 text-[10.5px] text-mut hover:border-red-400/40 hover:text-red-300">{t("cancelTask")}</button>}
+                        {retryable && <button type="button" disabled={!llmOk} onClick={() => void retryTask(task.id)} className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[10.5px] text-mut hover:border-ember/40 hover:text-ember disabled:opacity-40"><LuRotateCcw aria-hidden="true" className="h-3 w-3" />{t("retryTask")}</button>}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        ) : (
+          <div ref={listRef} className="mt-2 h-56 overflow-y-auto rounded-xl border border-line bg-panel-2 p-3">
+            {events.length === 0 ? <p className="mt-20 text-center text-[12px] text-mut">{running ? t("waiting") : t("empty")}</p> : (
+              <ul className="space-y-1.5">
+                {events.map((e, i) => {
+                  const meta = EVENT_META[e.type];
+                  return <li key={`${e.path}-${e.type}-${i}`} className="flex items-start gap-2 text-[12px]">
+                    <span className="shrink-0 font-mono text-[11px] text-mut">{fmtTime(e.at)}</span>
+                    <span className={`font-semibold ${meta.cls}`}>{meta.label}</span>
+                    <span className="min-w-0 break-all text-fg/90">{e.file}{e.type === "done" ? ` · ${t("doneClips", { n: e.clips ?? 0 })}` : ""}{e.type === "error" && e.message ? ` · ${e.message}` : ""}</span>
+                  </li>;
+                })}
+              </ul>
+            )}
+          </div>
+        )}
         <p className="mt-2.5 text-[11px] leading-relaxed text-mut">{t("note")}</p>
       </section>
     </ModalShell>
