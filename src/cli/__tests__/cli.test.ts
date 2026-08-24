@@ -45,6 +45,19 @@ describe("parseCliArgs (CLI 参数解析)", () => {
     expect(parseCliArgs(["doctor", "--download"]).download).toBe(true);
   });
 
+  it("发布表现反馈:import 需要文件,report 不需要路径", () => {
+    expect(parseCliArgs(["feedback", "/data/bilibili.csv"])).toMatchObject({
+      command: "feedback",
+      videoPath: "/data/bilibili.csv",
+    });
+    expect(parseCliArgs(["feedback-report", "--json"])).toMatchObject({
+      command: "feedback-report",
+      videoPath: "",
+      json: true,
+    });
+    expect(() => parseCliArgs(["feedback"])).toThrow(/数据文件路径/);
+  });
+
   it("缺命令/缺路径/未知选项/非法数值 → 抛出含用法的错误", () => {
     expect(() => parseCliArgs([])).toThrow(/用法/);
     expect(() => parseCliArgs(["clip"])).toThrow(/缺少视频路径/);

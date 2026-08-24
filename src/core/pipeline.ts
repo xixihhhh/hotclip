@@ -13,6 +13,7 @@ import { detectHighlights } from "./highlight/detect";
 import { detectShotBoundaries } from "./shots";
 import { buildReferenceProfile, type ReferenceProfile } from "./reference";
 import type { ReviewRecord } from "./review-memory";
+import type { PerformanceEntry } from "./performance-memory";
 import { collectSignals } from "./signals";
 import { collectEmotionSignal } from "./emotion";
 import { collectDanmakuSignal } from "./danmaku";
@@ -38,6 +39,8 @@ export interface AutoClipConfig {
   reference?: ReferenceProfile;
   /** 本机审阅记忆(桌面审阅台积累的采用/否决样例);选段向用户口味靠拢。 */
   reviewMemory?: ReviewRecord[];
+  /** 真实发布表现记忆(CSV/JSON 导入);选段向观众验证过的模式靠拢。 */
+  performanceMemory?: PerformanceEntry[];
   onStage?: (stage: "transcribing" | "detecting" | "exporting") => void;
   signal?: AbortSignal;
 }
@@ -95,7 +98,7 @@ export async function analyzeReferenceVideo(
 export async function detectForPipeline(
   videoPath: string,
   transcript: Transcript,
-  cfg: Pick<AutoClipConfig, "modelsRoot" | "llm" | "maxClips" | "reference" | "reviewMemory" | "signal">
+  cfg: Pick<AutoClipConfig, "modelsRoot" | "llm" | "maxClips" | "reference" | "reviewMemory" | "performanceMemory" | "signal">
 ): Promise<HighlightCandidate[]> {
   if (transcript.segments.length === 0) throw new Error("转写结果为空(可能是无人声素材)");
   const signals = await collectSignals(videoPath).catch(() => undefined);
@@ -133,7 +136,8 @@ export async function detectForPipeline(
       : guided;
   const outcome = await detectHighlights(
     transcript, cfg.llm, cfg.signal, merged,
-    undefined, undefined, undefined, cfg.reference, cfg.reviewMemory
+    undefined, undefined, undefined, cfg.reference, cfg.reviewMemory,
+    undefined, undefined, cfg.performanceMemory
   );
   const max = Math.max(1, Math.min(12, Math.round(cfg.maxClips ?? 6)));
   return outcome.candidates.slice(0, max);

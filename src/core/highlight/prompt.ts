@@ -12,6 +12,7 @@ import type { ClipLength } from "../../shared/api-types";
 import type { MediaSignals } from "../signals";
 import { referencePromptSection, type ReferenceProfile } from "../reference";
 import { reviewMemorySection, type ReviewRecord } from "../review-memory";
+import { performanceMemorySection, type PerformanceEntry } from "../performance-memory";
 import { genreSection } from "../genre";
 import { clipDurationSec, isStitched, type ClipPiece } from "../../shared/pieces";
 
@@ -144,7 +145,8 @@ export function highlightSystemPrompt(
   reference?: ReferenceProfile,
   reviewMemory?: ReviewRecord[],
   genre?: { id?: string; custom?: string },
-  brief?: { focus?: string; exclude?: string }
+  brief?: { focus?: string; exclude?: string },
+  performanceMemory?: PerformanceEntry[]
 ): string {
   const zh = isChineseTranscript(transcript);
   let base = zh ? HIGHLIGHT_SYSTEM_PROMPT_ZH : HIGHLIGHT_SYSTEM_PROMPT_EN;
@@ -164,6 +166,8 @@ export function highlightSystemPrompt(
   if (reference) base += referencePromptSection(reference, zh);
   // 审阅偏好回流:本机历史采用/否决样例(空记忆返回 "")
   if (reviewMemory && reviewMemory.length > 0) base += reviewMemorySection(reviewMemory, zh);
+  // 真实发布表现:观众结果信号比模型猜热点更硬,但仍只作趋势证据
+  if (performanceMemory && performanceMemory.length > 0) base += performanceMemorySection(performanceMemory, zh);
   return base;
 }
 

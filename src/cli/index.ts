@@ -18,6 +18,7 @@ import { userDataDir, modelsRoot, cacheDir, llmFromEnv } from "../core/appenv";
 import { runDoctor } from "../core/doctor";
 import { ensureModel } from "../core/models";
 import { loadReviewMemory } from "../core/review-memory";
+import { importPerformanceFile, loadPerformanceMemory, performanceReport } from "../core/performance-memory";
 
 const USAGE = `HotClip CLI —— 本地 AI 切片,素材不出电脑
 
@@ -38,6 +39,13 @@ const USAGE = `HotClip CLI —— 本地 AI 切片,素材不出电脑
   pnpm cli doctor [--download]
       环境自检:ffmpeg/模型安装状态/LLM 端点/磁盘/缓存,给出修复建议
       --download: 把默认管线要用的模型现在预下载好(断点续传,断网重跑接着下)
+
+  pnpm cli feedback <平台导出的 CSV 或 JSON>
+      导入真实播放/点赞/评论/分享/收藏数据,本地学习高低表现模式
+      支持中英文字段名与 1.2万/7.8k 等数字格式;同平台同视频重复导入会更新
+
+  pnpm cli feedback-report [--json]
+      查看 HotClip 已学到的高/低表现样例;之后桌面/CLI/MCP/监听找爆点都会使用
 
 环境变量(highlights / clip 需要):
   HOTCLIP_LLM_BASE_URL   OpenAI 兼容端点(本地 Ollama: http://localhost:11434/v1)
@@ -89,8 +97,8 @@ export function parseCliArgs(argv: string[]): CliArgs {
       args.videoPath = a;
     }
   }
-  // doctor 不吃视频路径,其余命令必须有
-  if (!args.videoPath && args.command !== "doctor") throw new Error(`缺少视频路径\n\n${USAGE}`);
+  // doctor/feedback-report 不吃路径;feedback 的位置参数是指标文件路径
+  if (!args.videoPath && !["doctor", "feedback-report"].includes(args.command)) throw new Error(`缺少视频路径或数据文件路径\n\n${USAGE}`);
   return args;
 }
 
@@ -131,6 +139,19 @@ async function main(): Promise<void> {
       process.stdout.write(`有 ${report.missingCoreModels.length} 个默认管线模型未安装,可加 --download 现在下好。\n`);
     }
     if (report.checks.some((c) => c.status === "fail")) process.exitCode = 1;
+    return;
+  }
+
+  if (args.command === "feedback") {
+    const result = await importPerformanceFile(userDataDir(), args.videoPath);
+    process.stdout.write(`已导入 ${result.imported} 条发布表现,跳过 ${result.skipped} 条无效记录;本地共学习 ${result.total} 条。\n`);
+    process.stdout.write(`${performanceReport(result.entries)}\n`);
+    return;
+  }
+
+  if (args.command === "feedback-report") {
+    const entries = await loadPerformanceMemory(userDataDir());
+    process.stdout.write(args.json ? `${JSON.stringify(entries, null, 2)}\n` : `${performanceReport(entries)}\n`);
     return;
   }
 
@@ -178,6 +199,7 @@ async function main(): Promise<void> {
       reference,
       // 桌面审阅台积累的本机偏好,CLI 检测同享(只读)
       reviewMemory: await loadReviewMemory(userDataDir()),
+      performanceMemory: await loadPerformanceMemory(userDataDir()),
     });
     if (candidates.length === 0) {
       process.stderr.write("没有找到值得切的爆点候选。\n");
@@ -220,6 +242,7 @@ async function main(): Promise<void> {
       outDir: args.outDir,
       reference,
       reviewMemory: await loadReviewMemory(userDataDir()),
+      performanceMemory: await loadPerformanceMemory(userDataDir()),
       fontsDir: join(__dirname, "..", "..", "resources", "fonts"),
       glossary,
       onStage: (stage) => {

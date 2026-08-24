@@ -14,6 +14,7 @@ import { writeFile, rm } from "fs/promises";
 import { resolveFfmpegPath } from "./binaries";
 import { toFfmpegTime } from "./time";
 import { buildZoomFilter } from "./autozoom";
+import { videoEncoderArgs, type VideoEncoder } from "./video-encoder";
 
 /**
  * Social loudness target (EBU R128): -14 LUFS integrated, -1.5 dBTP true-peak
@@ -64,6 +65,8 @@ export interface CutOptions {
   crf?: number;
   /** x264 preset for accurate mode; default "veryfast". */
   preset?: string;
+  /** Per-run encoder probe result. Hardware failures transparently retry with libx264. */
+  encoder?: VideoEncoder;
   /** Crop away static screen-recording chrome first (fractions of height). */
   uiCrop?: { topFrac: number; bottomFrac: number };
   /**
@@ -266,9 +269,7 @@ export function buildCutArgs(
   return [
     ...common,
     ...(filters.length > 0 || options.watermark ? ["-vf", composeVideoFilter(filters, options.watermark)] : []),
-    "-c:v", "libx264",
-    "-preset", preset,
-    "-crf", crf,
+    ...videoEncoderArgs(options.encoder ?? "libx264", Number(crf), preset),
     "-pix_fmt", "yuv420p",
     ...(audioChain.length > 0 ? ["-af", audioChain.join(",")] : []),
     ...(options.normalizeLoudness ? ["-ar", LOUDNORM_OUT_RATE] : []),
@@ -343,9 +344,7 @@ export function buildJumpCutArgs(
     "-filter_complex", parts.join(";"),
     "-map", "[vout]",
     "-map", "[aout]",
-    "-c:v", "libx264",
-    "-preset", preset,
-    "-crf", crf,
+    ...videoEncoderArgs(options.encoder ?? "libx264", Number(crf), preset),
     "-pix_fmt", "yuv420p",
     ...(options.normalizeLoudness ? ["-ar", LOUDNORM_OUT_RATE] : []),
     "-c:a", "aac",
@@ -370,6 +369,13 @@ export async function cutJumpClip(
   try {
     await runFfmpeg(args, { signal, onTimeSec });
   } catch (e) {
+    if (options.encoder && options.encoder !== "libx264" && !signal?.aborted) {
+      await runFfmpeg(
+        buildJumpCutArgs(inputPath, outputPath, clipStartSec, segments, { ...options, encoder: "libx264" }),
+        { signal, onTimeSec }
+      );
+      return;
+    }
     const msg = e instanceof Error ? e.message : String(e);
     const tail = msg.split("\n").slice(-6).join("\n");
     throw new Error(`ffmpeg jump cut failed (${segments.length} segments): ${tail}`);
@@ -390,6 +396,13 @@ export async function cutClip(
   try {
     await runFfmpeg(args, { signal, onTimeSec });
   } catch (e) {
+    if (options.encoder && options.encoder !== "libx264" && !signal?.aborted) {
+      await runFfmpeg(
+        buildCutArgs(inputPath, outputPath, startSec, endSec, { ...options, encoder: "libx264" }),
+        { signal, onTimeSec }
+      );
+      return;
+    }
     const msg = e instanceof Error ? e.message : String(e);
     // ffmpeg errors bury the cause at the end of stderr — surface only the tail
     const tail = msg.split("\n").slice(-6).join("\n");

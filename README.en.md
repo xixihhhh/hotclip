@@ -137,6 +137,7 @@ The LLM only picks *which part* and must quote the transcript; timestamps come f
 - **AI visual review (optional)**: after detection, top candidates get a contact-sheet look-over by a vision model — striking visuals boost the score, lifeless visuals demote signal-driven candidates, title/visual mismatches get flagged, and the scene note lands in the reasoning; free with local Ollama, or drop an API key into vision settings for a cloud model
 - **Reference-clip driven detection**: hand in a viral clip to model after — its pacing is measured locally and steers selection (CLI `--reference`)
 - **Review feedback loop**: kept/rejected candidates land in a local preference file steering the next run — it learns your taste, and the data never leaves your machine
+- **Real-performance feedback loop**: import platform-exported CSV/JSON metrics with `pnpm cli feedback`; HotClip locally learns the topic, hook, and duration patterns behind high/low performers. Desktop, CLI, MCP, and watch-folder detection all use the audience evidence without copying old titles or uploading account data
 - **On-device two-stage funnel**: a small local model shortlists first, the cloud model reads only the shortlist — an order of magnitude less LLM spend on long videos, zero accuracy loss
 - **Shot-snapped cut points**: TransNetV2 (31MB ONNX, local) finds real shot changes; boundaries snap with a word-boundary guard that never clips speech
 - **Product mode (live-selling)**: type product words and selection follows conversion logic (demos > pitches > price mechanics); stalling-for-engagement segments excluded
@@ -182,6 +183,7 @@ Face-tracked 9:16 reframing (three per-shot modes), silence jump cuts, filler-wo
 - **Render QA + self-repair**: black frames / silences / loudness / duration / mid-word cuts re-checked into clips.json; fixable warnings fixed on the spot and kept only if the re-check improves
 - **Smart cover frame**: the loudest moment inside the clip becomes the cover (usually the laugh or the shout); transitions avoided
 - **Frame-accurate cutting**: fast seek + re-encode; hours-long FLV/TS replays go straight in
+- **Hardware-accelerated export**: automatically uses VideoToolbox / NVENC / QSV when the bundled ffmpeg supports it; an unavailable device or driver transparently retries with x264, keeping reliability intact
 - **Precision cut points (Paraformer second pass)**: selected clips are re-decoded before export; integrated word timestamps (±50ms, better than forced alignment) fix captions, jump cuts and cut boundaries — covering the fast ASR tier's weakness; ~240MB model downloaded on first use, falls back safely when alignment is unreliable
 - **Cancellable exports + real-time progress**: ffmpeg progress streamed live; cancel kills the encoder instantly, finished clips stay
 </details>
@@ -237,6 +239,8 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
   pnpm cli transcribe vod.mp4                  # on-device word-level ASR (cached)
   pnpm cli highlights vod.mp4 --json           # AI highlight candidates, review first
   pnpm cli clip vod.mp4 --max-clips 10         # fully managed export + QA report
+  pnpm cli feedback bilibili.csv               # import real view/engagement outcomes
+  pnpm cli feedback-report                     # inspect learned winners/laggards
   pnpm cli doctor --download                   # environment self-check + model pre-fetch
   ```
 

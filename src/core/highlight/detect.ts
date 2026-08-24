@@ -6,6 +6,7 @@ import type { Transcript } from "../transcribe/types";
 import type { MediaSignals } from "../signals";
 import type { ReferenceProfile } from "../reference";
 import type { ReviewRecord } from "../review-memory";
+import type { PerformanceEntry } from "../performance-memory";
 import type { HighlightCandidate, LlmConfig, PrefilterConfig, FunnelStats, ClipLength } from "../../shared/api-types";
 import {
   highlightSystemPrompt,
@@ -534,7 +535,9 @@ export async function detectHighlights(
   /** 直播品类判据(内置预设 id + 用户自定义文本,见 core/genre.ts)。 */
   genre?: { id?: string; custom?: string },
   /** 用户点题:重点找什么/明确排除什么(v0.13,见 prompt.briefSection)。 */
-  brief?: { focus?: string; exclude?: string }
+  brief?: { focus?: string; exclude?: string },
+  /** 用户导入的真实发布表现(本地记忆,只注入高/低表现摘要)。 */
+  performanceMemory?: PerformanceEntry[]
 ): Promise<DetectOutcome> {
   if (transcript.segments.length === 0) return { candidates: [] };
   const zh = isChineseTranscript(transcript);
@@ -566,7 +569,7 @@ export async function detectHighlights(
 
   const selections = await chatCompleteJson(
     llm,
-    highlightSystemPrompt(promptTranscript, length, products ?? [], reference, reviewMemory, genre, brief),
+    highlightSystemPrompt(promptTranscript, length, products ?? [], reference, reviewMemory, genre, brief, performanceMemory),
     buildHighlightPrompt(promptTranscript, 6, signals),
     parseSelections,
     signal

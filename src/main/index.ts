@@ -45,6 +45,7 @@ import { defaultModelsRoot, readAppSettings, resolveModelsRoot, writeAppSettings
 import { inspectModels, moveModelsDir } from "@core/models-inventory";
 import { loadGlossary, saveGlossary } from "@core/glossary-store";
 import { loadReviewMemory, recordReview, type ReviewedCandidate } from "@core/review-memory";
+import { loadPerformanceMemory } from "@core/performance-memory";
 import { applyGlossaryToTranscript } from "../shared/glossary";
 import { tagTranscribeError } from "../shared/transcribe-errors";
 import { autoClip, analyzeReferenceVideo } from "@core/pipeline";
@@ -587,6 +588,7 @@ ipcMain.handle(
       : [];
     // 审阅偏好回流:本机历史采用/否决样例进提示词(空记忆无感)
     const reviewMemory = await loadReviewMemory(app.getPath("userData"));
+    const performanceMemory = await loadPerformanceMemory(app.getPath("userData"));
     // 品类判据:白名单清洗(id 必须是字符串,自定义文本截断由 core 侧兜)
     const g = genre as { id?: unknown; custom?: unknown } | null | undefined;
     const genreArg =
@@ -605,7 +607,7 @@ ipcMain.handle(
             exclude: typeof b.exclude === "string" ? b.exclude.trim() : undefined,
           }
         : undefined;
-    const outcome = await detectHighlights(t, config, undefined, signals, localFilter, clipLength, productWords, reference, reviewMemory, genreArg, briefArg);
+    const outcome = await detectHighlights(t, config, undefined, signals, localFilter, clipLength, productWords, reference, reviewMemory, genreArg, briefArg, performanceMemory);
     // 候选段画面复核(v0.12):每条候选一张接触表让 VL 看画面,画面分回流
     // 排序、看点进 reason。fail-open:失败/超时沿用原候选。
     let candidates = outcome.candidates;
@@ -868,6 +870,7 @@ function makeRecordingProcessor(
         fontsDir,
         glossary: await loadGlossary(app.getPath("userData")),
         reviewMemory: await loadReviewMemory(app.getPath("userData")),
+        performanceMemory: await loadPerformanceMemory(app.getPath("userData")),
         onStage: (stage) => emit({ type: stage, file, path: f.path }),
       });
       await markSeen();

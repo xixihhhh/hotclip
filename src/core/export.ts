@@ -58,6 +58,7 @@ import type { TranscriptWord, BrandStyle } from "../shared/api-types";
 import type { WatermarkSpec } from "./cut";
 import { transformScore, type TransformInputs, type TransformScore } from "../shared/transform-score";
 import { buildLedgerCsv, type LedgerRow } from "./ledger";
+import { resolveVideoEncoder } from "./video-encoder";
 
 export interface ExportClipSpec {
   id: number;
@@ -424,6 +425,9 @@ export async function exportClips(
   // 视频专属阶段(去录屏UI/人脸取景/镜头吸附)整体跳过
   const srcInfo = await probeMedia(inputPath).catch(() => null);
   const audioOnly = srcInfo ? !srcInfo.hasVideo : false;
+  // One encoder probe per process/run. The cut layer retries libx264 if the
+  // advertised hardware encoder is unusable because of a missing device/driver.
+  const videoEncoder = audioOnly ? "libx264" as const : await resolveVideoEncoder();
 
   // 多画幅:开「+横屏版」时进度总数翻倍(第二遍横屏在主循环后递归跑)。
   // 竖屏源裁不出可用的 16:9,原画幅本来就是竖的——直接跳过横屏版。
@@ -688,7 +692,7 @@ export async function exportClips(
             }
           : undefined;
       const cutOptions = trackPlan
-        ? { trackPlan, autoZoom, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, watermark, metadata: aigcMeta, crf: options.crf }
+        ? { trackPlan, autoZoom, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, watermark, metadata: aigcMeta, crf: options.crf, encoder: videoEncoder }
         : {
             uiCrop,
             vertical: options.vertical,
@@ -700,6 +704,7 @@ export async function exportClips(
             watermark,
             metadata: aigcMeta,
             crf: options.crf,
+            encoder: videoEncoder,
           };
       if (audioOnly) {
         // audiogram:深色底+品牌色波形合成画面,单段/跳剪统一(波形随剪好的音频生成)
@@ -828,8 +833,8 @@ export async function exportClips(
               }
             }
             const miniCutOptions = miniTrack
-              ? { trackPlan: miniTrack, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, watermark, crf: options.crf }
-              : { uiCrop, vertical: options.vertical, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, watermark, crf: options.crf };
+              ? { trackPlan: miniTrack, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, watermark, crf: options.crf, encoder: videoEncoder }
+              : { uiCrop, vertical: options.vertical, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, watermark, crf: options.crf, encoder: videoEncoder };
             await rename(outPath, bodyPath);
             await cutClip(inputPath, miniPath, coPlan.startSec, coPlan.endSec, miniCutOptions, signal);
             // 硬切拼接(通行做法);AIGC 隐式标识补到最终容器上
