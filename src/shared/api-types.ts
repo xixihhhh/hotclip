@@ -480,9 +480,30 @@ export interface ExportProgressEvent {
   fraction?: number;
 }
 
+export interface UrlImportProgressEvent {
+  stage: "downloading-tool" | "resolving" | "downloading-media" | "merging" | "done";
+  /** 已知总量时为 0..1；解析或合并阶段可能省略。 */
+  fraction?: number;
+  downloadedBytes?: number;
+  totalBytes?: number;
+  speedBytesPerSec?: number;
+  etaSec?: number;
+}
+
+export interface UrlImportResult {
+  /** 下载并合并后的本地媒体路径，后续完全复用本地文件管线。 */
+  filePath: string;
+}
+
 export interface HotClipApi {
   /** Open a file picker; resolves to a path/handle or null when cancelled. */
   selectMedia: () => Promise<string | null>;
+  /** 下载 HTTP(S) 视频页面/直链到应用管理目录。 */
+  importMediaUrl: (url: string) => Promise<UrlImportResult>;
+  /** 订阅下载器安装、解析、媒体下载与合并进度。 */
+  onUrlImportProgress: (cb: (p: UrlImportProgressEvent) => void) => () => void;
+  /** 取消当前地址导入；已完整下载的旧文件不受影响。 */
+  cancelUrlImport: () => void;
   /** Probe a media file (duration/streams/fps); throws on unreadable input. */
   probeMedia: (filePath: string) => Promise<MediaInfo>;
   /** List selectable transcription engines with install state. */

@@ -11,6 +11,8 @@ import {
   LuFileVideo,
   LuFolderSearch,
   LuLanguages,
+  LuLink,
+  LuLoaderCircle,
   LuSettings,
   LuShieldCheck,
   LuWandSparkles,
@@ -24,7 +26,7 @@ import { LogoMark, LogoWordmark } from "./components/Logo";
 import { Workbench } from "./components/Workbench";
 import { SettingsView } from "./components/SettingsView";
 import { WatchFolderModal } from "./components/WatchFolderModal";
-import type { UpdateInfo } from "../../shared/api-types";
+import type { UpdateInfo, UrlImportProgressEvent } from "../../shared/api-types";
 import { useEffect } from "react";
 import "./app.css";
 
@@ -40,6 +42,13 @@ function formatDuration(totalSeconds: number): string {
   const mm = String(m).padStart(2, "0");
   const ss = String(s % 60).padStart(2, "0");
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+function formatTransfer(bytes?: number): string {
+  if (!bytes || bytes < 1) return "";
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+  return `${Math.round(bytes / 1024)} KB`;
 }
 
 const FILE_CHIPS = ["MP4", "MKV", "MOV", "FLV", "MP3"];
@@ -73,6 +82,11 @@ function ImportStage(): React.JSX.Element {
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showWatch, setShowWatch] = useState(false);
+  const [url, setUrl] = useState("");
+  const [urlBusy, setUrlBusy] = useState(false);
+  const [urlProgress, setUrlProgress] = useState<UrlImportProgressEvent | null>(null);
+
+  useEffect(() => getApi().onUrlImportProgress(setUrlProgress), []);
 
   const probePath = useCallback(
     async (path: string): Promise<void> => {
@@ -96,6 +110,31 @@ function ImportStage(): React.JSX.Element {
     if (!path) return;
     await probePath(path);
   }, [probePath]);
+
+  const importUrl = useCallback(async (): Promise<void> => {
+    if (!url.trim() || urlBusy) return;
+    setError(null);
+    setUrlBusy(true);
+    setUrlProgress({ stage: "resolving" });
+    try {
+      const result = await getApi().importMediaUrl(url);
+      await probePath(result.filePath);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (!/AbortError|Aborted/i.test(message)) setError(t("urlFailed"));
+    } finally {
+      setUrlBusy(false);
+      setUrlProgress(null);
+    }
+  }, [probePath, t, url, urlBusy]);
+
+  const progressLabel = urlProgress?.stage === "downloading-tool"
+    ? t("urlStageTool")
+    : urlProgress?.stage === "downloading-media"
+      ? t("urlStageMedia")
+      : urlProgress?.stage === "merging"
+        ? t("urlStageMerge")
+        : t("urlStageResolve");
 
   return (
     <main className="stage flex flex-1 flex-col items-center overflow-y-auto px-6 pt-[10vh] pb-12">
@@ -145,6 +184,71 @@ function ImportStage(): React.JSX.Element {
         </div>
       </div>
 
+      <section className="rise-in rise-in-2 mt-5 w-full max-w-2xl rounded-2xl border border-line/80 bg-panel/55 p-4" aria-busy={urlBusy}>
+        <div className="flex items-center gap-2">
+          <LuLink aria-hidden="true" className="h-4 w-4 text-ember" />
+          <h2 className="text-[13px] font-bold text-fg">{t("urlTitle")}</h2>
+        </div>
+        <p className="mt-1 text-[11.5px] leading-relaxed text-mut">{t("urlDesc")}</p>
+        <div className="mt-3 flex gap-2">
+          <label htmlFor="media-url" className="sr-only">{t("urlLabel")}</label>
+          <input
+            id="media-url"
+            type="url"
+            value={url}
+            disabled={urlBusy || busy}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void importUrl();
+            }}
+            placeholder={t("urlPlaceholder")}
+            className="min-w-0 flex-1 rounded-lg border border-line bg-panel-2 px-3 py-2.5 text-[12.5px] text-fg outline-none transition-colors placeholder:text-mut/60 focus:border-ember/60 disabled:opacity-50"
+          />
+          {urlBusy ? (
+            <button
+              type="button"
+              onClick={() => getApi().cancelUrlImport()}
+              className="min-h-10 rounded-lg border border-line px-4 text-[12px] font-semibold text-mut transition-colors hover:border-red-500/40 hover:text-red-300"
+            >
+              {t("urlCancel")}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void importUrl()}
+              disabled={busy || !url.trim()}
+              className="btn-flame inline-flex min-h-10 items-center gap-2 rounded-lg px-4 text-[12px] font-bold text-white disabled:opacity-50"
+            >
+              <LuCircleArrowUp aria-hidden="true" className="h-4 w-4" />
+              {t("urlButton")}
+            </button>
+          )}
+        </div>
+        {urlBusy && (
+          <div className="mt-3" role="status" aria-live="polite">
+            <div className="flex items-center justify-between gap-3 text-[11px] text-mut">
+              <span className="flex items-center gap-1.5">
+                <LuLoaderCircle aria-hidden="true" className="h-3.5 w-3.5 animate-spin text-ember" />
+                {progressLabel}
+              </span>
+              {urlProgress?.stage === "downloading-media" && (
+                <span className="shrink-0 tabular-nums">
+                  {formatTransfer(urlProgress.downloadedBytes)}
+                  {urlProgress.totalBytes ? ` / ${formatTransfer(urlProgress.totalBytes)}` : ""}
+                </span>
+              )}
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line/70">
+              <div
+                className={`h-full rounded-full flame-gradient transition-[width] ${urlProgress?.fraction === undefined ? "w-1/3 animate-pulse" : ""}`}
+                style={urlProgress?.fraction === undefined ? undefined : { width: `${Math.round(urlProgress.fraction * 100)}%` }}
+              />
+            </div>
+            {urlProgress?.stage === "downloading-tool" && <p className="mt-1.5 text-[10.5px] text-mut/75">{t("urlFirstUse")}</p>}
+          </div>
+        )}
+      </section>
+
       <button
         type="button"
         onClick={() => setShowWatch(true)}
@@ -154,7 +258,7 @@ function ImportStage(): React.JSX.Element {
         {t("watchEntry")}
       </button>
 
-      {error && <p className="mt-5 text-sm text-red-400">{error}</p>}
+      {error && <p role="alert" className="mt-5 text-sm text-red-400">{error}</p>}
       {showWatch && <WatchFolderModal onClose={() => setShowWatch(false)} />}
     </main>
   );

@@ -3,10 +3,17 @@
  * The renderer never touches ipcRenderer — only this typed bridge.
  */
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
-import type { HotClipApi, TranscribeProgressEvent, ExportProgressEvent, WatchEvent } from "../shared/api-types";
+import type { HotClipApi, TranscribeProgressEvent, ExportProgressEvent, UrlImportProgressEvent, WatchEvent } from "../shared/api-types";
 
 const api: HotClipApi = {
   selectMedia: () => ipcRenderer.invoke("hotclip:select-media"),
+  importMediaUrl: (url) => ipcRenderer.invoke("hotclip:import-media-url", url),
+  onUrlImportProgress: (cb) => {
+    const listener = (_e: IpcRendererEvent, p: UrlImportProgressEvent): void => cb(p);
+    ipcRenderer.on("hotclip:url-import-progress", listener);
+    return () => ipcRenderer.removeListener("hotclip:url-import-progress", listener);
+  },
+  cancelUrlImport: () => ipcRenderer.send("hotclip:url-import-cancel"),
   probeMedia: (filePath) => ipcRenderer.invoke("hotclip:probe-media", filePath),
   listAsrEngines: () => ipcRenderer.invoke("hotclip:list-asr-engines"),
   transcribeMedia: (filePath, engineId, apiKey) => ipcRenderer.invoke("hotclip:transcribe", filePath, engineId, apiKey),

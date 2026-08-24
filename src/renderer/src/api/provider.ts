@@ -17,6 +17,7 @@ import type {
   GlossaryEntry,
   PerformanceEntry,
   PerformanceSummary,
+  UrlImportProgressEvent,
 } from "../../../shared/api-types";
 import { applyGlossaryToTranscript, sanitizeGlossary } from "../../../shared/glossary";
 
@@ -63,6 +64,8 @@ const emit = (p: TranscribeProgressEvent): void => progressListeners.forEach((cb
 type ExportCb = (p: ExportProgressEvent) => void;
 const exportListeners = new Set<ExportCb>();
 const emitExport = (p: ExportProgressEvent): void => exportListeners.forEach((cb) => cb(p));
+const urlImportListeners = new Set<(p: UrlImportProgressEvent) => void>();
+const emitUrlImport = (p: UrlImportProgressEvent): void => urlImportListeners.forEach((cb) => cb(p));
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 // 录播监听演示:启动后按剧本吐一轮事件
 type WatchCb = (e: WatchEvent) => void;
@@ -74,6 +77,7 @@ const emitWatch = (e: Omit<WatchEvent, "at">): void => {
   if (watchRunning) watchListeners.forEach((cb) => cb({ ...e, at: Date.now() }));
 };
 let mockExportCancelled = false;
+let mockUrlImportCancelled = false;
 let mockPerformanceEntries: PerformanceEntry[] = [
   { title: "三分钟讲清直播间投流误区", hook: "投流越多,为什么人反而越少?", platform: "bilibili", views: 128_000, likes: 8_240, comments: 611, shares: 1_420, saves: 3_180, durationSec: 43, keywords: ["投流", "直播运营"], importedAt: "2026-08-20T00:00:00Z" },
   { title: "纸巾吸水实测", hook: "半杯水倒下去会发生什么", platform: "douyin", views: 86_000, likes: 5_600, comments: 288, shares: 932, saves: 1_410, durationSec: 24, keywords: ["实测", "生活用品"], importedAt: "2026-08-21T00:00:00Z" },
@@ -110,6 +114,27 @@ const browserMock: HotClipApi = {
   async selectMedia() {
     await sleep(300);
     return "/demo/我的直播回放-2026-07-04.mp4";
+  },
+  async importMediaUrl() {
+    mockUrlImportCancelled = false;
+    emitUrlImport({ stage: "resolving" });
+    await sleep(350);
+    for (let i = 1; i <= 5; i++) {
+      if (mockUrlImportCancelled) throw new DOMException("Aborted", "AbortError");
+      emitUrlImport({ stage: "downloading-media", fraction: i / 5, downloadedBytes: i * 20_000_000, totalBytes: 100_000_000, speedBytesPerSec: 8_000_000, etaSec: 5 - i });
+      await sleep(220);
+    }
+    emitUrlImport({ stage: "merging" });
+    await sleep(300);
+    emitUrlImport({ stage: "done", fraction: 1 });
+    return { filePath: "/demo/网络导入-创作者访谈.mp4" };
+  },
+  onUrlImportProgress(cb) {
+    urlImportListeners.add(cb);
+    return () => urlImportListeners.delete(cb);
+  },
+  cancelUrlImport() {
+    mockUrlImportCancelled = true;
   },
   async listAsrEngines() {
     await sleep(200);

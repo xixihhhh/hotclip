@@ -41,7 +41,7 @@
 
 ## How to turn a long video into shorts — in three steps
 
-1. **Import**: drop in a podcast, livestream replay, lecture or vlog (MP4 / MKV / MOV / FLV / TS, audio-only too). Hours-long VODs go straight in — everything is processed locally
+1. **Import**: drop in a podcast, livestream replay, lecture or vlog (MP4 / MKV / MOV / FLV / TS, audio-only too), or paste a public Bilibili / YouTube-style video URL. The official resolver is downloaded and verified on first use; the source lands locally and enters the same on-device workflow
 2. **Pick highlights**: local word-level transcription → the AI reads the whole transcript and nominates quotables, conflicts and peak moments — each with a **virality score, an opening hook and its reasoning**, cut points accurate to the word; untick anything you don't like
 3. **Export**: one click produces vertical 9:16 clips — face-tracked reframe, dynamic word-synced captions, title cards, -14 LUFS loudness — plus a cover image and post copy, ready for **TikTok / Reels / Shorts / Douyin / Bilibili**
 

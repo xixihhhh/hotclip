@@ -51,6 +51,7 @@ import {
   loadPerformanceMemory,
   summarizePerformance,
 } from "@core/performance-memory";
+import { importMediaUrl as downloadMediaUrl } from "@core/url-import";
 import { applyGlossaryToTranscript } from "../shared/glossary";
 import { tagTranscribeError } from "../shared/transcribe-errors";
 import { autoClip, analyzeReferenceVideo } from "@core/pipeline";
@@ -163,6 +164,31 @@ ipcMain.handle("hotclip:select-media", async () => {
   });
   if (result.canceled || result.filePaths.length === 0) return null;
   return result.filePaths[0];
+});
+
+let urlImportAbort: AbortController | null = null;
+
+ipcMain.handle("hotclip:import-media-url", async (event, url: unknown) => {
+  if (typeof url !== "string") throw new Error("import-media-url requires a URL");
+  if (urlImportAbort) throw new Error("A URL import is already running");
+  const controller = new AbortController();
+  urlImportAbort = controller;
+  try {
+    return await downloadMediaUrl(url, {
+      toolsDir: join(app.getPath("userData"), "tools", "yt-dlp"),
+      destDir: join(app.getPath("videos"), "HotClip", "Imports"),
+      signal: controller.signal,
+      onProgress: (progress) => {
+        if (!event.sender.isDestroyed()) event.sender.send("hotclip:url-import-progress", progress);
+      },
+    });
+  } finally {
+    if (urlImportAbort === controller) urlImportAbort = null;
+  }
+});
+
+ipcMain.on("hotclip:url-import-cancel", () => {
+  urlImportAbort?.abort();
 });
 
 // ---- IPC:真实发布表现反馈(设置中心) ----
