@@ -237,6 +237,8 @@ export interface ReviewedCandidate {
 
 /** 一条平台发布结果;只含内容表现,不含账号凭据或本地目录。 */
 export interface PerformanceEntry {
+  /** HotClip 导出时生成的稳定内容 ID;与平台作品 id 分开。 */
+  contentId?: string;
   id?: string;
   title: string;
   hook?: string;
@@ -250,12 +252,34 @@ export interface PerformanceEntry {
   keywords?: string[];
   publishedAt?: string;
   importedAt: string;
+  matchConfidence?: "id" | "title-platform" | "title" | "ambiguous" | "unmatched";
+}
+
+export interface PerformanceMatchSummary {
+  matched: number;
+  unmatched: number;
+  ambiguous: number;
+  unmatchedTitles: string[];
+  ambiguousTitles: string[];
 }
 
 export interface PerformanceImportResult {
   imported: number;
   skipped: number;
   total: number;
+  correlation: PerformanceMatchSummary;
+}
+
+export interface PublishLedgerItem {
+  contentId: string;
+  filePath: string;
+  title: string;
+  hook?: string;
+  platform: string;
+  durationSec: number;
+  keywords?: string[];
+  exportedAt: string;
+  metricsImportedAt?: string;
 }
 
 /** 设置中心展示的数据摘要;赢家/弱项使用同一套本地质量分排序。 */
@@ -264,6 +288,12 @@ export interface PerformanceSummary {
   platforms: string[];
   winners: PerformanceEntry[];
   laggards: PerformanceEntry[];
+  publishing: {
+    total: number;
+    awaitingMetrics: number;
+    measured: number;
+    recent: PublishLedgerItem[];
+  };
 }
 
 /** Burned-in caption style choices (none = no captions; bubble = web-rendered). */
@@ -615,6 +645,8 @@ export interface HotClipApi {
   performanceGet: () => Promise<PerformanceSummary>;
   /** 选择并导入平台 CSV/JSON;用户取消返回 null。 */
   performanceImport: () => Promise<PerformanceImportResult | null>;
+  /** 导出带稳定内容 ID 的表现数据回填模板;用户取消返回 null。 */
+  performanceTemplate: () => Promise<{ count: number; path: string } | null>;
   /** 清空真实发布表现记忆;不影响主观审阅偏好。 */
   performanceClear: () => Promise<void>;
   /** 选择一个文件夹(录播监听用);取消返回 null。 */

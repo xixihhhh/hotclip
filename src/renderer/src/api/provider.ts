@@ -104,6 +104,15 @@ function mockPerformanceSummary(): PerformanceSummary {
     platforms: [...new Set(sorted.map((e) => e.platform))].sort(),
     winners: sorted.slice(0, half),
     laggards: sorted.length >= 4 ? sorted.slice(half).reverse() : [],
+    publishing: {
+      total: 3,
+      awaitingMetrics: 2,
+      measured: 1,
+      recent: [
+        { contentId: "hc_demo1", filePath: "/demo/省钱教程.mp4", title: "三步省下订阅费", platform: "douyin", durationSec: 32, exportedAt: "2026-08-24T08:00:00Z" },
+        { contentId: "hc_demo2", filePath: "/demo/设置技巧.mp4", title: "九成人开错的设置", platform: "xiaohongshu", durationSec: 28, exportedAt: "2026-08-24T07:00:00Z", metricsImportedAt: "2026-08-24T09:00:00Z" },
+      ],
+    },
   };
 }
 // 浏览器预览的词表持久化:localStorage 模拟主进程的 glossary.json
@@ -296,7 +305,11 @@ const browserMock: HotClipApi = {
       ...mockPerformanceEntries,
       { title: "新导入的高收藏教程", hook: "这个设置九成人都开错了", platform: "xiaohongshu", views: 45_000, likes: 3_600, comments: 190, shares: 740, saves: 2_900, durationSec: 31, keywords: ["教程", "设置"], importedAt: at },
     ];
-    return { imported: 1, skipped: 0, total: mockPerformanceEntries.length };
+    return { imported: 1, skipped: 0, total: mockPerformanceEntries.length, correlation: { matched: 1, unmatched: 0, ambiguous: 0, unmatchedTitles: [], ambiguousTitles: [] } };
+  },
+  async performanceTemplate() {
+    await sleep(350);
+    return { count: 2, path: "/demo/HotClip-表现数据回填.csv" };
   },
   async performanceClear() {
     await sleep(250);

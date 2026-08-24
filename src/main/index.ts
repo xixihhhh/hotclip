@@ -52,6 +52,7 @@ import {
   loadPerformanceMemory,
   summarizePerformance,
 } from "@core/performance-memory";
+import { buildPerformanceTemplate, clearPublishMetrics, loadPublishLedger, registerPublishItems } from "@core/publish-ledger";
 import { importMediaUrl as downloadMediaUrl } from "@core/url-import";
 import { clearSessionCheckpoint, readSessionCheckpoint, saveSessionCheckpoint } from "@core/session-checkpoint";
 import { loadAutomationTasks, normalizeAutomationTasks, saveAutomationTasks } from "@core/automation-history";
@@ -216,9 +217,20 @@ ipcMain.handle("hotclip:session-checkpoint-clear", () =>
 
 // ---- IPC:真实发布表现反馈(设置中心) ----
 
-ipcMain.handle("hotclip:performance-get", async () =>
-  summarizePerformance(await loadPerformanceMemory(app.getPath("userData")))
-);
+ipcMain.handle("hotclip:performance-get", async () => {
+  const userData = app.getPath("userData");
+  const [entries, publishingItems] = await Promise.all([
+    loadPerformanceMemory(userData),
+    loadPublishLedger(userData),
+  ]);
+  const measured = publishingItems.filter((item) => item.metricsImportedAt).length;
+  return summarizePerformance(entries, {
+    total: publishingItems.length,
+    measured,
+    awaitingMetrics: publishingItems.length - measured,
+    recent: publishingItems.slice(-8).reverse(),
+  });
+});
 
 ipcMain.handle("hotclip:performance-import", async () => {
   const result = await dialog.showOpenDialog({
@@ -230,12 +242,26 @@ ipcMain.handle("hotclip:performance-import", async () => {
   });
   if (result.canceled || result.filePaths.length === 0) return null;
   const imported = await importPerformanceFile(app.getPath("userData"), result.filePaths[0]);
-  return { imported: imported.imported, skipped: imported.skipped, total: imported.total };
+  return { imported: imported.imported, skipped: imported.skipped, total: imported.total, correlation: imported.correlation };
 });
 
-ipcMain.handle("hotclip:performance-clear", async () =>
-  clearPerformanceMemory(app.getPath("userData"))
-);
+ipcMain.handle("hotclip:performance-template", async () => {
+  const items = await loadPublishLedger(app.getPath("userData"));
+  const pending = items.filter((item) => !item.metricsImportedAt);
+  if (pending.length === 0) return null;
+  const result = await dialog.showSaveDialog({
+    defaultPath: join(app.getPath("documents"), "HotClip-表现数据回填.csv"),
+    filters: [{ name: "CSV", extensions: ["csv"] }],
+  });
+  if (result.canceled || !result.filePath) return null;
+  await writeFile(result.filePath, buildPerformanceTemplate(pending), "utf8");
+  return { count: pending.length, path: result.filePath };
+});
+
+ipcMain.handle("hotclip:performance-clear", async () => {
+  const userData = app.getPath("userData");
+  await Promise.all([clearPerformanceMemory(userData), clearPublishMetrics(userData)]);
+});
 
 // 出厂导出根目录:~/影片/HotClip——新手在文件管理器里找得到(issue #3)
 ipcMain.handle("hotclip:default-out-dir", async () => join(app.getPath("videos"), "HotClip"));
@@ -827,11 +853,14 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
         teaser: c.teaser,
       },
     }));
-  return await exportClips(
+  const exportSpecs = variantPlans
+    ? expandClipSpecs(baseSpecs, variantPlans, Boolean(pub?.llm?.baseUrl && pub.llm.model), !opts.flashForward)
+    : baseSpecs;
+  const exported = await exportClips(
     filePath,
     // 一片多版:变体克隆原 spec(换标题/悬念句/文案/封面峰),紧跟原版排列;
     // 全局爆点闪现没开时,最后一版再换开场结构(flash-forward 差异维度)
-    variantPlans ? expandClipSpecs(baseSpecs, variantPlans, Boolean(pub?.llm?.baseUrl && pub.llm.model), !opts.flashForward) : baseSpecs,
+    exportSpecs,
     outDir,
     {
       vertical: Boolean(opts.vertical),
@@ -894,6 +923,28 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
     },
     abortSignal
   );
+  const platforms = Array.isArray(opts.publishPack)
+    ? validPlatformIds(opts.publishPack.filter((p): p is string => typeof p === "string"))
+    : [];
+  const exportedAt = new Date().toISOString();
+  const ledgerInputs = exported
+    .filter((result) => result.id > 0)
+    .flatMap((result) => {
+      const spec = exportSpecs.find((candidate) => candidate.id === result.id);
+      return (platforms.length > 0 ? platforms : ["unassigned"]).map((platform) => ({
+        filePath: result.path,
+        title: result.title,
+        hook: spec?.meta?.hook,
+        platform,
+        durationSec: result.durationSec,
+        keywords: spec?.keywords,
+        exportedAt,
+      }));
+    });
+  await registerPublishItems(app.getPath("userData"), ledgerInputs).catch((error) => {
+    console.error("publish ledger registration failed:", error);
+  });
+  return exported;
   } finally {
     exportAbort = null;
   }
@@ -1043,6 +1094,22 @@ function makeRecordingProcessor(
           signal: controller.signal,
         });
         controller.signal.throwIfAborted();
+        const exportedAt = new Date().toISOString();
+        await registerPublishItems(
+          app.getPath("userData"),
+          outcome.exported.filter((clip) => clip.id > 0).map((clip) => {
+            const candidate = outcome.candidates.find((item) => item.id === clip.id);
+            return {
+              filePath: clip.path,
+              title: clip.title,
+              hook: candidate?.hook,
+              platform: "unassigned",
+              durationSec: clip.durationSec,
+              keywords: candidate?.keywords,
+              exportedAt,
+            };
+          })
+        ).catch((error) => console.error("automation publish ledger registration failed:", error));
         await patchAutomationTask(taskId, { status: "completed", clips: outcome.exported.length, outDir: outcome.outDir, error: undefined });
         emit({ type: "done", file, path: f.path, clips: outcome.exported.length, outDir: outcome.outDir, taskId });
       } catch (error) {

@@ -49,6 +49,7 @@ const api: HotClipApi = {
   recordReview: (video, kept, rejected) => ipcRenderer.invoke("hotclip:review-record", video, kept, rejected),
   performanceGet: () => ipcRenderer.invoke("hotclip:performance-get"),
   performanceImport: () => ipcRenderer.invoke("hotclip:performance-import"),
+  performanceTemplate: () => ipcRenderer.invoke("hotclip:performance-template"),
   performanceClear: () => ipcRenderer.invoke("hotclip:performance-clear"),
   selectDir: () => ipcRenderer.invoke("hotclip:select-dir"),
   defaultOutDir: () => ipcRenderer.invoke("hotclip:default-out-dir"),

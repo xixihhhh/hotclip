@@ -6,6 +6,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from "fs/promises";
 import { basename, dirname, extname, join } from "path";
 import type { PerformanceEntry, PerformanceImportResult, PerformanceSummary } from "../shared/api-types";
+import { correlatePerformanceEntries, type CorrelatedPerformance } from "./publish-ledger";
 
 export type { PerformanceEntry, PerformanceImportResult, PerformanceSummary };
 
@@ -14,6 +15,7 @@ const MAX_PROMPT_EXAMPLES = 5;
 const memoryPath = (userDataDir: string): string => join(userDataDir, "performance-memory.json");
 
 const FIELD_ALIASES = {
+  contentId: ["content_id", "contentid", "hotclip_id", "内容id", "内容编号"],
   id: ["id", "video_id", "bvid", "aweme_id", "作品id", "视频id"],
   title: ["title", "name", "video_title", "标题", "作品标题", "视频标题"],
   hook: ["hook", "opening_hook", "钩子", "开场钩子"],
@@ -109,6 +111,7 @@ export function normalizePerformanceRows(rows: Row[], defaultPlatform = "unknown
     }
     const duration = metricNumber(field(row, FIELD_ALIASES.durationSec));
     entries.push({
+      contentId: String(field(row, FIELD_ALIASES.contentId) ?? "").trim() || undefined,
       id: String(field(row, FIELD_ALIASES.id) ?? "").trim() || undefined,
       title: title.slice(0, 160),
       hook: String(field(row, FIELD_ALIASES.hook) ?? "").trim().slice(0, 200) || undefined,
@@ -143,7 +146,7 @@ export async function loadPerformanceMemory(userDataDir: string): Promise<Perfor
 }
 
 const entryKey = (e: PerformanceEntry): string =>
-  `${e.platform.toLowerCase()}\0${(e.id || e.title).trim().toLowerCase()}`;
+  `${e.platform.toLowerCase()}\0${(e.id || e.contentId || e.title).trim().toLowerCase()}`;
 
 export async function savePerformanceMemory(userDataDir: string, incoming: PerformanceEntry[]): Promise<PerformanceEntry[]> {
   const byKey = new Map<string, PerformanceEntry>();
@@ -182,8 +185,15 @@ export async function importPerformanceFile(
   }
   const defaultPlatform = basename(inputPath, ext).split(/[-_.]/)[0] || "unknown";
   const normalized = normalizePerformanceRows(rows, defaultPlatform);
-  const entries = await savePerformanceMemory(userDataDir, normalized.entries);
-  return { imported: normalized.entries.length, skipped: normalized.skipped, total: entries.length, entries };
+  const correlated: CorrelatedPerformance = await correlatePerformanceEntries(userDataDir, normalized.entries);
+  const entries = await savePerformanceMemory(userDataDir, correlated.entries);
+  return {
+    imported: normalized.entries.length,
+    skipped: normalized.skipped,
+    total: entries.length,
+    correlation: correlated.summary,
+    entries,
+  };
 }
 
 /**
@@ -207,13 +217,17 @@ export function performanceExamples(entries: PerformanceEntry[]): { winners: Per
   return { winners, laggards };
 }
 
-export function summarizePerformance(entries: PerformanceEntry[]): PerformanceSummary {
+export function summarizePerformance(
+  entries: PerformanceEntry[],
+  publishing: PerformanceSummary["publishing"] = { total: 0, awaitingMetrics: 0, measured: 0, recent: [] }
+): PerformanceSummary {
   const { winners, laggards } = performanceExamples(entries);
   return {
     total: entries.length,
     platforms: [...new Set(entries.map((e) => e.platform))].sort(),
     winners,
     laggards,
+    publishing,
   };
 }
 

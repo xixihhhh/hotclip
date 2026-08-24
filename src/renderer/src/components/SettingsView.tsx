@@ -43,7 +43,7 @@ import { Switch, SwitchRow } from "./ui";
 import { GlossaryModal } from "./GlossaryModal";
 import { BrandStyleModal } from "./BrandStyleModal";
 import { WatchFolderModal } from "./WatchFolderModal";
-import type { AsrEngineInfo, CaptionStyleChoice, ExportQuality, ModelsInfo, PerformanceEntry, PerformanceSummary } from "../../../shared/api-types";
+import type { AsrEngineInfo, CaptionStyleChoice, ExportQuality, ModelsInfo, PerformanceEntry, PerformanceMatchSummary, PerformanceSummary } from "../../../shared/api-types";
 
 type NavKey = "ai" | "asr" | "storage" | "performance" | "brand" | "glossary" | "watch" | "lang";
 
@@ -111,10 +111,12 @@ function PerformanceSection(): React.JSX.Element {
   const [summary, setSummary] = useState<PerformanceSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
+  const [templating, setTemplating] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [correlation, setCorrelation] = useState<PerformanceMatchSummary | null>(null);
 
   const refresh = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -136,17 +138,40 @@ function PerformanceSection(): React.JSX.Element {
     setImporting(true);
     setError("");
     setNotice("");
+    setCorrelation(null);
     try {
       const result = await getApi().performanceImport();
       if (!result) return;
       setSummary(await getApi().performanceGet());
-      setNotice(t("importSuccess", { imported: result.imported, skipped: result.skipped, total: result.total }));
+      setCorrelation(result.correlation);
+      setNotice(t("importSuccess", {
+        imported: result.imported,
+        skipped: result.skipped,
+        total: result.total,
+        matched: result.correlation.matched,
+        unmatched: result.correlation.unmatched + result.correlation.ambiguous,
+      }));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setImporting(false);
     }
   }, [t]);
+
+  const exportTemplate = useCallback(async (): Promise<void> => {
+    setTemplating(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await getApi().performanceTemplate();
+      if (result) setNotice(t("templateSuccess", { count: result.count }));
+      else if (summary?.publishing.awaitingMetrics === 0) setNotice(t("templateEmpty"));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setTemplating(false);
+    }
+  }, [summary, t]);
 
   const clear = useCallback(async (): Promise<void> => {
     if (!confirmClear) {
@@ -169,7 +194,7 @@ function PerformanceSection(): React.JSX.Element {
   }, [confirmClear, t]);
 
   return (
-    <div className="flex flex-col gap-5" aria-busy={loading || importing || clearing}>
+    <div className="flex flex-col gap-5" aria-busy={loading || importing || templating || clearing}>
       <section>
         <h3 className="flex items-center gap-2 text-[13.5px] font-bold">
           <LuChartNoAxesCombined aria-hidden="true" className="h-4 w-4 text-ember" />
@@ -186,6 +211,15 @@ function PerformanceSection(): React.JSX.Element {
             {importing ? <LuLoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <LuUpload aria-hidden="true" className="h-4 w-4" />}
             {importing ? t("importing") : t("importButton")}
           </button>
+          <button
+            type="button"
+            disabled={importing || templating || clearing}
+            onClick={() => void exportTemplate()}
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-line px-4 py-2 text-[12.5px] font-semibold text-fg transition-colors hover:border-ember/50 disabled:opacity-50"
+          >
+            {templating ? <LuLoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <LuDownload aria-hidden="true" className="h-4 w-4" />}
+            {templating ? t("templating") : t("templateButton")}
+          </button>
           <span className="text-[11px] text-mut/80">{t("formats")}</span>
         </div>
         {notice && (
@@ -200,7 +234,48 @@ function PerformanceSection(): React.JSX.Element {
             {error}
           </p>
         )}
+        {correlation && (correlation.unmatched > 0 || correlation.ambiguous > 0) && (
+          <div role="status" className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-[11.5px] text-amber-200">
+            <p className="font-semibold">{t("matchReview")}</p>
+            {correlation.unmatchedTitles.length > 0 && <p className="mt-1 break-words">{t("unmatchedRows", { titles: correlation.unmatchedTitles.join(" · ") })}</p>}
+            {correlation.ambiguousTitles.length > 0 && <p className="mt-1 break-words">{t("ambiguousRows", { titles: correlation.ambiguousTitles.join(" · ") })}</p>}
+          </div>
+        )}
       </section>
+
+      {!loading && summary && (
+        <section className="rounded-xl border border-line bg-panel-2 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h4 className="text-[12.5px] font-bold text-fg">{t("ledgerTitle")}</h4>
+              <p className="mt-1 text-[11px] leading-relaxed text-mut">{t("ledgerDesc")}</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-ember/10 px-2.5 py-1 text-[10.5px] font-bold text-ember">{summary.publishing.total}</span>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="rounded-lg border border-line/70 bg-panel px-3 py-2.5">
+              <p className="text-[10.5px] text-mut">{t("awaitingLabel")}</p>
+              <p className="mt-0.5 text-lg font-black tabular-nums text-amber-300">{summary.publishing.awaitingMetrics}</p>
+            </div>
+            <div className="rounded-lg border border-line/70 bg-panel px-3 py-2.5">
+              <p className="text-[10.5px] text-mut">{t("measuredLabel")}</p>
+              <p className="mt-0.5 text-lg font-black tabular-nums text-emerald-300">{summary.publishing.measured}</p>
+            </div>
+          </div>
+          {summary.publishing.recent.length > 0 && (
+            <ul className="mt-3 space-y-1.5">
+              {summary.publishing.recent.slice(0, 4).map((item) => (
+                <li key={item.contentId} className="flex items-center justify-between gap-3 text-[11px]">
+                  <span className="min-w-0 truncate text-fg/90">{item.title}</span>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${item.metricsImportedAt ? "bg-emerald-500/10 text-emerald-300" : "bg-amber-500/10 text-amber-300"}`}>
+                    {item.metricsImportedAt ? t("measuredStatus") : t("awaitingStatus")}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       {loading ? (
         <div className="flex min-h-36 items-center justify-center rounded-xl border border-line bg-panel-2 text-[12px] text-mut">
