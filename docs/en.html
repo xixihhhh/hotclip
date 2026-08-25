@@ -17,12 +17,12 @@
 <meta property="og:site_name" content="HotClip">
 <meta property="og:locale" content="en_US">
 <meta property="og:title" content="HotClip — Free Open-Source AI Video Clipper, Runs Locally">
-<meta property="og:description" content="Long video → viral vertical shorts. AI highlights, 9:16 auto-reframe and dynamic word-level captions, with restart-safe tasks and publishing feedback. No credits or watermark.">
+<meta property="og:description" content="Long video → vertical shorts. AI highlights, 9:16 auto-reframe and dynamic captions, with persistent projects, reversible edits and local performance experiments. No credits or watermark.">
 <meta property="og:image" content="https://xixihhhh.github.io/hotclip/social-preview.png">
 <meta property="og:url" content="https://xixihhhh.github.io/hotclip/en.html">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="HotClip — Free Open-Source AI Video Clipper, Runs Locally">
-<meta name="twitter:description" content="Long video → viral vertical shorts. AI highlights, 9:16 auto-reframe and dynamic word-level captions, with restart-safe tasks and publishing feedback. No credits or watermark.">
+<meta name="twitter:description" content="Long video → vertical shorts. AI highlights, 9:16 auto-reframe and dynamic captions, with persistent projects, reversible edits and local performance experiments. No credits or watermark.">
 <meta name="twitter:image" content="https://xixihhhh.github.io/hotclip/social-preview.png">
 <script type="application/ld+json">
 {
@@ -31,11 +31,11 @@
   "name": "HotClip",
   "operatingSystem": "Windows, macOS, Linux",
   "applicationCategory": "MultimediaApplication",
-  "softwareVersion": "0.15.1",
+  "softwareVersion": "0.16.0",
   "inLanguage": ["en", "zh-CN"],
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
   "description": "Free, open-source, local-first AI video clipper: turn long videos and livestream replays into 9:16 shorts with AI highlight detection, dynamic word-level captions and face-tracked auto-reframe. No credits or watermark.",
-  "featureList": "AI highlight detection with virality scores and reasoning, live-chat heat evidence, face-tracked 9:16 auto-reframe, dynamic word-level captions, filler removal, transcript-timed sensitive-term muting, restart-safe session recovery, durable automation queue, desktop health diagnostics, publishing feedback ledger, topic-series packs, per-platform publish packs, SRT and bilingual captions",
+  "featureList": "AI highlight detection with virality scores and reasoning, live-chat heat evidence, face-tracked 9:16 auto-reframe, dynamic word-level captions, filler removal, transcript-timed sensitive-term muting, multi-project workspace, reversible editing and professional shortcuts, restart-safe recovery, durable automation queue, desktop health diagnostics, publishing feedback ledger, local A/B experiments, topic-series packs, per-platform publish packs, SRT and bilingual captions",
   "url": "https://xixihhhh.github.io/hotclip/en.html",
   "downloadUrl": "https://github.com/xixihhhh/hotclip/releases/latest",
   "screenshot": "https://xixihhhh.github.io/hotclip/screenshots/04-highlights.png",
@@ -136,7 +136,7 @@
   </div>
   <p class="note">No Python, no Docker, no account — a real desktop app you double-click</p>
   <div class="meta-badges">
-    <span>Latest <b id="gh-version">v0.15.1</b></span>
+    <span>Latest <b id="gh-version">v0.16.0</b></span>
     <span>GitHub <b id="gh-stars">★</b></span>
     <span>Windows · macOS · Linux</span>
   </div>
@@ -312,10 +312,13 @@
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-voice"/></svg></span><h3>Speaker diarization</h3><p><b>Who-said-what</b> labels for interviews and multi-host shows (fully local), color-coded captions.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-globe"/></svg></span><h3>Native Chinese + English</h3><p>Dedicated Chinese ASR engines covering dialects and code-switching; bilingual UI.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg></span><h3>Every cut is auditable</h3><p>Reasoning, removed fillers, applied styles — all logged to the <b>clips.json receipt</b>. Veto anything.</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-film"/></svg></span><h3>A real multi-project workspace</h3><p>Switch, rename, close, delete and relink projects; offline or changed sources <b>keep their edit state</b>, and deleting a project never deletes media.</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-scissors"/></svg></span><h3>Every human edit can step back</h3><p>Selection, copy, boundaries, manual clips and transcript fixes share persistent undo/redo, plus keyboard transport, seek and in/out controls.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>Restart-safe work, durable queue</h3><p>Sources, transcripts, candidates and manual cuts recover; folder watch and webhooks share a <b>persistent queue</b> with cancel and retry.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span><h3>Health check before a long run</h3><p>Checks FFmpeg, downloader, nine model roles, LLM routing, disk and cache; core model preparation supports cancel and resume.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-scissors"/></svg></span><h3>Mute terms, keep the audit trail</h3><p>An editable local list drives transcript-timed audio muting across jump cuts and multi-piece clips; <b>captions keep the original text</b>.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg></span><h3>Published results teach the next cut</h3><p>Stable content IDs and a prefilled metrics CSV correlate outcomes conservatively; awaiting/measured and unmatched/ambiguous states stay visible.</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>Multi-version exports become local A/B</h3><p>Compare only one platform, a 72-hour publish window and 500+ views per version; states stay explicit and <b>direction is never presented as causation</b>.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-film"/></svg></span><h3>Turn one recording into a series</h3><p>Original clips sharing meaningful keywords become source-ordered episodes with manifests; variants stay out and hard links save disk.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-tag"/></svg></span><h3>Actually free</h3><p>No credits, no watermark, no caps, no paywalled features — not even an account.</p></div>
     <div class="b-cell b-full b-shot" data-reveal>
