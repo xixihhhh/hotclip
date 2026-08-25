@@ -280,6 +280,48 @@ export interface PublishLedgerItem {
   keywords?: string[];
   exportedAt: string;
   metricsImportedAt?: string;
+  /** Present only when this export belongs to a multi-version packaging experiment. */
+  experimentId?: string;
+  variantIndex?: number;
+  variantTotal?: number;
+  variantRole?: "control" | "challenger";
+  experimentDimensions?: Array<"packaging" | "opening">;
+}
+
+export type PerformanceExperimentStatus =
+  | "awaiting-metrics"
+  | "incomplete-group"
+  | "ambiguous-metrics"
+  | "platform-mismatch"
+  | "missing-publish-time"
+  | "outside-window"
+  | "low-sample"
+  | "inconclusive"
+  | "directional";
+
+export interface PerformanceExperimentVariant {
+  contentId: string;
+  title: string;
+  index: number;
+  role: "control" | "challenger";
+  views?: number;
+  weightedEngagementRate?: number;
+  publishedAt?: string;
+}
+
+/** Conservative local comparison; "directional" is evidence, never a causal claim. */
+export interface PerformanceExperiment {
+  experimentId: string;
+  platform: string;
+  dimensions: Array<"packaging" | "opening">;
+  variantTotal: number;
+  measuredVariants: number;
+  status: PerformanceExperimentStatus;
+  createdAt: string;
+  leaderContentId?: string;
+  relativeLiftPct?: number;
+  absoluteLiftPoints?: number;
+  variants: PerformanceExperimentVariant[];
 }
 
 /** 设置中心展示的数据摘要;赢家/弱项使用同一套本地质量分排序。 */
@@ -293,6 +335,13 @@ export interface PerformanceSummary {
     awaitingMetrics: number;
     measured: number;
     recent: PublishLedgerItem[];
+  };
+  experiments: {
+    total: number;
+    ready: number;
+    awaiting: number;
+    insufficient: number;
+    recent: PerformanceExperiment[];
   };
 }
 

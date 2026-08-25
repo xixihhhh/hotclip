@@ -219,7 +219,8 @@ export function performanceExamples(entries: PerformanceEntry[]): { winners: Per
 
 export function summarizePerformance(
   entries: PerformanceEntry[],
-  publishing: PerformanceSummary["publishing"] = { total: 0, awaitingMetrics: 0, measured: 0, recent: [] }
+  publishing: PerformanceSummary["publishing"] = { total: 0, awaitingMetrics: 0, measured: 0, recent: [] },
+  experiments: PerformanceSummary["experiments"] = { total: 0, ready: 0, awaiting: 0, insufficient: 0, recent: [] }
 ): PerformanceSummary {
   const { winners, laggards } = performanceExamples(entries);
   return {
@@ -228,6 +229,7 @@ export function summarizePerformance(
     winners,
     laggards,
     publishing,
+    experiments,
   };
 }
 

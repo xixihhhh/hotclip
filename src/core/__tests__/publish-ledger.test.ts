@@ -8,6 +8,7 @@ import {
   correlatePerformanceEntries,
   loadPublishLedger,
   publishContentId,
+  publishExperimentId,
   registerPublishItems,
   type RegisterPublishItem,
 } from "../publish-ledger";
@@ -48,6 +49,22 @@ describe("publishing feedback ledger", () => {
     expect((await loadPublishLedger(dir))[0].contentId).toMatch(/^hc_[a-f0-9]{16}$/);
   });
 
+  it("persists multi-version experiment membership with a platform-scoped stable ID", async () => {
+    const dir = await freshDir();
+    const identity = { sourcePath: "/source.mp4", platform: "douyin", exportedAt: item().exportedAt, candidateId: 7 };
+    expect(publishExperimentId(identity)).toBe(publishExperimentId(identity));
+    expect(publishExperimentId({ ...identity, platform: "bilibili" })).not.toBe(publishExperimentId(identity));
+    const experimentId = publishExperimentId(identity);
+    const [saved] = await registerPublishItems(dir, [item({
+      experimentId,
+      variantIndex: 1,
+      variantTotal: 2,
+      variantRole: "control",
+      experimentDimensions: ["packaging", "opening"],
+    })]);
+    expect(saved).toMatchObject({ experimentId, variantIndex: 1, variantTotal: 2, variantRole: "control", experimentDimensions: ["packaging", "opening"] });
+  });
+
   it("matches stable IDs first and marks the ledger measured", async () => {
     const dir = await freshDir();
     const [registered] = await registerPublishItems(dir, [item()]);
@@ -86,6 +103,7 @@ describe("publishing feedback ledger", () => {
     await correlatePerformanceEntries(dir, [metric({ contentId: registered.contentId })]);
     const csv = buildPerformanceTemplate(await loadPublishLedger(dir));
     expect(csv.startsWith("\uFEFFcontent_id,title,platform")).toBe(true);
+    expect(csv).toContain("experiment_id,variant");
     expect(csv).toContain(registered.contentId);
     expect(csv).toContain('"逗号,标题"');
     await clearPublishMetrics(dir);

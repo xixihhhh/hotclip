@@ -52,7 +52,8 @@ import {
   loadPerformanceMemory,
   summarizePerformance,
 } from "@core/performance-memory";
-import { buildPerformanceTemplate, clearPublishMetrics, loadPublishLedger, registerPublishItems } from "@core/publish-ledger";
+import { buildPerformanceTemplate, clearPublishMetrics, loadPublishLedger, publishExperimentId, registerPublishItems } from "@core/publish-ledger";
+import { summarizeExperiments } from "@core/experiments";
 import { importMediaUrl as downloadMediaUrl } from "@core/url-import";
 import { clearSessionCheckpoint, readSessionCheckpoint, saveSessionCheckpoint } from "@core/session-checkpoint";
 import {
@@ -279,7 +280,7 @@ ipcMain.handle("hotclip:performance-get", async () => {
     measured,
     awaitingMetrics: publishingItems.length - measured,
     recent: publishingItems.slice(-8).reverse(),
-  });
+  }, summarizeExperiments(publishingItems, entries));
 });
 
 ipcMain.handle("hotclip:performance-import", async () => {
@@ -931,7 +932,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       ? createClipAligner(modelsRoot(), abortSignal)
       : undefined;
   try {
-  const baseSpecs = list.map((c) => ({
+  const baseSpecs: import("@core/export").ExportClipSpec[] = list.map((c) => ({
       id: c.id,
       title: c.title,
       startSec: c.startSec,
@@ -1039,6 +1040,11 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
     .filter((result) => result.id > 0)
     .flatMap((result) => {
       const spec = exportSpecs.find((candidate) => candidate.id === result.id);
+      const rootId = spec ? (spec.variantOf ?? spec.id) : null;
+      const group = rootId === null ? [] : exportSpecs.filter((candidate) => (candidate.variantOf ?? candidate.id) === rootId);
+      const control = group.find((candidate) => candidate.id === rootId);
+      const dimensions: Array<"packaging" | "opening"> = ["packaging"];
+      if (group.some((candidate) => Boolean(candidate.flashForward) !== Boolean(control?.flashForward))) dimensions.push("opening");
       return (platforms.length > 0 ? platforms : ["unassigned"]).map((platform) => ({
         filePath: result.path,
         title: result.title,
@@ -1047,6 +1053,13 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
         durationSec: result.durationSec,
         keywords: spec?.keywords,
         exportedAt,
+        ...(spec && rootId !== null && group.length > 1 ? {
+          experimentId: publishExperimentId({ sourcePath: filePath, platform, exportedAt, candidateId: rootId }),
+          variantIndex: spec.variant ?? 1,
+          variantTotal: group.length,
+          variantRole: spec.variantOf ? "challenger" as const : "control" as const,
+          experimentDimensions: dimensions,
+        } : {}),
       }));
     });
   await registerPublishItems(app.getPath("userData"), ledgerInputs).catch((error) => {

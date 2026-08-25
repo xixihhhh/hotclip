@@ -19,6 +19,7 @@ import {
   LuExternalLink,
   LuFolderOpen,
   LuFolderSearch,
+  LuFlaskConical,
   LuGauge,
   LuHardDrive,
   LuLanguages,
@@ -43,7 +44,7 @@ import { Switch, SwitchRow } from "./ui";
 import { GlossaryModal } from "./GlossaryModal";
 import { BrandStyleModal } from "./BrandStyleModal";
 import { WatchFolderModal } from "./WatchFolderModal";
-import type { AsrEngineInfo, CaptionStyleChoice, DiagnosticsProgressEvent, DiagnosticsReport, ExportQuality, ModelsInfo, PerformanceEntry, PerformanceMatchSummary, PerformanceSummary } from "../../../shared/api-types";
+import type { AsrEngineInfo, CaptionStyleChoice, DiagnosticsProgressEvent, DiagnosticsReport, ExportQuality, ModelsInfo, PerformanceEntry, PerformanceExperiment, PerformanceMatchSummary, PerformanceSummary } from "../../../shared/api-types";
 
 type NavKey = "ai" | "asr" | "storage" | "diagnostics" | "performance" | "brand" | "glossary" | "watch" | "lang";
 
@@ -102,6 +103,65 @@ function PerformanceRow({ entry, weak = false }: { entry: PerformanceEntry; weak
         {entry.durationSec && <span>{t("duration", { n: Math.round(entry.durationSec) })}</span>}
       </div>
     </li>
+  );
+}
+
+const EXPERIMENT_STATUS_KEY: Record<PerformanceExperiment["status"], string> = {
+  "awaiting-metrics": "experimentStatusAwaiting",
+  "incomplete-group": "experimentStatusIncomplete",
+  "ambiguous-metrics": "experimentStatusAmbiguous",
+  "platform-mismatch": "experimentStatusPlatform",
+  "missing-publish-time": "experimentStatusTime",
+  "outside-window": "experimentStatusWindow",
+  "low-sample": "experimentStatusSample",
+  inconclusive: "experimentStatusInconclusive",
+  directional: "experimentStatusDirectional",
+};
+
+function ExperimentCard({ experiment }: { experiment: PerformanceExperiment }): React.JSX.Element {
+  const t = useT("performance");
+  const { locale } = useLocaleStore();
+  const leader = experiment.variants.find((variant) => variant.contentId === experiment.leaderContentId);
+  const ready = experiment.status === "directional" || experiment.status === "inconclusive";
+  return (
+    <article className="rounded-xl border border-line/80 bg-panel-2 p-3.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11.5px] font-bold text-fg">
+            {experiment.dimensions.includes("opening") ? t("experimentDimensionOpening") : t("experimentDimensionPackaging")}
+          </p>
+          <p className="mt-0.5 text-[10.5px] text-mut">{experiment.platform} · {t("experimentVariants", { n: experiment.variantTotal })}</p>
+        </div>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9.5px] font-bold ${ready ? "bg-emerald-500/10 text-emerald-300" : "bg-amber-500/10 text-amber-300"}`}>
+          {t(EXPERIMENT_STATUS_KEY[experiment.status])}
+        </span>
+      </div>
+      <ul className="mt-2.5 space-y-1.5">
+        {experiment.variants.map((variant) => {
+          const isLeader = variant.contentId === experiment.leaderContentId;
+          return (
+            <li key={variant.contentId} className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 ${isLeader ? "border-emerald-500/40 bg-emerald-500/5" : "border-line/60 bg-panel"}`}>
+              <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9.5px] font-black ${variant.role === "control" ? "bg-sky-500/10 text-sky-300" : "bg-ember/10 text-ember"}`}>
+                {String.fromCharCode(64 + Math.min(26, variant.index))}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[11px] text-fg/90">{variant.title}</span>
+              {variant.views !== undefined && variant.weightedEngagementRate !== undefined ? (
+                <span className="shrink-0 text-right font-mono text-[9.5px] leading-tight text-mut tabular-nums">
+                  {formatMetric(variant.views, locale)} · {variant.weightedEngagementRate.toFixed(2)}%
+                </span>
+              ) : <span className="shrink-0 text-[9.5px] text-mut/60">{t("awaitingStatus")}</span>}
+            </li>
+          );
+        })}
+      </ul>
+      {leader && experiment.relativeLiftPct !== undefined ? (
+        <p className="mt-2 text-[10.5px] leading-relaxed text-emerald-300">
+          {t("experimentDirectionalNote", { variant: String.fromCharCode(64 + Math.min(26, leader.index)), lift: experiment.relativeLiftPct })}
+        </p>
+      ) : (
+        <p className="mt-2 text-[10.5px] leading-relaxed text-mut">{t("experimentEvidenceNote")}</p>
+      )}
+    </article>
   );
 }
 
@@ -274,6 +334,33 @@ function PerformanceSection(): React.JSX.Element {
               ))}
             </ul>
           )}
+        </section>
+      )}
+
+      {!loading && summary && summary.experiments.total > 0 && (
+        <section>
+          <h4 className="flex items-center gap-2 text-[12.5px] font-bold text-fg">
+            <LuFlaskConical aria-hidden="true" className="h-4 w-4 text-ember" />
+            {t("experimentTitle")}
+          </h4>
+          <p className="mt-1 text-[11px] leading-relaxed text-mut">{t("experimentDesc")}</p>
+          <div className="mt-2.5 grid grid-cols-4 gap-2">
+            {[
+              ["experimentTotal", summary.experiments.total, "text-fg"],
+              ["experimentReady", summary.experiments.ready, "text-emerald-300"],
+              ["experimentAwaiting", summary.experiments.awaiting, "text-amber-300"],
+              ["experimentInsufficient", summary.experiments.insufficient, "text-mut"],
+            ].map(([key, value, cls]) => (
+              <div key={String(key)} className="rounded-lg border border-line/70 bg-panel px-2.5 py-2">
+                <p className="text-[9.5px] text-mut">{t(String(key))}</p>
+                <p className={`mt-0.5 text-base font-black tabular-nums ${cls}`}>{value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 space-y-2.5">
+            {summary.experiments.recent.slice(0, 4).map((experiment) => <ExperimentCard key={experiment.experimentId} experiment={experiment} />)}
+          </div>
+          <p className="mt-2 text-[10px] leading-relaxed text-mut/70">{t("experimentCaution")}</p>
         </section>
       )}
 

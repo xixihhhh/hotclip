@@ -92,7 +92,8 @@ let mockAutomationTasks: AutomationTask[] = [
 ];
 let mockPerformanceEntries: PerformanceEntry[] = [
   { title: "三分钟讲清直播间投流误区", hook: "投流越多,为什么人反而越少?", platform: "bilibili", views: 128_000, likes: 8_240, comments: 611, shares: 1_420, saves: 3_180, durationSec: 43, keywords: ["投流", "直播运营"], importedAt: "2026-08-20T00:00:00Z" },
-  { title: "纸巾吸水实测", hook: "半杯水倒下去会发生什么", platform: "douyin", views: 86_000, likes: 5_600, comments: 288, shares: 932, saves: 1_410, durationSec: 24, keywords: ["实测", "生活用品"], importedAt: "2026-08-21T00:00:00Z" },
+  { contentId: "hc_exp_control", title: "纸巾吸水实测", hook: "半杯水倒下去会发生什么", platform: "douyin", views: 86_000, likes: 5_600, comments: 288, shares: 932, saves: 1_410, durationSec: 24, keywords: ["实测", "生活用品"], publishedAt: "2026-08-21T08:00:00Z", importedAt: "2026-08-22T00:00:00Z" },
+  { contentId: "hc_exp_challenger", title: "两块钱的纸巾能有多离谱", hook: "别看价格,先看这半杯水", platform: "douyin", views: 100_000, likes: 12_000, comments: 500, shares: 1_600, saves: 2_500, durationSec: 24, keywords: ["实测", "生活用品"], publishedAt: "2026-08-21T09:00:00Z", importedAt: "2026-08-22T00:00:00Z" },
   { title: "主播闲聊片段", platform: "bilibili", views: 2_100, likes: 33, comments: 4, shares: 1, saves: 2, durationSec: 58, importedAt: "2026-08-22T00:00:00Z" },
   { title: "今天给大家介绍一下", platform: "douyin", views: 1_280, likes: 12, comments: 1, shares: 0, saves: 1, durationSec: 37, importedAt: "2026-08-22T00:00:00Z" },
 ];
@@ -104,19 +105,44 @@ function mockPerformanceSummary(): PerformanceSummary {
     return score(b) - score(a);
   });
   const half = Math.max(1, Math.floor(sorted.length / 2));
+  const control = mockPerformanceEntries.find((entry) => entry.contentId === "hc_exp_control");
+  const challenger = mockPerformanceEntries.find((entry) => entry.contentId === "hc_exp_challenger");
+  const experimentMeasured = Boolean(control && challenger);
   return {
     total: sorted.length,
     platforms: [...new Set(sorted.map((e) => e.platform))].sort(),
     winners: sorted.slice(0, half),
     laggards: sorted.length >= 4 ? sorted.slice(half).reverse() : [],
     publishing: {
-      total: 3,
-      awaitingMetrics: 2,
-      measured: 1,
+      total: 4,
+      awaitingMetrics: experimentMeasured ? 1 : 3,
+      measured: experimentMeasured ? 3 : 1,
       recent: [
+        { contentId: "hc_exp_challenger", filePath: "/demo/纸巾-v2.mp4", title: "两块钱的纸巾能有多离谱", platform: "douyin", durationSec: 24, exportedAt: "2026-08-21T07:00:00Z", metricsImportedAt: experimentMeasured ? "2026-08-22T00:00:00Z" : undefined, experimentId: "hcx_demo", variantIndex: 2, variantTotal: 2, variantRole: "challenger", experimentDimensions: ["packaging"] },
+        { contentId: "hc_exp_control", filePath: "/demo/纸巾-v1.mp4", title: "纸巾吸水实测", platform: "douyin", durationSec: 24, exportedAt: "2026-08-21T07:00:00Z", metricsImportedAt: experimentMeasured ? "2026-08-22T00:00:00Z" : undefined, experimentId: "hcx_demo", variantIndex: 1, variantTotal: 2, variantRole: "control", experimentDimensions: ["packaging"] },
         { contentId: "hc_demo1", filePath: "/demo/省钱教程.mp4", title: "三步省下订阅费", platform: "douyin", durationSec: 32, exportedAt: "2026-08-24T08:00:00Z" },
         { contentId: "hc_demo2", filePath: "/demo/设置技巧.mp4", title: "九成人开错的设置", platform: "xiaohongshu", durationSec: 28, exportedAt: "2026-08-24T07:00:00Z", metricsImportedAt: "2026-08-24T09:00:00Z" },
       ],
+    },
+    experiments: {
+      total: 1,
+      ready: experimentMeasured ? 1 : 0,
+      awaiting: experimentMeasured ? 0 : 1,
+      insufficient: 0,
+      recent: [{
+        experimentId: "hcx_demo",
+        platform: "douyin",
+        dimensions: ["packaging"],
+        variantTotal: 2,
+        measuredVariants: experimentMeasured ? 2 : 0,
+        status: experimentMeasured ? "directional" : "awaiting-metrics",
+        createdAt: "2026-08-21T07:00:00Z",
+        ...(experimentMeasured ? { leaderContentId: "hc_exp_challenger", relativeLiftPct: 64.8, absoluteLiftPoints: 9.95 } : {}),
+        variants: [
+          { contentId: "hc_exp_control", title: "纸巾吸水实测", index: 1, role: "control", ...(control ? { views: control.views, weightedEngagementRate: 15.35, publishedAt: control.publishedAt } : {}) },
+          { contentId: "hc_exp_challenger", title: "两块钱的纸巾能有多离谱", index: 2, role: "challenger", ...(challenger ? { views: challenger.views, weightedEngagementRate: 25.3, publishedAt: challenger.publishedAt } : {}) },
+        ],
+      }],
     },
   };
 }

@@ -18,6 +18,11 @@ export interface RegisterPublishItem {
   durationSec: number;
   keywords?: string[];
   exportedAt: string;
+  experimentId?: string;
+  variantIndex?: number;
+  variantTotal?: number;
+  variantRole?: "control" | "challenger";
+  experimentDimensions?: Array<"packaging" | "opening">;
 }
 
 export function publishContentId(item: RegisterPublishItem): string {
@@ -28,11 +33,25 @@ export function publishContentId(item: RegisterPublishItem): string {
   return `hc_${digest}`;
 }
 
+export function publishExperimentId(input: { sourcePath: string; platform: string; exportedAt: string; candidateId: number }): string {
+  const digest = createHash("sha256")
+    .update([input.sourcePath, input.platform, input.exportedAt, String(input.candidateId)].join("\0"))
+    .digest("hex")
+    .slice(0, 16);
+  return `hcx_${digest}`;
+}
+
 function validItem(value: unknown): value is PublishLedgerItem {
   const item = value as PublishLedgerItem;
   return !!item && typeof item.contentId === "string" && typeof item.filePath === "string" &&
     typeof item.title === "string" && typeof item.platform === "string" &&
-    typeof item.exportedAt === "string" && Number.isFinite(item.durationSec);
+    typeof item.exportedAt === "string" && Number.isFinite(item.durationSec) &&
+    (item.metricsImportedAt === undefined || typeof item.metricsImportedAt === "string") &&
+    (item.experimentId === undefined || typeof item.experimentId === "string") &&
+    (item.variantIndex === undefined || Number.isInteger(item.variantIndex)) &&
+    (item.variantTotal === undefined || Number.isInteger(item.variantTotal)) &&
+    (item.variantRole === undefined || item.variantRole === "control" || item.variantRole === "challenger") &&
+    (item.experimentDimensions === undefined || (Array.isArray(item.experimentDimensions) && item.experimentDimensions.every((dimension) => dimension === "packaging" || dimension === "opening")));
 }
 
 export async function loadPublishLedger(userDataDir: string): Promise<PublishLedgerItem[]> {
@@ -66,6 +85,11 @@ export async function registerPublishItems(userDataDir: string, incoming: Regist
       durationSec: Math.max(0, input.durationSec),
       keywords: input.keywords?.slice(0, 12),
       exportedAt: input.exportedAt,
+      ...(input.experimentId ? { experimentId: input.experimentId } : {}),
+      ...(Number.isInteger(input.variantIndex) ? { variantIndex: input.variantIndex } : {}),
+      ...(Number.isInteger(input.variantTotal) ? { variantTotal: input.variantTotal } : {}),
+      ...(input.variantRole ? { variantRole: input.variantRole } : {}),
+      ...(input.experimentDimensions?.length ? { experimentDimensions: [...new Set(input.experimentDimensions)].slice(0, 2) } : {}),
     });
   }
   const items = [...byId.values()].sort((a, b) => a.exportedAt.localeCompare(b.exportedAt)).slice(-MAX_ITEMS);
@@ -151,13 +175,15 @@ function csvField(value: string | number): string {
 
 /** 用户只需补播放/互动列;稳定内容 ID 可避免重名标题误匹配。 */
 export function buildPerformanceTemplate(items: PublishLedgerItem[]): string {
-  const header = ["content_id", "title", "platform", "duration_sec", "keywords", "published_at", "views", "likes", "comments", "shares", "saves"];
+  const header = ["content_id", "title", "platform", "experiment_id", "variant", "duration_sec", "keywords", "published_at", "views", "likes", "comments", "shares", "saves"];
   const lines = [header.join(",")];
   for (const item of items) {
     lines.push([
       item.contentId,
       item.title,
       item.platform === "unassigned" ? "" : item.platform,
+      item.experimentId ?? "",
+      item.variantIndex ?? "",
       Number(item.durationSec.toFixed(1)),
       item.keywords?.join("|") ?? "",
       "", "", "", "", "", "",
