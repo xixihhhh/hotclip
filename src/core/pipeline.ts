@@ -25,6 +25,8 @@ import { wordsInPieces } from "../shared/pieces";
 export interface AutoClipConfig {
   modelsRoot: string;
   cacheDir: string;
+  /** Reusable bounded base-render cache; omit to disable. */
+  renderCacheDir?: string;
   llm: LlmConfig;
   /** 输出目录;缺省源视频旁 `<名>-hotclip/`。 */
   outDir?: string;
@@ -192,6 +194,7 @@ export async function autoClip(videoPath: string, cfg: AutoClipConfig): Promise<
       snapToShots: true,
       modelsRoot: cfg.modelsRoot,
       fontsDir: cfg.fontsDir,
+      renderCacheDir: cfg.renderCacheDir,
     },
     undefined,
     cfg.signal

@@ -808,6 +808,8 @@ export interface HotClipApi {
   performanceClear: () => Promise<void>;
   /** 运行只读环境健康检查。 */
   diagnosticsRun: (llm: LlmConfig | null, locale?: "zh" | "en") => Promise<DiagnosticsReport>;
+  /** Clear only generated base renders, then return a refreshed health report. */
+  diagnosticsClearRenderCache: (llm: LlmConfig | null, locale?: "zh" | "en") => Promise<DiagnosticsReport>;
   /** 显式预下载缺失的默认管线模型;支持断点续传。 */
   diagnosticsPrepareModels: (llm: LlmConfig | null, locale?: "zh" | "en") => Promise<DiagnosticsReport>;
   onDiagnosticsProgress: (cb: (p: DiagnosticsProgressEvent) => void) => () => void;

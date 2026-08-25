@@ -21,6 +21,9 @@ export const modelsRoot = (): string => resolveModelsRoot(userDataDir());
 /** 转写结果本地缓存目录(同文件重开秒进)。 */
 export const cacheDir = (): string => join(userDataDir(), "transcript-cache");
 
+/** 可复用基础成片缓存(有界 LRU,与转写缓存分开管理)。 */
+export const renderCacheDir = (): string => join(userDataDir(), "render-cache");
+
 /**
  * 成片落地目录:<导出根目录>/<片名>/。
  * 根目录默认是系统「影片」下的 HotClip(新手在文件管理器里找得到),用户在

@@ -14,7 +14,7 @@ import { join, basename } from "path";
 import { transcribeCached, detectForPipeline, autoClip, analyzeReferenceVideo } from "../core/pipeline";
 import type { ReferenceProfile } from "../core/reference";
 import { loadGlossary } from "../core/glossary-store";
-import { userDataDir, modelsRoot, cacheDir, llmFromEnv } from "../core/appenv";
+import { userDataDir, modelsRoot, cacheDir, renderCacheDir, llmFromEnv } from "../core/appenv";
 import { loadReviewMemory } from "../core/review-memory";
 import { loadPerformanceMemory } from "../core/performance-memory";
 import { handleMcpMessage, type JsonRpcMessage } from "./protocol";
@@ -102,6 +102,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
     const outcome = await autoClip(videoPath, {
       modelsRoot: modelsRoot(),
       cacheDir: cacheDir(),
+      renderCacheDir: renderCacheDir(),
       llm,
       maxClips: clampClips(args.maxClips),
       vertical: args.vertical !== false,

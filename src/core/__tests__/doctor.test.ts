@@ -127,6 +127,19 @@ describe("runDoctor", () => {
     expect(report.checks.find((c) => c.id === "cache")?.detail).toContain("Empty");
   });
 
+  it("可选渲染缓存检查显示占用并支持英文报告", async () => {
+    const { modelsRoot, cacheDir } = await freshRoot();
+    const renderCacheDir = join(root, "render-cache");
+    await mkdir(renderCacheDir, { recursive: true });
+    await writeFile(join(renderCacheDir, "base.mp4"), Buffer.alloc(1024 * 1024));
+
+    let report = await runDoctor({ modelsRoot, cacheDir, renderCacheDir, llm: null, resolveBinaries: fakeBins, probeBinaryVersion: fakeProbe });
+    expect(report.checks.find((c) => c.id === "render-cache")).toMatchObject({ name: "基础渲染缓存", status: "ok", detail: expect.stringContaining("1MB") });
+
+    report = await runDoctor({ modelsRoot, cacheDir, renderCacheDir, llm: null, zh: false, resolveBinaries: fakeBins, probeBinaryVersion: fakeProbe });
+    expect(report.checks.find((c) => c.id === "render-cache")).toMatchObject({ name: "Render cache", detail: expect.stringContaining("limited to 1GB") });
+  });
+
   it("LLM 端点:区分成功、路由错误、凭据错误和网络错误", async () => {
     const { modelsRoot, cacheDir } = await freshRoot();
     const llm = { baseUrl: "http://127.0.0.1:1/v1", apiKey: "k", model: "m" };

@@ -65,6 +65,29 @@ describe("buildCutArgs", () => {
     expect(args).not.toContain("make_zero");
   });
 
+  it("smart video copy preserves AAC and the complete audio filter chain", () => {
+    const args = buildCutArgs("/v/in.mp4", "/v/out.mp4", 10, 20, {
+      videoCopy: true,
+      denoise: true,
+      normalizeLoudness: true,
+      muteRanges: [{ startSec: 1, endSec: 2 }],
+    });
+    expect(args.slice(args.indexOf("-c:v"), args.indexOf("-c:v") + 2)).toEqual(["-c:v", "copy"]);
+    expect(args).not.toContain("libx264");
+    expect(args.slice(args.indexOf("-c:a"), args.indexOf("-c:a") + 2)).toEqual(["-c:a", "aac"]);
+    const audio = args[args.indexOf("-af") + 1];
+    expect(audio).toContain(DENOISE_FILTER);
+    expect(audio).toContain(LOUDNORM_FILTER);
+    expect(audio).toContain("volume=enable='between(t,1.000,2.000)':volume=0");
+    expect(audio).toContain("afade=t=in");
+  });
+
+  it("pixel-changing filters disable smart video copy", () => {
+    const args = buildCutArgs("/v/in.mp4", "/v/out.mp4", 0, 5, { videoCopy: true, vertical: true });
+    expect(args).toContain("libx264");
+    expect(args.slice(args.indexOf("-c:v"), args.indexOf("-c:v") + 2)).toEqual(["-c:v", "libx264"]);
+  });
+
   it("escapes windows drive colons and backslashes for the filter graph", () => {
     expect(escapeFilterPath("C:\\Users\\我\\a.ass")).toBe("C\\:/Users/我/a.ass");
   });

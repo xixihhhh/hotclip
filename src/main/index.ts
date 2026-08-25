@@ -69,6 +69,7 @@ import {
 import { loadAutomationTasks, normalizeAutomationTasks, saveAutomationTasks } from "@core/automation-history";
 import { sanitizeSensitiveWords } from "@core/sensitive-words";
 import { runDoctor } from "@core/doctor";
+import { clearRenderCache } from "@core/render-cache";
 import { applyGlossaryToTranscript } from "../shared/glossary";
 import { tagTranscribeError } from "../shared/transcribe-errors";
 import { autoClip, analyzeReferenceVideo } from "@core/pipeline";
@@ -327,6 +328,7 @@ async function desktopDiagnostics(llm: LlmConfig | null, zh = true) {
   const report = await runDoctor({
     modelsRoot: modelsRoot(),
     cacheDir: transcriptCacheDir(),
+    renderCacheDir: baseRenderCacheDir(),
     toolsDir: join(app.getPath("userData"), "tools", "yt-dlp"),
     llm,
     zh,
@@ -335,6 +337,10 @@ async function desktopDiagnostics(llm: LlmConfig | null, zh = true) {
 }
 
 ipcMain.handle("hotclip:diagnostics-run", (_event, llm: unknown, locale: unknown) => desktopDiagnostics(diagnosticsConfig(llm), locale !== "en"));
+ipcMain.handle("hotclip:diagnostics-clear-render-cache", async (_event, llm: unknown, locale: unknown) => {
+  await clearRenderCache(baseRenderCacheDir());
+  return desktopDiagnostics(diagnosticsConfig(llm), locale !== "en");
+});
 
 let diagnosticsRepairAbort: AbortController | null = null;
 ipcMain.on("hotclip:diagnostics-repair-cancel", () => diagnosticsRepairAbort?.abort());
@@ -344,6 +350,7 @@ ipcMain.handle("hotclip:diagnostics-prepare-models", async (event, llm: unknown,
   const before = await runDoctor({
     modelsRoot: modelsRoot(),
     cacheDir: transcriptCacheDir(),
+    renderCacheDir: baseRenderCacheDir(),
     toolsDir: join(app.getPath("userData"), "tools", "yt-dlp"),
     llm: config,
     zh: locale !== "en",
@@ -559,6 +566,7 @@ ipcMain.handle("hotclip:review-record", async (_event, video: unknown, kept: unk
 // 模型位置用户可改(设置页),每次现读配置——搬完家后续下载立刻落新位置
 const modelsRoot = (): string => resolveModelsRoot(app.getPath("userData"));
 const transcriptCacheDir = (): string => join(app.getPath("userData"), "transcript-cache");
+const baseRenderCacheDir = (): string => join(app.getPath("userData"), "render-cache");
 
 /** catalog id → engine factory + its model asset (for install checks). */
 const ASR_ENGINES = {
@@ -1026,6 +1034,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       modelsRoot: modelsRoot(),
       fontsDir,
       renderOverlay: renderCaptionOverlay,
+      renderCacheDir: baseRenderCacheDir(),
     },
     (p) => {
       if (!event.sender.isDestroyed()) event.sender.send("hotclip:export-progress", p);
@@ -1203,6 +1212,7 @@ function makeRecordingProcessor(
               : undefined,
           modelsRoot: modelsRoot(),
           cacheDir: transcriptCacheDir(),
+          renderCacheDir: baseRenderCacheDir(),
           llm: config,
           fontsDir,
           glossary: await loadGlossary(app.getPath("userData")),

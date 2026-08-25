@@ -33,6 +33,7 @@
 - **Ready to post, not just cut**: vertical clips + dynamic captions + covers + post copy + per-platform publish packs, all in one run
 - **Interrupted work picks up safely**: source, transcript, candidates, selections and hand-tuned cuts recover after restart; folder watch and webhooks share a durable queue with retry and cancel
 - **Real projects, not disposable tasks**: a project workspace manages multiple edits with offline/changed-source relinking; selections, copy, boundaries and transcript fixes all undo/redo, even after reopening
+- **Long videos get faster on repeat**: identical base renders come straight from a bounded local cache; H.264 video is stream-copied only for keyframe-aligned, pixel-unchanged single cuts, while audio processing remains intact and every uncertain case falls back to accurate encoding
 - **Publishing teaches the next cut**: every export gets a stable content ID; multi-version exports form local A/B groups and only receive a direction when platform, publish window and sample evidence are comparable
 - **Clips while you sleep**: a 24/7 watch folder turns finished recordings into clips; one-click health diagnostics catch missing tools/models first, while CLI / MCP make it a one-sentence agent deliverable
 
@@ -242,8 +243,9 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 <summary><b>Details</b>: durable task queue · watch folder · health diagnostics · CLI · MCP · Claude Code skill</summary>
 
 - **Durable task center**: folder watch and webhooks share one single-concurrency queue with persisted stages, history and attempt counts; tasks can be cancelled or explicitly retried, in-flight work becomes "interrupted" after restart, and credentials are never stored in history
+- **Long-video performance layer**: repeat exports with the same source, cuts and base effects restore an exact local base render; H.264 video is copied only for a continuous cut whose start is proven keyframe-aligned and whose pixels are unchanged. Audio still receives fades, denoise, loudness and sensitive-term muting, and any failure transparently falls back to accurate encoding. LRU storage is capped at 1GB and can be inspected or cleared separately
 - **Recording watch folder (24/7)**: point it at your OBS/recorder output dir; recordings are transcribed, mined and exported the moment they finish writing ("two rounds of stable size" — half-written files are never cut)
-- **Desktop health diagnostics**: one click checks FFmpeg/FFprobe, downloader integrity, nine model roles, LLM connectivity/auth/routing, disk and cache; missing core models can be prepared explicitly with cancel and resume
+- **Desktop health diagnostics**: one click checks FFmpeg/FFprobe, downloader integrity, nine model roles, LLM connectivity/auth/routing, disk, transcript cache and render cache; missing core models can be prepared with cancel/resume, and generated render cache can be cleared safely on its own
 - **Headless CLI** (same outputs as the desktop app):
 
   ```bash
@@ -283,6 +285,8 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 
 ## What's new
 
+**[v0.17.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.17.0)** (2026-08-25) "Long videos get faster on repeat": **bounded base-render cache** (exact reuse across matching source/cuts/captions/reframe/audio/brand inputs, atomic writes, corrupt-entry invalidation and LRU pruning capped at 1GB); **safe smart copy** (H.264 video stream copy only for keyframe-aligned, pixel-unchanged continuous cuts; AAC, edge fades, denoise, loudness and sensitive-term muting remain active; every uncertainty or failure falls back to accurate encoding); **shared everywhere** (desktop exports, folder watch/webhooks, CLI and MCP use the same cache); **diagnostics and scoped cleanup** (bilingual size visibility and two-step cleanup that never touches projects, source media, models or transcript cache)
+
 **[v0.16.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.16.0)** (2026-08-25) "Projects persist, every edit can step back": **project workspace** (multi-project list, switch, rename, close, delete and media relinking; offline/changed sources keep their project; legacy sessions migrate automatically); **reversible editing history** (selection, copy/boundaries, manual clips and transcript corrections share undo/redo, capped at 60 commands / 4 MB and restored with the project); **professional keyboard controls** (transport, seek, in/out and candidate navigation with safe input/modal guards); **local A/B experiment center** (multi-version exports group per platform, metrics join through stable content IDs, same-platform/72-hour/minimum-sample gates, directional evidence only)
 
 **[v0.15.1](https://github.com/xixihhhh/hotclip/releases/tag/v0.15.1)** (2026-08-24) "Work survives, publishing teaches": **hardware-accelerated export** (VideoToolbox / NVENC / QSV with transparent x264 fallback); **post-performance center** (import platform metrics and feed winner/laggard patterns back into selection); **verified public-video URL import** (Bilibili / YouTube-style links with checked resolver bootstrap and resume); **restart-safe editing** (source, transcript, candidates, selections and manual cuts recover); **durable automation task center** (one folder-watch/webhook queue with history, cancel, retry and interrupted state, never stored credentials); **transcript-timed sensitive-term muting** (correct through jump cuts and multi-piece clips, original captions retained); **publishing feedback ledger** (stable content IDs, prefilled metrics CSV, conservative matching and awaiting status); **desktop health diagnostics** (tools, nine model roles, LLM, disk/cache, cancellable/resumable core-model preparation); **topic-series packs** (meaningful repeated keywords become ordered episodes, variants excluded, manifests included)
@@ -319,6 +323,7 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 | v0.15 (three-pane workbench · timeline curves · chat interaction weighting) | ✅ Shipped |
 | v0.15.1 (hardware export · URL import · recovery · durable queue · publishing feedback · diagnostics · topic series) | ✅ Shipped |
 | v0.16 (project workspace · reversible editing · pro shortcuts · local A/B experiments) | ✅ Shipped |
+| v0.17 (bounded render cache · keyframe-safe copy · shared across entry points · scoped cleanup) | ✅ Shipped |
 | English ASR upgrade (Parakeet) · code signing · deeper unattended mode | 🗺️ [Planned](docs/PRODUCT-PLAN.md) |
 
 </details>

@@ -11,7 +11,7 @@ import { join, basename } from "path";
 import { resolveFfmpegPath } from "./binaries";
 
 const execFileAsync = promisify(execFile);
-import { cutClip, cutJumpClip, concatClips } from "./cut";
+import { cutClip, cutJumpClip, concatClips, type CutOptions } from "./cut";
 import { planColdOpen, planFlashForward, FLASH_SKIP_NEAR_START_SEC } from "./coldopen";
 import { computeJumpCut, BREATH_PAD_SEC } from "./gaps";
 import { perturbLayout } from "../shared/perturb";
@@ -61,6 +61,16 @@ import type { WatermarkSpec } from "./cut";
 import { transformScore, type TransformInputs, type TransformScore } from "../shared/transform-score";
 import { buildLedgerCsv, type LedgerRow } from "./ledger";
 import { resolveVideoEncoder } from "./video-encoder";
+import {
+  createRenderCacheKey,
+  fingerprintRenderFile,
+  hashRenderInput,
+  invalidateRenderCache,
+  restoreRenderCache,
+  storeRenderCache,
+  type FileFingerprint,
+} from "./render-cache";
+import { canCopyVideoStream, probeVideoKeyframes } from "./smart-render";
 
 export interface ExportClipSpec {
   id: number;
@@ -227,6 +237,10 @@ export interface ClipRenderOutcome {
   sfxCues: number;
   /** True 表示 BGM 混入成功(含人声闪避)。 */
   bgmMixed: boolean;
+  /** Base-render cache result for this clip. */
+  renderCache?: "hit" | "miss" | "disabled";
+  /** How the base video became available; cached keeps the receipt truthful when no encoder ran. */
+  videoMode?: "copy" | "encode" | "cached";
 }
 
 export interface ExportRenderOptions {
@@ -334,6 +348,10 @@ export interface ExportRenderOptions {
    * 显式 false 只检不修。
    */
   qaRepair?: boolean;
+  /** Shared bounded cache for exact base renders. Omit to disable. */
+  renderCacheDir?: string;
+  /** Cache budget override; defaults to a conservative 1GiB. */
+  renderCacheMaxBytes?: number;
 }
 
 export interface ExportedClip {
@@ -436,6 +454,18 @@ export async function exportClips(
   // One encoder probe per process/run. The cut layer retries libx264 if the
   // advertised hardware encoder is unusable because of a missing device/driver.
   const videoEncoder = audioOnly ? "libx264" as const : await resolveVideoEncoder();
+  // Cache identity is resolved once per export. If source/watermark metadata
+  // cannot be read, caching simply disables itself and the normal render path
+  // continues unchanged.
+  let cacheSource: FileFingerprint | null = null;
+  let cacheWatermark: FileFingerprint | null = null;
+  if (options.renderCacheDir) {
+    cacheSource = await fingerprintRenderFile(inputPath).catch(() => null);
+    if (watermark) cacheWatermark = await fingerprintRenderFile(watermark.path).catch(() => null);
+  }
+  const renderCacheReady = Boolean(
+    options.renderCacheDir && cacheSource && (!watermark || cacheWatermark)
+  );
 
   // 多画幅:开「+横屏版」时进度总数翻倍(第二遍横屏在主循环后递归跑)。
   // 竖屏源裁不出可用的 16:9,原画幅本来就是竖的——直接跳过横屏版。
@@ -578,6 +608,7 @@ export async function exportClips(
 
       const clipDuration = plan ? plan.durationSec : clip.endSec - clip.startSec;
       let subtitlePath: string | undefined;
+      let subtitleHash: string | undefined;
       const wantCaptions = Boolean(options.captionStyle && captionWords && captionWords.length > 0);
       // Web styles render words in the overlay pass; ASS then only draws the
       // title card. ASS styles burn everything in one libass pass as before.
@@ -615,6 +646,7 @@ export async function exportClips(
             speakerLabels: options.speakerLabels,
           }
         );
+        subtitleHash = hashRenderInput(ass);
         await writeFile(subtitlePath, ass, "utf8");
       }
 
@@ -703,7 +735,7 @@ export async function exportClips(
         options.muteTerms && clip.words
           ? mapSensitiveRanges(clip.words, options.muteTerms, plan?.segments ?? [{ startSec: clip.startSec, endSec: clip.endSec }])
           : undefined;
-      const cutOptions = trackPlan
+      const cutOptions: CutOptions = trackPlan
         ? { trackPlan, autoZoom, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, muteRanges: sensitiveMuteRanges, watermark, metadata: aigcMeta, crf: options.crf, encoder: videoEncoder }
         : {
             uiCrop,
@@ -719,33 +751,107 @@ export async function exportClips(
             crf: options.crf,
             encoder: videoEncoder,
           };
-      if (audioOnly) {
-        // audiogram:深色底+品牌色波形合成画面,单段/跳剪统一(波形随剪好的音频生成)
-        await runAudiogram(
-          inputPath,
-          cutTarget,
-          plan ? plan.segments : [{ startSec: clip.startSec, endSec: clip.endSec }],
-          {
-            // 与 ASS layout 的竖/横选择严格一致,playRes 才对得上
-            spec: audiogramSpec(Boolean(options.vertical), options.brand?.highlightColor),
-            subtitlePath,
-            fontsDir: subtitlePath ? options.fontsDir : undefined,
-            normalizeLoudness: options.normalizeLoudness,
-            denoise: options.denoise,
-            muteRanges: sensitiveMuteRanges,
-            watermark,
-            metadata: aigcMeta,
-            crf: options.crf,
-          },
-          signal,
-          onTimeSec
-        );
-      } else if (plan && plan.segments.length > 1) {
-        await cutJumpClip(inputPath, cutTarget, clip.startSec, plan.segments, cutOptions, signal, onTimeSec);
+      const baseSegments = plan?.segments ?? [{ startSec: clip.startSec, endSec: clip.endSec }];
+      const baseKind = audioOnly ? "audiogram" : baseSegments.length > 1 ? "jump-cut" : "cut";
+      const cacheKey = renderCacheReady
+        ? createRenderCacheKey({
+            source: cacheSource,
+            implementation: "export-base-v1",
+            kind: baseKind,
+            segments: baseSegments,
+            options: {
+              uiCrop,
+              vertical: options.vertical,
+              autoZoom,
+              trackPlan,
+              subtitleSha256: subtitleHash,
+              fontsDir: subtitlePath ? options.fontsDir : undefined,
+              normalizeLoudness: options.normalizeLoudness,
+              denoise: options.denoise,
+              muteRanges: sensitiveMuteRanges,
+              watermark: watermark ? { ...watermark, file: cacheWatermark } : undefined,
+              metadata: aigcMeta,
+              crf: options.crf,
+              encoder: videoEncoder,
+              audiogram: audioOnly ? audiogramSpec(Boolean(options.vertical), options.brand?.highlightColor) : undefined,
+            },
+          })
+        : null;
+      let renderCache: ClipRenderOutcome["renderCache"] = renderCacheReady ? "miss" : "disabled";
+      let videoMode: ClipRenderOutcome["videoMode"] = "encode";
+      let cacheHit = false;
+      if (cacheKey && options.renderCacheDir) {
+        cacheHit = await restoreRenderCache(options.renderCacheDir, cacheKey, cutTarget);
+        if (cacheHit) {
+          const cachedInfo = await probeMedia(cutTarget).catch(() => null);
+          if (!cachedInfo?.hasVideo || cachedInfo.durationSec <= 0) {
+            cacheHit = false;
+            await invalidateRenderCache(options.renderCacheDir, cacheKey);
+            await rm(cutTarget, { force: true }).catch(() => undefined);
+          }
+        }
+      }
+      if (cacheHit) {
+        renderCache = "hit";
+        videoMode = "cached";
+        onProgress?.({ current: i + 1, total: totalUnits, clipId: clip.id, stage: "cutting", fraction: 1 });
       } else {
-        // single kept segment → plain cut (honoring trimmed lead-in/tail)
-        const range = plan?.segments[0] ?? { startSec: clip.startSec, endSec: clip.endSec };
-        await cutClip(inputPath, cutTarget, range.startSec, range.endSec, cutOptions, signal, onTimeSec);
+        if (audioOnly) {
+          // audiogram:深色底+品牌色波形合成画面,单段/跳剪统一(波形随剪好的音频生成)
+          await runAudiogram(
+            inputPath,
+            cutTarget,
+            baseSegments,
+            {
+              // 与 ASS layout 的竖/横选择严格一致,playRes 才对得上
+              spec: audiogramSpec(Boolean(options.vertical), options.brand?.highlightColor),
+              subtitlePath,
+              fontsDir: subtitlePath ? options.fontsDir : undefined,
+              normalizeLoudness: options.normalizeLoudness,
+              denoise: options.denoise,
+              muteRanges: sensitiveMuteRanges,
+              watermark,
+              metadata: aigcMeta,
+              crf: options.crf,
+            },
+            signal,
+            onTimeSec
+          );
+        } else if (baseSegments.length > 1) {
+          await cutJumpClip(inputPath, cutTarget, clip.startSec, baseSegments, cutOptions, signal, onTimeSec);
+        } else {
+          // Single kept segment: copy H.264 video only when its start is proven
+          // keyframe-aligned and no pixel-changing filter is active.
+          const range = baseSegments[0];
+          // First use a synthetic aligned timestamp to check codec/filter
+          // eligibility; only pay for ffprobe when the edit could actually copy.
+          const copyCandidate = srcInfo
+            ? canCopyVideoStream(srcInfo, range.startSec, cutOptions, [range.startSec])
+            : false;
+          const keyframes = copyCandidate
+            ? await probeVideoKeyframes(inputPath, range.startSec).catch(() => [] as number[])
+            : [];
+          const videoCopy = copyCandidate && srcInfo
+            ? canCopyVideoStream(srcInfo, range.startSec, cutOptions, keyframes)
+            : false;
+          videoMode = await cutClip(
+            inputPath,
+            cutTarget,
+            range.startSec,
+            range.endSec,
+            { ...cutOptions, videoCopy },
+            signal,
+            onTimeSec
+          );
+        }
+        if (cacheKey && options.renderCacheDir) {
+          await storeRenderCache(
+            options.renderCacheDir,
+            cacheKey,
+            cutTarget,
+            options.renderCacheMaxBytes
+          ).catch((error) => console.error(`render cache store failed for clip ${clip.id}:`, error));
+        }
       }
       if (webStyle) {
         // Overlay geometry must match the base clip exactly, whatever the cut
@@ -1101,6 +1207,8 @@ export async function exportClips(
         preciseAligned,
         sfxCues: sfxApplied.length,
         bgmMixed,
+        renderCache,
+        videoMode,
       });
       onProgress?.({ current: i + 1, total: totalUnits, clipId: clip.id, stage: "done" });
     }

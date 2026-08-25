@@ -31,11 +31,11 @@
   "name": "HotClip",
   "operatingSystem": "Windows, macOS, Linux",
   "applicationCategory": "MultimediaApplication",
-  "softwareVersion": "0.16.0",
+  "softwareVersion": "0.17.0",
   "inLanguage": ["en", "zh-CN"],
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
   "description": "Free, open-source, local-first AI video clipper: turn long videos and livestream replays into 9:16 shorts with AI highlight detection, dynamic word-level captions and face-tracked auto-reframe. No credits or watermark.",
-  "featureList": "AI highlight detection with virality scores and reasoning, live-chat heat evidence, face-tracked 9:16 auto-reframe, dynamic word-level captions, filler removal, transcript-timed sensitive-term muting, multi-project workspace, reversible editing and professional shortcuts, restart-safe recovery, durable automation queue, desktop health diagnostics, publishing feedback ledger, local A/B experiments, topic-series packs, per-platform publish packs, SRT and bilingual captions",
+  "featureList": "AI highlight detection with virality scores and reasoning, live-chat heat evidence, face-tracked 9:16 auto-reframe, dynamic word-level captions, filler removal, transcript-timed sensitive-term muting, multi-project workspace, reversible editing and professional shortcuts, restart-safe recovery, durable automation queue, bounded base-render cache, keyframe-safe H.264 copy, desktop health diagnostics, publishing feedback ledger, local A/B experiments, topic-series packs, per-platform publish packs, SRT and bilingual captions",
   "url": "https://xixihhhh.github.io/hotclip/en.html",
   "downloadUrl": "https://github.com/xixihhhh/hotclip/releases/latest",
   "screenshot": "https://xixihhhh.github.io/hotclip/screenshots/04-highlights.png",
@@ -136,7 +136,7 @@
   </div>
   <p class="note">No Python, no Docker, no account — a real desktop app you double-click</p>
   <div class="meta-badges">
-    <span>Latest <b id="gh-version">v0.16.0</b></span>
+    <span>Latest <b id="gh-version">v0.17.0</b></span>
     <span>GitHub <b id="gh-stars">★</b></span>
     <span>Windows · macOS · Linux</span>
   </div>
@@ -316,6 +316,7 @@
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-scissors"/></svg></span><h3>Every human edit can step back</h3><p>Selection, copy, boundaries, manual clips and transcript fixes share persistent undo/redo, plus keyboard transport, seek and in/out controls.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>Restart-safe work, durable queue</h3><p>Sources, transcripts, candidates and manual cuts recover; folder watch and webhooks share a <b>persistent queue</b> with cancel and retry.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span><h3>Health check before a long run</h3><p>Checks FFmpeg, downloader, nine model roles, LLM routing, disk and cache; core model preparation supports cancel and resume.</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>Repeat long-video exports get faster</h3><p>Matching base renders restore from a local cache; H.264 copies only when keyframes and pixel operations make it safe, otherwise it <b>falls back to accurate encoding</b>. The 1GB cache clears separately.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-scissors"/></svg></span><h3>Mute terms, keep the audit trail</h3><p>An editable local list drives transcript-timed audio muting across jump cuts and multi-piece clips; <b>captions keep the original text</b>.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg></span><h3>Published results teach the next cut</h3><p>Stable content IDs and a prefilled metrics CSV correlate outcomes conservatively; awaiting/measured and unmatched/ambiguous states stay visible.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>Multi-version exports become local A/B</h3><p>Compare only one platform, a 72-hour publish window and 500+ views per version; states stay explicit and <b>direction is never presented as causation</b>.</p></div>

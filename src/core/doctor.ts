@@ -253,6 +253,8 @@ async function checkDownloader(toolsDir: string, zh: boolean): Promise<DoctorChe
 export async function runDoctor(opts: {
   modelsRoot: string;
   cacheDir: string;
+  /** Optional bounded base-render cache; desktop passes it for size/control visibility. */
+  renderCacheDir?: string;
   /** 桌面地址导入工具目录;CLI 未提供时跳过此可选检查。 */
   toolsDir?: string;
   llm: LlmConfig | null;
@@ -294,6 +296,20 @@ export async function runDoctor(opts: {
     status: "ok",
     detail: cacheBytes > 0 ? (zh ? `${fmtMB(cacheBytes)}(同文件重开秒进)` : `${fmtMB(cacheBytes)} (reopens the same file instantly)`) : (zh ? "空(转写后自动积累)" : "Empty (builds automatically after transcription)"),
   });
+
+  if (opts.renderCacheDir) {
+    const renderCacheBytes = await dirSize(opts.renderCacheDir);
+    checks.push({
+      id: "render-cache",
+      name: zh ? "基础渲染缓存" : "Render cache",
+      status: "ok",
+      detail: renderCacheBytes > 0
+        ? (zh
+            ? `${fmtMB(renderCacheBytes)}(重复导出直接复用,自动限制为 1GB)`
+            : `${fmtMB(renderCacheBytes)} (reused for repeat exports; automatically limited to 1GB)`)
+        : (zh ? "空(导出后按需积累)" : "Empty (builds as clips are exported)"),
+    });
+  }
 
   return { checks, missingCoreModels };
 }

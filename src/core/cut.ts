@@ -67,6 +67,12 @@ export type CutMode = "accurate" | "copy";
 
 export interface CutOptions {
   mode?: CutMode;
+  /**
+   * Internal smart-render path: copy only the H.264 video stream while audio
+   * still receives the normal fades/filters and AAC encoding. Callers must
+   * prove keyframe alignment first; any pixel-changing filter disables it.
+   */
+  videoCopy?: boolean;
   /** x264 CRF for accurate mode (lower = better); default 18 (visually lossless-ish). */
   crf?: number;
   /** x264 preset for accurate mode; default "veryfast". */
@@ -267,6 +273,7 @@ export function buildCutArgs(
 
   const crf = Number.isFinite(options.crf) ? String(options.crf) : "18";
   const preset = options.preset ?? "veryfast";
+  const copyVideo = Boolean(options.videoCopy && filters.length === 0 && !options.watermark);
   // 音频链固定顺序:降噪 → 响度标准化(loudnorm 必须看到去噪后的音频)
   // → 边缘淡化(放最后,loudnorm 的动态增益才不会把淡化抬回去)
   const audioChain = [
@@ -278,8 +285,9 @@ export function buildCutArgs(
   return [
     ...common,
     ...(filters.length > 0 || options.watermark ? ["-vf", composeVideoFilter(filters, options.watermark)] : []),
-    ...videoEncoderArgs(options.encoder ?? "libx264", Number(crf), preset),
-    "-pix_fmt", "yuv420p",
+    ...(copyVideo
+      ? ["-c:v", "copy"]
+      : [...videoEncoderArgs(options.encoder ?? "libx264", Number(crf), preset), "-pix_fmt", "yuv420p"]),
     ...(audioChain.length > 0 ? ["-af", audioChain.join(",")] : []),
     ...(options.normalizeLoudness ? ["-ar", LOUDNORM_OUT_RATE] : []),
     "-c:a", "aac",
@@ -401,17 +409,32 @@ export async function cutClip(
   options: CutOptions = {},
   signal?: AbortSignal,
   onTimeSec?: (sec: number) => void
-): Promise<void> {
+): Promise<"copy" | "encode"> {
   const args = buildCutArgs(inputPath, outputPath, startSec, endSec, options);
   try {
     await runFfmpeg(args, { signal, onTimeSec });
+    return options.videoCopy ? "copy" : "encode";
   } catch (e) {
+    // Smart video copy is an optimization only. Container/bitstream quirks can
+    // still reject an otherwise eligible stream, so retry the proven accurate
+    // path before considering hardware-encoder fallback.
+    if (options.videoCopy && !signal?.aborted) {
+      try {
+        await runFfmpeg(
+          buildCutArgs(inputPath, outputPath, startSec, endSec, { ...options, videoCopy: false }),
+          { signal, onTimeSec }
+        );
+        return "encode";
+      } catch (accurateError) {
+        e = accurateError;
+      }
+    }
     if (options.encoder && options.encoder !== "libx264" && !signal?.aborted) {
       await runFfmpeg(
-        buildCutArgs(inputPath, outputPath, startSec, endSec, { ...options, encoder: "libx264" }),
+        buildCutArgs(inputPath, outputPath, startSec, endSec, { ...options, videoCopy: false, encoder: "libx264" }),
         { signal, onTimeSec }
       );
-      return;
+      return "encode";
     }
     const msg = e instanceof Error ? e.message : String(e);
     // ffmpeg errors bury the cause at the end of stderr — surface only the tail

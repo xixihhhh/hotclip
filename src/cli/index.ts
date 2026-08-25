@@ -14,7 +14,7 @@ import { join, basename } from "path";
 import { transcribeCached, detectForPipeline, autoClip, analyzeReferenceVideo } from "../core/pipeline";
 import type { ReferenceProfile } from "../core/reference";
 import { loadGlossary } from "../core/glossary-store";
-import { userDataDir, modelsRoot, cacheDir, llmFromEnv } from "../core/appenv";
+import { userDataDir, modelsRoot, cacheDir, renderCacheDir, llmFromEnv } from "../core/appenv";
 import { runDoctor } from "../core/doctor";
 import { ensureModel } from "../core/models";
 import { loadReviewMemory } from "../core/review-memory";
@@ -118,7 +118,7 @@ async function main(): Promise<void> {
     } catch {
       // 保持 null
     }
-    const report = await runDoctor({ modelsRoot: modelsRoot(), cacheDir: cacheDir(), llm });
+    const report = await runDoctor({ modelsRoot: modelsRoot(), cacheDir: cacheDir(), renderCacheDir: renderCacheDir(), llm });
     const icon = { ok: "✅", warn: "⚠️", fail: "❌" } as const;
     for (const c of report.checks) {
       process.stdout.write(`${icon[c.status]} ${c.name}:${c.detail}\n`);
@@ -235,6 +235,7 @@ async function main(): Promise<void> {
     const outcome = await autoClip(args.videoPath, {
       modelsRoot: modelsRoot(),
       cacheDir: cacheDir(),
+      renderCacheDir: renderCacheDir(),
       llm,
       maxClips: args.maxClips,
       vertical: args.vertical,

@@ -32,11 +32,11 @@
   "alternateName": "HotClip 爆款切片",
   "operatingSystem": "Windows, macOS, Linux",
   "applicationCategory": "MultimediaApplication",
-  "softwareVersion": "0.16.0",
+  "softwareVersion": "0.17.0",
   "inLanguage": ["zh-CN", "en"],
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
   "description": "免费开源、本地运行的 AI 视频切片 / 直播切片软件:长视频、直播回放一键切成爆款竖屏短视频。AI 找爆点、弹幕热度进爆点判断、横屏转竖屏 9:16、逐词点亮动态字幕,无积分制、无水印、素材不上传。",
-  "featureList": "AI 找爆点(八路证据链,附爆款分与理由)、弹幕热度进爆点判断、横屏转竖屏 9:16 人脸跟随、动态逐词点亮字幕、去气口剪口头禅、敏感词音频静音、项目工作区、可逆编辑与专业快捷键、重启恢复、持久自动化任务队列、桌面健康检查、发布反馈台账、本地 A/B 实验、主题系列整理、平台发布包、SRT/双语字幕导出",
+  "featureList": "AI 找爆点(八路证据链,附爆款分与理由)、弹幕热度进爆点判断、横屏转竖屏 9:16 人脸跟随、动态逐词点亮字幕、去气口剪口头禅、敏感词音频静音、项目工作区、可逆编辑与专业快捷键、重启恢复、持久自动化任务队列、有界基础渲染缓存、关键帧安全直拷、桌面健康检查、发布反馈台账、本地 A/B 实验、主题系列整理、平台发布包、SRT/双语字幕导出",
   "url": "https://xixihhhh.github.io/hotclip/",
   "downloadUrl": "https://github.com/xixihhhh/hotclip/releases/latest",
   "screenshot": "https://xixihhhh.github.io/hotclip/screenshots/04-highlights.png",
@@ -139,7 +139,7 @@
   </div>
   <p class="note">不用 Python、不用 Docker、连账号都不用注册——下载安装包,双击即用</p>
   <div class="meta-badges">
-    <span>最新版本 <b id="gh-version">v0.16.0</b></span>
+    <span>最新版本 <b id="gh-version">v0.17.0</b></span>
     <span>GitHub <b id="gh-stars">★</b></span>
     <span>Windows · macOS · Linux</span>
   </div>
@@ -320,6 +320,7 @@
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-scissors"/></svg></span><h3>每一步都能撤销重做</h3><p>选片、标题、切点、手动加片和逐句稿纠错共用可逆历史,随项目恢复;播放、跳播和入出点有专业快捷键。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>任务断了,重开接着做</h3><p>素材、逐字稿、候选与手调切点自动恢复;录播监听和 webhook 共用<b>持久任务队列</b>,可取消、可重试。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span><h3>出片前一键健康检查</h3><p>检查 FFmpeg、解析工具、9 类模型、LLM 连通性、磁盘与缓存;核心模型可取消、可续传地准备。</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>长视频重复出片更快</h3><p>相同基础成片直接复用本地缓存;H.264 仅在关键帧与画面条件安全时直拷,其余<b>透明回退精确编码</b>。缓存最多 1GB,可单独清理。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-scissors"/></svg></span><h3>敏感词只静音,原文仍可审</h3><p>自定义词表按逐字稿时间精准静音,跳剪/多片段也能映射;<b>字幕与逐字稿保留原文</b>。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg></span><h3>发布效果回流下一刀</h3><p>稳定内容 ID + 预填指标 CSV 保守对账;待回填/已统计状态清楚,未匹配和歧义不藏起来。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>一片多版自动做本地 A/B</h3><p>同平台、72 小时发布窗口、每版至少 500 播放才比较;只报等待/证据不足/方向性领先,<b>不把相关说成因果</b>。</p></div>
