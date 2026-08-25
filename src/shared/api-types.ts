@@ -477,6 +477,36 @@ export interface SessionCheckpoint {
   savedAt: string;
 }
 
+/** Current relationship between a saved project and its source media. */
+export type ProjectSourceStatus = "ready" | "offline" | "changed" | "corrupt";
+
+/** Lightweight project metadata used by the workspace list. */
+export interface ProjectSummary {
+  id: string;
+  name: string;
+  sourcePath: string;
+  sourceName: string;
+  status: ProjectSourceStatus;
+  hasTranscript: boolean;
+  candidateCount: number;
+  createdAt: string;
+  updatedAt: string;
+  lastOpenedAt: string;
+}
+
+/** Opening an offline/changed/corrupt project returns metadata but no live session. */
+export interface ProjectOpenResult {
+  project: ProjectSummary;
+  checkpoint: SessionCheckpoint | null;
+}
+
+/** One-shot startup payload, including idempotent legacy-session migration. */
+export interface ProjectWorkspaceBootstrap {
+  projects: ProjectSummary[];
+  activeProjectId: string | null;
+  active: ProjectOpenResult | null;
+}
+
 /** One exported clip file on disk. */
 export interface ExportedClip {
   id: number;
@@ -605,6 +635,22 @@ export interface HotClipApi {
   onUrlImportProgress: (cb: (p: UrlImportProgressEvent) => void) => () => void;
   /** 取消当前地址导入；已完整下载的旧文件不受影响。 */
   cancelUrlImport: () => void;
+  /** Load the project library and restore the last active project when its source is valid. */
+  projectWorkspaceGet: () => Promise<ProjectWorkspaceBootstrap>;
+  /** Create and activate a project from a freshly probed source session. */
+  projectCreate: (checkpoint: SessionCheckpoint, name?: string) => Promise<ProjectOpenResult | null>;
+  /** Activate a saved project; offline/changed projects return no checkpoint until relinked. */
+  projectOpen: (id: string) => Promise<ProjectOpenResult | null>;
+  /** Save stable editing state into a specific project, guarded by its source fingerprint. */
+  projectSave: (id: string, checkpoint: SessionCheckpoint) => Promise<boolean>;
+  /** Rename project metadata without renaming or moving source media. */
+  projectRename: (id: string, name: string) => Promise<ProjectSummary | null>;
+  /** Delete only the app-managed project document; source media is never deleted. */
+  projectDelete: (id: string) => Promise<boolean>;
+  /** Reconnect an offline/changed project to a compatible, freshly probed media file. */
+  projectRelink: (id: string, filePath: string) => Promise<ProjectOpenResult | null>;
+  /** Leave the current project while keeping it in the library. */
+  projectClose: () => Promise<void>;
   /** Restore the last stable editing session when the source fingerprint still matches. */
   sessionCheckpointGet: () => Promise<SessionCheckpoint | null>;
   /** Atomically save one active editing session; false means it exceeded the safety cap. */

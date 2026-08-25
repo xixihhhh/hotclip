@@ -185,3 +185,19 @@ export function sessionCheckpointFromState(state: SessionState = useSession.getS
     savedAt: new Date().toISOString(),
   };
 }
+
+/** Build the first stable document for a freshly probed source before it enters the live store. */
+export function initialSessionCheckpoint(file: ProbedFile): SessionCheckpoint {
+  return {
+    file,
+    transcript: null,
+    candidates: null,
+    selected: [],
+    focusedId: null,
+    stats: EMPTY_STATS,
+    diarize: false,
+    referencePath: null,
+    paramsDirty: false,
+    savedAt: new Date().toISOString(),
+  };
+}

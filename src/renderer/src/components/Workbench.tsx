@@ -146,7 +146,7 @@ function StatsLine(): React.JSX.Element | null {
   );
 }
 
-export function Workbench(): React.JSX.Element {
+export function Workbench({ onCloseProject }: { onCloseProject: () => void }): React.JSX.Element {
   const t = useT("workbench");
   const th = useT("highlights");
   const session = useSession();
@@ -285,7 +285,7 @@ export function Workbench(): React.JSX.Element {
                 filePath={file.path}
                 cached={null}
                 autoStart={auto}
-                onBack={() => session.reset()}
+                onBack={onCloseProject}
                 onDone={(tr) => session.setTranscript(tr)}
                 onEdited={(tr) => session.setTranscript(tr)}
               />
@@ -416,7 +416,7 @@ export function Workbench(): React.JSX.Element {
               session.setAuto(false);
               session.setExporting(null);
             }}
-            onRestart={() => session.reset()}
+            onRestart={onCloseProject}
           />
         </div>
       )}

@@ -20,6 +20,8 @@ import type {
   UrlImportProgressEvent,
   SessionCheckpoint,
   AutomationTask,
+  ProjectOpenResult,
+  ProjectSummary,
 } from "../../../shared/api-types";
 import { applyGlossaryToTranscript, sanitizeGlossary } from "../../../shared/glossary";
 
@@ -81,6 +83,9 @@ const emitWatch = (e: Omit<WatchEvent, "at">): void => {
 let mockExportCancelled = false;
 let mockUrlImportCancelled = false;
 let mockSessionCheckpoint: SessionCheckpoint | null = null;
+let mockActiveProjectId: string | null = null;
+let mockProjectSerial = 0;
+let mockProjects: Array<{ summary: ProjectSummary; checkpoint: SessionCheckpoint }> = [];
 let mockAutomationTasks: AutomationTask[] = [
   { id: "demo-done", sourcePath: "/demo/访谈回放.mp4", sourceName: "访谈回放.mp4", sourceSize: 1_200_000_000, sourceMtimeMs: 1, trigger: "folder", status: "completed", stage: "exporting", attempts: 1, clips: 5, outDir: "/demo/访谈回放-hotclip", createdAt: "2026-08-23T02:10:00Z", updatedAt: "2026-08-23T02:18:00Z" },
   { id: "demo-failed", sourcePath: "/demo/断流回放.flv", sourceName: "断流回放.flv", sourceSize: 420_000_000, sourceMtimeMs: 2, trigger: "webhook", status: "failed", stage: "transcribing", attempts: 1, error: "媒体文件尾部不完整", createdAt: "2026-08-22T12:00:00Z", updatedAt: "2026-08-22T12:01:00Z" },
@@ -151,6 +156,84 @@ const browserMock: HotClipApi = {
   },
   cancelUrlImport() {
     mockUrlImportCancelled = true;
+  },
+  async projectWorkspaceGet() {
+    const activeRecord = mockProjects.find((item) => item.summary.id === mockActiveProjectId);
+    const active: ProjectOpenResult | null = activeRecord
+      ? { project: structuredClone(activeRecord.summary), checkpoint: activeRecord.summary.status === "ready" ? structuredClone(activeRecord.checkpoint) : null }
+      : null;
+    return { projects: structuredClone(mockProjects.map((item) => item.summary)), activeProjectId: mockActiveProjectId, active };
+  },
+  async projectCreate(checkpoint, name) {
+    const now = new Date().toISOString();
+    const id = `demo-project-${++mockProjectSerial}`;
+    const sourceName = checkpoint.file.path.split(/[\\/]/).pop() ?? checkpoint.file.path;
+    const summary: ProjectSummary = {
+      id,
+      name: name?.trim() || sourceName.replace(/\.[^.]+$/, ""),
+      sourcePath: checkpoint.file.path,
+      sourceName,
+      status: "ready",
+      hasTranscript: checkpoint.transcript !== null,
+      candidateCount: checkpoint.candidates?.length ?? 0,
+      createdAt: now,
+      updatedAt: now,
+      lastOpenedAt: now,
+    };
+    const saved = structuredClone(checkpoint);
+    mockProjects.push({ summary, checkpoint: saved });
+    mockActiveProjectId = id;
+    return { project: structuredClone(summary), checkpoint: structuredClone(saved) };
+  },
+  async projectOpen(id) {
+    const record = mockProjects.find((item) => item.summary.id === id);
+    if (!record) return null;
+    record.summary.lastOpenedAt = new Date().toISOString();
+    mockActiveProjectId = id;
+    return {
+      project: structuredClone(record.summary),
+      checkpoint: record.summary.status === "ready" ? structuredClone(record.checkpoint) : null,
+    };
+  },
+  async projectSave(id, checkpoint) {
+    const record = mockProjects.find((item) => item.summary.id === id);
+    if (!record || record.summary.status !== "ready" || record.summary.sourcePath !== checkpoint.file.path) return false;
+    record.checkpoint = structuredClone(checkpoint);
+    record.summary.updatedAt = new Date().toISOString();
+    record.summary.hasTranscript = checkpoint.transcript !== null;
+    record.summary.candidateCount = checkpoint.candidates?.length ?? 0;
+    return true;
+  },
+  async projectRename(id, name) {
+    const record = mockProjects.find((item) => item.summary.id === id);
+    if (!record) return null;
+    record.summary.name = name.trim().replace(/\s+/g, " ").slice(0, 80) || record.summary.name;
+    record.summary.updatedAt = new Date().toISOString();
+    return structuredClone(record.summary);
+  },
+  async projectDelete(id) {
+    const before = mockProjects.length;
+    mockProjects = mockProjects.filter((item) => item.summary.id !== id);
+    if (mockActiveProjectId === id) mockActiveProjectId = null;
+    return mockProjects.length !== before;
+  },
+  async projectRelink(id, filePath) {
+    const record = mockProjects.find((item) => item.summary.id === id);
+    if (!record) return null;
+    record.checkpoint = { ...record.checkpoint, file: { ...record.checkpoint.file, path: filePath }, savedAt: new Date().toISOString() };
+    record.summary = {
+      ...record.summary,
+      sourcePath: filePath,
+      sourceName: filePath.split(/[\\/]/).pop() ?? filePath,
+      status: "ready",
+      updatedAt: new Date().toISOString(),
+      lastOpenedAt: new Date().toISOString(),
+    };
+    mockActiveProjectId = id;
+    return { project: structuredClone(record.summary), checkpoint: structuredClone(record.checkpoint) };
+  },
+  async projectClose() {
+    mockActiveProjectId = null;
   },
   async sessionCheckpointGet() {
     return mockSessionCheckpoint ? structuredClone(mockSessionCheckpoint) : null;

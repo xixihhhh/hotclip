@@ -55,6 +55,16 @@ import {
 import { buildPerformanceTemplate, clearPublishMetrics, loadPublishLedger, registerPublishItems } from "@core/publish-ledger";
 import { importMediaUrl as downloadMediaUrl } from "@core/url-import";
 import { clearSessionCheckpoint, readSessionCheckpoint, saveSessionCheckpoint } from "@core/session-checkpoint";
+import {
+  closeProject,
+  createProject,
+  deleteProject,
+  openProject,
+  projectWorkspace,
+  relinkProject,
+  renameProject,
+  saveProject,
+} from "@core/project-workspace";
 import { loadAutomationTasks, normalizeAutomationTasks, saveAutomationTasks } from "@core/automation-history";
 import { sanitizeSensitiveWords } from "@core/sensitive-words";
 import { runDoctor } from "@core/doctor";
@@ -197,23 +207,62 @@ ipcMain.on("hotclip:url-import-cancel", () => {
   urlImportAbort?.abort();
 });
 
-let sessionCheckpointOps: Promise<void> = Promise.resolve();
-function queueSessionCheckpoint<T>(operation: () => Promise<T>): Promise<T> {
-  const result = sessionCheckpointOps.then(operation, operation);
-  sessionCheckpointOps = result.then(() => undefined, () => undefined);
+let projectPersistenceOps: Promise<void> = Promise.resolve();
+function queueProjectPersistence<T>(operation: () => Promise<T>): Promise<T> {
+  const result = projectPersistenceOps.then(operation, operation);
+  projectPersistenceOps = result.then(() => undefined, () => undefined);
   return result;
 }
 
-ipcMain.handle("hotclip:session-checkpoint-get", () => queueSessionCheckpoint(async () => {
+ipcMain.handle("hotclip:project-workspace-get", () => queueProjectPersistence(async () => {
+  const workspace = await projectWorkspace(app.getPath("userData"));
+  if (workspace.active?.checkpoint) allowedMedia.add(workspace.active.checkpoint.file.path);
+  return workspace;
+}));
+ipcMain.handle("hotclip:project-create", (_event, checkpoint: unknown, name?: string) =>
+  queueProjectPersistence(async () => {
+    const result = await createProject(app.getPath("userData"), checkpoint, name);
+    if (result?.checkpoint) allowedMedia.add(result.checkpoint.file.path);
+    return result;
+  })
+);
+ipcMain.handle("hotclip:project-open", (_event, id: string) => queueProjectPersistence(async () => {
+  const result = await openProject(app.getPath("userData"), id);
+  if (result?.checkpoint) allowedMedia.add(result.checkpoint.file.path);
+  return result;
+}));
+ipcMain.handle("hotclip:project-save", (_event, id: string, checkpoint: unknown) =>
+  queueProjectPersistence(() => saveProject(app.getPath("userData"), id, checkpoint))
+);
+ipcMain.handle("hotclip:project-rename", (_event, id: string, name: string) =>
+  queueProjectPersistence(() => renameProject(app.getPath("userData"), id, name))
+);
+ipcMain.handle("hotclip:project-delete", (_event, id: string) =>
+  queueProjectPersistence(() => deleteProject(app.getPath("userData"), id))
+);
+ipcMain.handle("hotclip:project-relink", (_event, id: string, filePath: string) =>
+  queueProjectPersistence(async () => {
+    if (typeof filePath !== "string" || filePath.length === 0) return null;
+    const info = await probeMedia(filePath);
+    const result = await relinkProject(app.getPath("userData"), id, { path: filePath, ...info });
+    if (result?.checkpoint) allowedMedia.add(result.checkpoint.file.path);
+    return result;
+  })
+);
+ipcMain.handle("hotclip:project-close", () =>
+  queueProjectPersistence(() => closeProject(app.getPath("userData")))
+);
+
+ipcMain.handle("hotclip:session-checkpoint-get", () => queueProjectPersistence(async () => {
   const checkpoint = await readSessionCheckpoint(app.getPath("userData"));
   if (checkpoint) allowedMedia.add(checkpoint.file.path);
   return checkpoint;
 }));
 ipcMain.handle("hotclip:session-checkpoint-save", (_event, checkpoint: unknown) =>
-  queueSessionCheckpoint(() => saveSessionCheckpoint(app.getPath("userData"), checkpoint))
+  queueProjectPersistence(() => saveSessionCheckpoint(app.getPath("userData"), checkpoint))
 );
 ipcMain.handle("hotclip:session-checkpoint-clear", () =>
-  queueSessionCheckpoint(() => clearSessionCheckpoint(app.getPath("userData")))
+  queueProjectPersistence(() => clearSessionCheckpoint(app.getPath("userData")))
 );
 
 // ---- IPC:真实发布表现反馈(设置中心) ----
