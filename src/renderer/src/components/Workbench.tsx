@@ -4,7 +4,7 @@
  * 三步向导退役——回退不再丢结果,任何环节随时可回。
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { LuFileVideo, LuAudioLines, LuFolderSearch, LuKeyRound, LuSparkles, LuTextSelect } from "react-icons/lu";
+import { LuFileVideo, LuAudioLines, LuFolderSearch, LuKeyRound, LuRedo2, LuSparkles, LuTextSelect, LuUndo2 } from "react-icons/lu";
 import { useT } from "../i18n/store";
 import { getApi, isElectron } from "../api/provider";
 import { useSession } from "../stores/session-store";
@@ -13,7 +13,7 @@ import { useRenderPrefs } from "../stores/render-prefs-store";
 import { useBrandStore } from "../stores/brand-store";
 import { useDetection } from "./workbench/useDetection";
 import { buildRenderToggles } from "./workbench/export-options";
-import { PreviewPane } from "./workbench/PreviewPane";
+import { PreviewPane, type PreviewTransportCommand } from "./workbench/PreviewPane";
 import { Timeline } from "./workbench/Timeline";
 import { CandidateTable } from "./workbench/CandidateTable";
 import { TranscriptPanel } from "./workbench/TranscriptPanel";
@@ -27,7 +27,8 @@ import { TranscriptPickModal } from "./TranscriptPickModal";
 import { BrandStyleModal } from "./BrandStyleModal";
 import { WatchFolderModal } from "./WatchFolderModal";
 import { clipDurationSec } from "../../../shared/pieces";
-import type { ClipPiece, HighlightCandidate, ReviewedCandidate } from "../../../shared/api-types";
+import { resolveWorkbenchShortcut } from "../keyboard-shortcuts";
+import type { ClipPiece, HighlightCandidate, ReviewedCandidate, SessionEditCommand } from "../../../shared/api-types";
 
 function formatDuration(totalSeconds: number): string {
   const s = Math.floor(totalSeconds);
@@ -41,6 +42,22 @@ function formatDuration(totalSeconds: number): string {
 function displayName(path: string): string {
   const base = path.split(/[\\/]/).pop() ?? path;
   return base.replace(/\.[^.]+$/, "");
+}
+
+function historyLabel(command: SessionEditCommand | undefined, t: (key: string) => string): string {
+  if (!command) return "";
+  if (command.kind === "selection") return t(command.after.length > command.before.length ? "editSelect" : "editDeselect");
+  if (command.kind === "candidate-add") return t("editAddClip");
+  if (command.kind === "transcript-update") return t("editTranscript");
+  if (command.before.title !== command.after.title || command.before.hook !== command.after.hook) return t("editCopy");
+  if (command.before.startSec !== command.after.startSec || command.before.endSec !== command.after.endSec ||
+      JSON.stringify(command.before.pieces) !== JSON.stringify(command.after.pieces)) return t("editBounds");
+  return t("editCandidate");
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || target.matches("input, textarea, select, button, a, [role='button'], [role='switch'], [contenteditable='true']");
 }
 
 /** 左栏:当前素材卡 + 录播监听状态(常驻,不再"选了文件就消失")。 */
@@ -165,6 +182,8 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
   const [showWatch, setShowWatch] = useState(false);
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [defaultOutDir, setDefaultOutDir] = useState("");
+  const [transportCommand, setTransportCommand] = useState<PreviewTransportCommand | null>(null);
+  const currentSecRef = useRef(0);
   useEffect(() => {
     void getApi().defaultOutDir().then(setDefaultOutDir).catch(() => {});
   }, []);
@@ -245,13 +264,49 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
         reviewNote: "",
         manualBounds: true,
       };
-      s.setCandidates([...(s.candidates ?? []), cand].sort((a, b) => a.startSec - b.startSec));
-      s.setSelected(new Set(s.selected).add(id));
-      s.setFocusedId(id);
+      s.addCandidate(cand);
       setShowPick(false);
     },
     []
   );
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      const action = resolveWorkbenchShortcut({
+        key: event.key,
+        code: event.code,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        editable: isEditableTarget(event.target),
+        modalOpen: exporting !== null || document.querySelector("[data-hotclip-modal='true'], [role='dialog']") !== null,
+      });
+      if (!action) return;
+      event.preventDefault();
+      const state = useSession.getState();
+      if (action === "undo") return state.undoEdit();
+      if (action === "redo") return state.redoEdit();
+      if (action === "previous-candidate") return stepCandidate(-1);
+      if (action === "next-candidate") return stepCandidate(1);
+      if (action === "toggle-play" || action === "back-5" || action === "forward-5") {
+        const transportAction = action === "toggle-play" ? "toggle" : action === "back-5" ? "back5" : "forward5";
+        setTransportCommand((previous) => ({ id: (previous?.id ?? 0) + 1, action: transportAction }));
+        return;
+      }
+      const focused = state.candidates?.find((candidate) => candidate.id === state.focusedId);
+      if (!focused || (focused.pieces && focused.pieces.length > 1)) return;
+      const at = Math.max(0, Math.min(durationSec, currentSecRef.current));
+      if (action === "set-in" && at < focused.endSec - 0.1) {
+        state.patchCandidate(focused.id, { startSec: at, boundary: "segment", manualBounds: true });
+      }
+      if (action === "set-out" && at > focused.startSec + 0.1) {
+        state.patchCandidate(focused.id, { endSec: at, boundary: "segment", manualBounds: true });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [durationSec, exporting, stepCandidate]);
 
   const startExport = useCallback((): void => {
     const s = useSession.getState();
@@ -296,9 +351,13 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
                 filePath={file.path}
                 durationSec={durationSec}
                 seekSec={seekSec}
-                onTime={setCurrentSec}
+                onTime={(sec) => {
+                  currentSecRef.current = sec;
+                  setCurrentSec(sec);
+                }}
                 onPrevCandidate={() => stepCandidate(-1)}
                 onNextCandidate={() => stepCandidate(1)}
+                transportCommand={transportCommand}
               />
               <Timeline
                 filePath={file.path}
@@ -331,6 +390,40 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
                 ))}
                 <div className="min-w-0 flex-1 px-2">
                   <StatsLine />
+                </div>
+                <div className="flex shrink-0 items-center gap-1" title={t("shortcutHint")}>
+                  {(() => {
+                    const command = session.editHistory.undo[session.editHistory.undo.length - 1];
+                    const label = command ? `${t("undo")}: ${historyLabel(command, t)}` : t("nothingToUndo");
+                    return (
+                      <button
+                        type="button"
+                        disabled={!command}
+                        title={`${label} · ⌘/Ctrl+Z`}
+                        aria-label={label}
+                        onClick={() => session.undoEdit()}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-line text-mut transition-colors hover:border-mut hover:text-fg disabled:cursor-not-allowed disabled:opacity-30"
+                      >
+                        <LuUndo2 className="h-3.5 w-3.5" />
+                      </button>
+                    );
+                  })()}
+                  {(() => {
+                    const command = session.editHistory.redo[session.editHistory.redo.length - 1];
+                    const label = command ? `${t("redo")}: ${historyLabel(command, t)}` : t("nothingToRedo");
+                    return (
+                      <button
+                        type="button"
+                        disabled={!command}
+                        title={`${label} · ⇧⌘/Ctrl+Y`}
+                        aria-label={label}
+                        onClick={() => session.redoEdit()}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-line text-mut transition-colors hover:border-mut hover:text-fg disabled:cursor-not-allowed disabled:opacity-30"
+                      >
+                        <LuRedo2 className="h-3.5 w-3.5" />
+                      </button>
+                    );
+                  })()}
                 </div>
                 <button
                   type="button"

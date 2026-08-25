@@ -455,6 +455,42 @@ export interface ReferenceInfo {
   zh: boolean;
 }
 
+/** One reversible human edit. AI detection/transcription results establish a new baseline instead. */
+export type SessionEditCommand =
+  | {
+      kind: "selection";
+      before: number[];
+      after: number[];
+    }
+  | {
+      kind: "candidate-update";
+      candidateId: number;
+      before: HighlightCandidate;
+      after: HighlightCandidate;
+    }
+  | {
+      kind: "candidate-add";
+      candidate: HighlightCandidate;
+      beforeSelected: number[];
+      afterSelected: number[];
+      beforeFocusedId: number | null;
+      afterFocusedId: number | null;
+    }
+  | {
+      kind: "transcript-update";
+      changes: Array<{
+        segmentId: number;
+        before: TranscriptSegment;
+        after: TranscriptSegment;
+      }>;
+    };
+
+/** Two JSON-safe stacks; the final item in each array is the next command to replay. */
+export interface SessionEditHistory {
+  undo: SessionEditCommand[];
+  redo: SessionEditCommand[];
+}
+
 /** Stable, restart-safe subset of the renderer's active editing session. */
 export interface SessionCheckpoint {
   file: MediaInfo & { path: string };
@@ -474,6 +510,8 @@ export interface SessionCheckpoint {
   diarize: boolean;
   referencePath: string | null;
   paramsDirty: boolean;
+  /** Optional for backward compatibility with pre-v0.16 projects/checkpoints. */
+  editHistory?: SessionEditHistory;
   savedAt: string;
 }
 

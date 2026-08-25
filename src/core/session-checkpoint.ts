@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, stat, unlink, writeFile } from "fs/promises";
 import { join } from "path";
-import type { HighlightCandidate, SessionCheckpoint, Transcript } from "../shared/api-types";
+import type { HighlightCandidate, SessionCheckpoint, SessionEditCommand, SessionEditHistory, Transcript, TranscriptSegment } from "../shared/api-types";
+import { compactSessionEditHistory } from "../shared/session-edit-history";
 
 const VERSION = 1;
 const FILE_NAME = "active-session.json";
@@ -16,12 +17,14 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
 
+function validTranscriptSegment(segment: unknown): segment is TranscriptSegment {
+  if (!isObject(segment) || !finite(segment.id) || !finite(segment.startSec) || !finite(segment.endSec) || typeof segment.text !== "string" || !Array.isArray(segment.words)) return false;
+  return segment.words.every((word) => isObject(word) && typeof word.text === "string" && finite(word.startSec) && finite(word.endSec));
+}
+
 function validTranscript(value: unknown): value is Transcript {
-  if (!isObject(value) || typeof value.language !== "string" || typeof value.engine !== "string" || !finite(value.durationSec) || !Array.isArray(value.segments)) return false;
-  return value.segments.every((segment) => {
-    if (!isObject(segment) || !finite(segment.id) || !finite(segment.startSec) || !finite(segment.endSec) || typeof segment.text !== "string" || !Array.isArray(segment.words)) return false;
-    return segment.words.every((word) => isObject(word) && typeof word.text === "string" && finite(word.startSec) && finite(word.endSec));
-  });
+  return isObject(value) && typeof value.language === "string" && typeof value.engine === "string" && finite(value.durationSec) &&
+    Array.isArray(value.segments) && value.segments.every(validTranscriptSegment);
 }
 
 function validCandidate(value: unknown): value is HighlightCandidate {
@@ -35,6 +38,41 @@ function validCandidate(value: unknown): value is HighlightCandidate {
 
 function nullableObject(value: unknown): boolean {
   return value === null || isObject(value);
+}
+
+function validIdList(value: unknown): value is number[] {
+  return Array.isArray(value) && value.every(finite);
+}
+
+function validEditCommand(value: unknown): value is SessionEditCommand {
+  if (!isObject(value) || typeof value.kind !== "string") return false;
+  if (value.kind === "selection") return validIdList(value.before) && validIdList(value.after);
+  if (value.kind === "candidate-update") {
+    return finite(value.candidateId) && validCandidate(value.before) && validCandidate(value.after) &&
+      value.before.id === value.candidateId && value.after.id === value.candidateId;
+  }
+  if (value.kind === "candidate-add") {
+    return validCandidate(value.candidate) && validIdList(value.beforeSelected) && validIdList(value.afterSelected) &&
+      (value.beforeFocusedId === null || finite(value.beforeFocusedId)) && (value.afterFocusedId === null || finite(value.afterFocusedId));
+  }
+  if (value.kind === "transcript-update") {
+    if (!Array.isArray(value.changes) || value.changes.length === 0) return false;
+    const ids = new Set<number>();
+    return value.changes.every((change) => {
+      if (!isObject(change) || !finite(change.segmentId) || !validTranscriptSegment(change.before) || !validTranscriptSegment(change.after) ||
+          change.before.id !== change.segmentId || change.after.id !== change.segmentId || ids.has(change.segmentId)) return false;
+      ids.add(change.segmentId);
+      return true;
+    });
+  }
+  return false;
+}
+
+function normalizeEditHistory(value: unknown): SessionEditHistory | undefined {
+  if (!isObject(value) || !Array.isArray(value.undo) || !Array.isArray(value.redo) ||
+      !value.undo.every(validEditCommand) || !value.redo.every(validEditCommand)) return undefined;
+  const compacted = compactSessionEditHistory({ undo: value.undo, redo: value.redo });
+  return compacted.undo.length + compacted.redo.length > 0 ? compacted : undefined;
 }
 
 /** Reject malformed disk data and normalize selection/focus against live candidates. */
@@ -57,7 +95,11 @@ export function normalizeSessionCheckpoint(value: unknown): SessionCheckpoint | 
   const ids = new Set((candidates ?? []).map((candidate) => candidate.id));
   const selected = [...new Set(value.selected as number[])].filter((id) => ids.has(id));
   const focusedId = finite(value.focusedId) && ids.has(value.focusedId) ? value.focusedId : null;
-  return { ...(value as unknown as SessionCheckpoint), selected, focusedId };
+  const normalized = { ...(value as unknown as SessionCheckpoint), selected, focusedId };
+  const editHistory = normalizeEditHistory(value.editHistory);
+  if (editHistory) normalized.editHistory = editHistory;
+  else delete normalized.editHistory;
+  return normalized;
 }
 
 function checkpointPath(userDataDir: string): string {

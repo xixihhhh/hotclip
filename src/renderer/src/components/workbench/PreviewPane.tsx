@@ -9,6 +9,11 @@ import { LuPlay, LuPause, LuSkipBack, LuSkipForward } from "react-icons/lu";
 import { getApi } from "../../api/provider";
 import { useT } from "../../i18n/store";
 
+export interface PreviewTransportCommand {
+  id: number;
+  action: "toggle" | "back5" | "forward5";
+}
+
 function formatClock(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
   const h = Math.floor(s / 3600);
@@ -25,6 +30,7 @@ export function PreviewPane({
   onTime,
   onPrevCandidate,
   onNextCandidate,
+  transportCommand,
 }: {
   filePath: string | null;
   durationSec: number;
@@ -33,6 +39,7 @@ export function PreviewPane({
   onTime: (sec: number) => void;
   onPrevCandidate: () => void;
   onNextCandidate: () => void;
+  transportCommand?: PreviewTransportCommand | null;
 }): React.JSX.Element {
   const t = useT("workbench");
   const mainRef = useRef<HTMLVideoElement>(null);
@@ -71,6 +78,18 @@ export function PreviewPane({
     if (v.paused) void v.play().catch(() => {});
     else v.pause();
   };
+
+  useEffect(() => {
+    const video = mainRef.current;
+    if (!video || !transportCommand) return;
+    if (transportCommand.action === "toggle") {
+      if (video.paused) void video.play().catch(() => {});
+      else video.pause();
+      return;
+    }
+    const delta = transportCommand.action === "back5" ? -5 : 5;
+    video.currentTime = Math.max(0, Math.min(durationSec, video.currentTime + delta));
+  }, [durationSec, transportCommand]);
 
   return (
     <div className="flex shrink-0 flex-col gap-2">

@@ -102,7 +102,7 @@ export function ModalShell({ onClose, children }: { onClose: () => void; childre
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   return createPortal(
-    <div onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm">
+    <div data-hotclip-modal="true" onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm">
       {children}
     </div>,
     document.body

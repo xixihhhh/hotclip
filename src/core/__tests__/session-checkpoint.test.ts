@@ -3,7 +3,8 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { describe, expect, it } from "vitest";
 import type { SessionCheckpoint } from "../../shared/api-types";
-import { clearSessionCheckpoint, readSessionCheckpoint, saveSessionCheckpoint, SESSION_CHECKPOINT_MAX_BYTES } from "../session-checkpoint";
+import { clearSessionCheckpoint, normalizeSessionCheckpoint, readSessionCheckpoint, saveSessionCheckpoint, SESSION_CHECKPOINT_MAX_BYTES } from "../session-checkpoint";
+import { SESSION_EDIT_HISTORY_MAX_BYTES, SESSION_EDIT_HISTORY_MAX_COMMANDS } from "../../shared/session-edit-history";
 
 async function fixture(): Promise<{ dir: string; source: string; checkpoint: SessionCheckpoint }> {
   const dir = await mkdtemp(join(tmpdir(), "hotclip-session-"));
@@ -72,5 +73,27 @@ describe("session checkpoint", () => {
     expect(await saveSessionCheckpoint(dir, {})).toBe(false);
     checkpoint.candidates![0].text = "x".repeat(SESSION_CHECKPOINT_MAX_BYTES);
     expect(await saveSessionCheckpoint(dir, checkpoint)).toBe(false);
+  });
+
+  it("preserves valid edit history and drops malformed or oversized history without losing the session", async () => {
+    const { checkpoint } = await fixture();
+    const command = { kind: "selection" as const, before: [7], after: [] };
+    const bounded = normalizeSessionCheckpoint({
+      ...checkpoint,
+      editHistory: { undo: Array.from({ length: SESSION_EDIT_HISTORY_MAX_COMMANDS + 5 }, () => command), redo: [] },
+    });
+    expect(bounded?.editHistory?.undo).toHaveLength(SESSION_EDIT_HISTORY_MAX_COMMANDS);
+
+    const malformed = normalizeSessionCheckpoint({ ...checkpoint, editHistory: { undo: [{ kind: "selection", before: "bad", after: [] }], redo: [] } });
+    expect(malformed).not.toBeNull();
+    expect(malformed).not.toHaveProperty("editHistory");
+
+    const hugeCandidate = { ...checkpoint.candidates![0], title: "x".repeat(SESSION_EDIT_HISTORY_MAX_BYTES) };
+    const oversized = normalizeSessionCheckpoint({
+      ...checkpoint,
+      editHistory: { undo: [{ kind: "candidate-update", candidateId: 7, before: checkpoint.candidates![0], after: hugeCandidate }], redo: [] },
+    });
+    expect(oversized).not.toBeNull();
+    expect(oversized).not.toHaveProperty("editHistory");
   });
 });

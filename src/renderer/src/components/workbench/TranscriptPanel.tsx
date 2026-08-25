@@ -23,7 +23,7 @@ function formatClock(totalSeconds: number): string {
 
 export function TranscriptPanel({ transcript, onSeek }: { transcript: Transcript; onSeek: (sec: number) => void }): React.JSX.Element {
   const t = useT("transcribe");
-  const { setTranscript } = useSession();
+  const { editTranscript } = useSession();
   const [editingSeg, setEditingSeg] = useState<number | null>(null);
   const [glossaryOpen, setGlossaryOpen] = useState(false);
   const [pending, setPending] = useState<{ entry: GlossaryEntry; count: number } | null>(null);
@@ -33,7 +33,7 @@ export function TranscriptPanel({ transcript, onSeek }: { transcript: Transcript
     const prevText = transcript.segments.find((s) => s.id === segId)?.text ?? "";
     const next = editSegmentText(transcript, segId, value);
     if (next !== transcript) {
-      setTranscript(next);
+      editTranscript(next);
       // 术语纠错闭环:这次修改若是「错词→对词」,提示一键全片替换+入词表
       const entry = diffReplacement(prevText, value);
       setPending(entry ? { entry, count: countGlossaryHits(next, [entry]) } : null);
@@ -43,7 +43,7 @@ export function TranscriptPanel({ transcript, onSeek }: { transcript: Transcript
   const confirmPending = (): void => {
     if (!pending) return;
     const { transcript: fixed, replaced } = applyGlossaryToTranscript(transcript, [pending.entry]);
-    if (replaced > 0) setTranscript(fixed);
+    if (replaced > 0) editTranscript(fixed);
     const api = getApi();
     void api
       .glossaryGet()
