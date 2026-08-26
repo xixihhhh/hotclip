@@ -1,8 +1,8 @@
 name: Release
 
-# Tag push (v*) → build installers on native runners, then publish from ONE
-# job. (Two electron-builder jobs publishing to the same draft race and
-# overwrite each other's assets — bit us on v0.1.0 and v0.2.0.)
+# Tag push (v*) → build installers on native runners, then stage and publish
+# from ONE job. (Two electron-builder jobs publishing to the same release race
+# and overwrite each other's assets — bit us on v0.1.0 and v0.2.0.)
 # Native runners matter: sherpa-onnx-node / ffmpeg-static install
 # platform-specific binaries at install time.
 on:
@@ -11,7 +11,11 @@ on:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -27,13 +31,13 @@ jobs:
             args: --linux
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 10
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -53,7 +57,7 @@ jobs:
           # unsigned builds for now — signing is a paid-cert decision
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: installers-${{ matrix.os }}
           path: |
@@ -64,19 +68,118 @@ jobs:
             dist/*.blockmap
             dist/latest*.yml
           if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
 
   publish:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
         with:
+          pattern: installers-*
           path: assets
           merge-multiple: true
 
-      - name: Create release and upload all assets
+      - name: Validate release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_version="$(node -p "require('./package.json').version")"
+          if [[ "$GITHUB_REF_NAME" != "v$package_version" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version v$package_version" >&2
+            exit 1
+          fi
+
+          required_patterns=(
+            "assets/*.dmg"
+            "assets/*.dmg.blockmap"
+            "assets/*.exe"
+            "assets/*.exe.blockmap"
+            "assets/*.zip"
+            "assets/*.AppImage"
+            "assets/latest.yml"
+            "assets/latest-mac.yml"
+            "assets/latest-linux.yml"
+          )
+
+          for pattern in "${required_patterns[@]}"; do
+            if ! compgen -G "$pattern" > /dev/null; then
+              echo "Missing required release asset: $pattern" >&2
+              exit 1
+            fi
+          done
+
+      - name: Stage assets and publish release
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --title "$GITHUB_REF_NAME" --notes "Draft — notes attached on publish." || true
-          gh release upload "$GITHUB_REF_NAME" assets/* --repo "$GITHUB_REPOSITORY" --clobber
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          notes_file="docs/releases/$tag.md"
+          asset_files=(assets/*)
+
+          if release_state="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null)"; then
+            if [[ "$release_state" == "true" ]]; then
+              echo "Resuming existing draft release $tag"
+            else
+              echo "Release $tag is already public; verifying it without replacing assets"
+              exit 0
+            fi
+          else
+            create_args=(
+              --repo "$GITHUB_REPOSITORY"
+              --draft
+              --verify-tag
+              --title "$tag"
+            )
+            if [[ -f "$notes_file" ]]; then
+              create_args+=(--notes-file "$notes_file")
+            else
+              create_args+=(--generate-notes)
+            fi
+            gh release create "$tag" "${create_args[@]}"
+          fi
+
+          gh release upload "$tag" "${asset_files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+
+          publish_args=(
+            --repo "$GITHUB_REPOSITORY"
+            --draft=false
+            --prerelease=false
+            --latest
+            --title "$tag"
+          )
+          if [[ -f "$notes_file" ]]; then
+            publish_args+=(--notes-file "$notes_file")
+          fi
+          gh release edit "$tag" "${publish_args[@]}"
+
+      - name: Verify public release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          release_state="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease --jq '.isDraft, .isPrerelease')"
+          if [[ "$release_state" != $'false\nfalse' ]]; then
+            echo "Release $tag is not a public stable release: $release_state" >&2
+            exit 1
+          fi
+
+          remote_assets="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          for asset in assets/*; do
+            expected="$(basename "$asset")"
+            if ! grep -Fxq -- "$expected" <<< "$remote_assets"; then
+              echo "Release $tag is missing uploaded asset: $expected" >&2
+              exit 1
+            fi
+          done
+
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url --jq .url
