@@ -40,7 +40,7 @@ export function parseScribeWords(res: ScribeResponse): TranscriptWord[] {
     const start = Number(w.start);
     const end = Number(w.end);
     if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
-    out.push({ text, startSec: start, endSec: Math.max(end, start) });
+    out.push({ text, startSec: start, endSec: Math.max(end, start), timingSource: "native" });
   }
   return out;
 }

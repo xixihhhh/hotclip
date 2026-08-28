@@ -20,6 +20,7 @@ describe("rebuildWords", () => {
     const words = rebuildWords("你好word", 10, 14);
     expect(words[0].startSec).toBe(10);
     expect(words[words.length - 1].endSec).toBe(14);
+    expect(words.every((word) => word.timingSource === "edited")).toBe(true);
     for (let i = 1; i < words.length; i++) {
       expect(words[i].startSec).toBeCloseTo(words[i - 1].endSec, 10);
     }

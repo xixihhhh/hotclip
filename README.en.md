@@ -28,7 +28,7 @@
 
 - **Actually free, not a trial**: AGPL-3.0 open source — no watermark, no credits, no length caps, no account. There is no crippled free tier, and no quota that expires at month's end
 - **Your footage never leaves your machine**: transcription, captions, cutting and export all run locally — unreleased footage and client material stay yours
-- **Every cut comes with receipts**: virality score + opening hook + reasoning + four-dimension review, cut points aligned to the word; veto anything — the AI never guesses timestamps, and never makes the final call for you
+- **Every cut comes with receipts**: virality score + opening hook + reasoning + four-dimension review, plus visible caption-timing provenance and review ranges — the AI never guesses timestamps or fabricates confidence
 - **Live chat feeds highlight detection**: the chat log next to your recording is auto-discovered (BililiveRecorder .xml and Douyin-recorder .jsonl both work), gifts and superchats weighted, spam-proof — the audience voting second by second, evidence most tools never even look at
 - **Ready to post, not just cut**: vertical clips + dynamic captions + covers + post copy + per-platform publish packs, all in one run
 - **Interrupted work picks up safely**: source, transcript, candidates, selections and hand-tuned cuts recover after restart; folder watch and webhooks share a durable queue with retry and cancel
@@ -118,7 +118,7 @@ Fast SenseVoice (5 languages, 170MB) / balanced Paraformer / most-accurate FireR
 <summary><b>Details</b>: transcript cache · click-to-fix transcripts · hotword glossary · speaker diarization</summary>
 
 - **Local transcript cache**: reopen the same file and jump straight to highlight picking; invalidated when the file or engine changes
-- **Inline transcript correction**: hover any sentence and fix it in place; captions, translation and post copy all use the corrected text, per-word timing rebuilt automatically
+- **Inline transcript correction**: hover any sentence and fix it in place; captions, translation and post copy all use the corrected text, while rebuilt timing is explicitly marked and filterable for review
 - **Hotword glossary**: fix a name once, apply to every matching sentence, and every future transcript auto-corrects (whole-word matching, longest wrong term wins); glossary updates replay from cache — no re-recognition
 - **Speaker diarization**: one toggle (local pyannote + 3D-Speaker, zero upload) labels who's speaking; the AI picks segments per speaker and never stitches two people out of context; bubble captions can color per speaker
 </details>
@@ -187,7 +187,8 @@ Face-tracked 9:16 reframing (three per-shot modes), silence jump cuts, filler-wo
 - **Smart cover frame**: the loudest moment inside the clip becomes the cover (usually the laugh or the shout); transitions avoided
 - **Frame-accurate cutting**: fast seek + re-encode; hours-long FLV/TS replays go straight in
 - **Hardware-accelerated export**: automatically uses VideoToolbox / NVENC / QSV when the bundled ffmpeg supports it; an unavailable device or driver transparently retries with x264, keeping reliability intact
-- **Precision cut points (Paraformer second pass)**: selected clips are re-decoded before export; integrated word timestamps (±50ms, better than forced alignment) fix captions, jump cuts and cut boundaries — covering the fast ASR tier's weakness; ~240MB model downloaded on first use, falls back safely when alignment is unreliable
+- **Precision cut points (Paraformer second pass)**: selected clips are re-decoded before export to repair captions, jump cuts and boundaries; matched/interpolated words, coverage and uncertain spans land in the receipt, while weak or failed alignment still falls back safely
+- **Caption timing quality gate**: validates the final post-splice timeline for invalid or overlapping timing, reading speed, flashes, oversize tokens and estimated ranges; every clip records a machine-readable report in `clips.json`
 - **Cancellable exports + real-time progress**: ffmpeg progress streamed live; cancel kills the encoder instantly, finished clips stay
 </details>
 
@@ -279,11 +280,14 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 
   > Install HotClip as my local clipping skill: `git clone https://github.com/xixihhhh/hotclip.git && cd hotclip && pnpm install`, then copy `skills/hotclip/` into my agent skills directory (`~/.claude/skills/hotclip/` for Claude Code) and configure the LLM env vars per `skills/hotclip/SKILL.md`. Verify with `pnpm cli highlights` on a test video.
 
-- **clips.json processing receipt**: what the AI did to each clip (caption style, reframe mode, jump-cut ratio, fillers removed) — fully auditable, pipeline-ready
+- **clips.json processing receipt**: what the AI did to each clip (caption style, reframe mode, jump-cut ratio, alignment coverage, caption lint, fillers removed) — fully auditable, pipeline-ready
+- **Golden quality evaluation**: `pnpm quality:eval [fixture.json]` reports CER/WER, median/P95 word-boundary error and highlight recall@3/@5 locally, so model and threshold changes can be compared on the same evidence
 - **Bring your own AI (or none)**: free local models by default; plug in [Atlas Cloud](https://www.atlascloud.ai), fal.ai or any OpenAI-compatible endpoint — or local Ollama for a fully offline pipeline
 </details>
 
 ## What's new
+
+**[v0.18.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.18.0)** (2026-08-28) "Quality you can inspect, upgrades you can measure": **word timing provenance** (native / second-pass aligned / interpolated / edited / estimated, legacy-safe); **focused review** (estimated-timing badges and filter in the transcript, timing receipt in candidate details); **localized alignment reports** (coverage, aligned/interpolated counts and uncertain spans in `clips.json`); **caption quality gate** (invalid timing, overlap, reading speed, flashes, oversize tokens and estimated ranges checked on the final rendered timeline); **repeatable golden evaluation** (local CER/WER, boundary error and highlight recall@K without new model downloads); plus a standalone `dev:web` browser preview for UI regression without the Electron runtime
 
 **[v0.17.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.17.0)** (2026-08-25) "Long videos get faster on repeat": **bounded base-render cache** (exact reuse across matching source/cuts/captions/reframe/audio/brand inputs, atomic writes, corrupt-entry invalidation and LRU pruning capped at 1GB); **safe smart copy** (H.264 video stream copy only for keyframe-aligned, pixel-unchanged continuous cuts; AAC, edge fades, denoise, loudness and sensitive-term muting remain active; every uncertainty or failure falls back to accurate encoding); **shared everywhere** (desktop exports, folder watch/webhooks, CLI and MCP use the same cache); **diagnostics and scoped cleanup** (bilingual size visibility and two-step cleanup that never touches projects, source media, models or transcript cache)
 

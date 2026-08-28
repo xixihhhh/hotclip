@@ -62,7 +62,7 @@ export function defaultFontName(platform: NodeJS.Platform = process.platform): s
 const CJK_RE = /[぀-ヿ㐀-鿿豈-﫿가-힯]/;
 
 /** Visual width units of a token: CJK chars count double. */
-function widthUnits(text: string): number {
+export function widthUnits(text: string): number {
   let units = 0;
   for (const ch of text) units += CJK_RE.test(ch) ? 2 : 1;
   return units;
@@ -537,6 +537,14 @@ const MINIMAL_INTRO = "{\\fad(80,0)\\fscx96\\fscy96\\t(0,80,\\fscx100\\fscy100)}
 /** 动态极简短块宽度:与 Hormozi 同档(约 5 汉字),字号小一号所以更透气。 */
 const MINIMAL_MAX_UNITS = 10;
 
+/** The exact width budget used by each rendered caption style. */
+export function captionMaxLineUnits(style: CaptionStyle, layout: AssLayout): number {
+  if (style === "pop") return POP_MAX_UNITS;
+  if (style === "hormozi") return HORMOZI_MAX_UNITS;
+  if (style === "minimal") return MINIMAL_MAX_UNITS;
+  return layout.maxLineUnits;
+}
+
 /** 数字类 token(含百分号/价格):没有关键词命中时的高亮兜底。 */
 const DIGIT_TOKEN_RE = /[0-9][0-9.,]*%?/;
 
@@ -648,8 +656,7 @@ export function buildCaptionAss(
   // 说话人标签器:每条切片一个(带「上一行是谁」的状态);单人/没开不生效
   const speakerTag = createSpeakerLabeler(words, Boolean(options.speakerLabels));
   if (style === "pop" || style === "hormozi" || style === "minimal") {
-    const maxUnits =
-      style === "pop" ? POP_MAX_UNITS : style === "hormozi" ? HORMOZI_MAX_UNITS : MINIMAL_MAX_UNITS;
+    const maxUnits = captionMaxLineUnits(style, layout);
     // 动态极简与 keyword 同款:先把关键词连成一个词,断块永远不劈开高亮词
     const chunkWords = style === "minimal" ? mergeKeywordWords(words, options.keywords ?? []) : words;
     const units = groupWordsIntoLines(chunkWords, maxUnits, forcedBreaks);

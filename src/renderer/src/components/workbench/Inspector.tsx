@@ -25,6 +25,7 @@ import { useRenderPrefs } from "../../stores/render-prefs-store";
 import { GENRE_PRESETS, GENRE_CUSTOM_MAX_CHARS } from "../../../../core/genre";
 import { adjustCandidateBoundary } from "../../../../shared/boundary";
 import { clipDurationSec, isStitched } from "../../../../shared/pieces";
+import { summarizeTimingQuality, wordsForClip } from "../../../../shared/transcript-quality";
 import { SectionLabel, Segmented, SwitchRow } from "../ui";
 import type { ClipLength, HighlightCandidate, Transcript } from "../../../../shared/api-types";
 
@@ -62,6 +63,9 @@ function DetailTab({
   const th = useT("highlights");
   const { patchCandidate } = useSession();
   const [editingTitle, setEditingTitle] = useState(false);
+  const clipWords = wordsForClip(transcript.segments.flatMap((segment) => segment.words), c);
+  const timingQuality = summarizeTimingQuality(clipWords);
+  const legacyTiming = (timingQuality.sourceCounts.legacy ?? 0) === timingQuality.totalWords && timingQuality.totalWords > 0;
 
   const nudge = (edge: "start" | "end", dir: 1 | -1): void => {
     const adjusted = adjustCandidateBoundary(transcript, c, edge, dir);
@@ -184,6 +188,40 @@ function DetailTab({
             {c.gateNotes?.length ? `:${c.gateNotes.join(";")}` : c.reviewNote ? `:${c.reviewNote}` : ""}
           </span>
         </p>
+      )}
+
+      {/* 字幕时间回执:只报告可证明的来源,不伪造跨模型置信度。 */}
+      {timingQuality.totalWords > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <SectionLabel>{t("timingReceipt")}</SectionLabel>
+          <p
+            className={`flex items-start gap-1.5 rounded-lg px-2.5 py-2 text-[11px] leading-relaxed ${
+              timingQuality.uncertainWords > 0
+                ? "bg-amber-500/10 text-amber-400"
+                : legacyTiming
+                  ? "bg-white/5 text-mut"
+                  : "bg-emerald-500/10 text-emerald-400"
+            }`}
+          >
+            {timingQuality.uncertainWords > 0 && <LuTriangleAlert className="mt-0.5 h-3 w-3 shrink-0" />}
+            <span>
+              {timingQuality.uncertainWords > 0
+                ? t("timingNeedsReview", { n: timingQuality.uncertainWords })
+                : legacyTiming
+                  ? t("timingLegacy")
+                  : t("timingReady")}
+            </span>
+          </p>
+          {timingQuality.uncertainSpans[0] && (
+            <button
+              type="button"
+              onClick={() => onOpenReview(c.id)}
+              className="self-start text-[10.5px] text-amber-400/80 hover:text-amber-400"
+            >
+              {t("timingFirstIssue", { time: formatClock(timingQuality.uncertainSpans[0].startSec) })}
+            </button>
+          )}
+        </div>
       )}
 
       {/* 边界微调 */}

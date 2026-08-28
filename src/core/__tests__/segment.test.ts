@@ -54,14 +54,16 @@ describe("tokensToWords", () => {
       12
     );
     expect(words).toHaveLength(2);
-    expect(words[0]).toEqual({ text: "a", startSec: 10.5, endSec: 11.0 });
+    expect(words[0]).toEqual({ text: "a", startSec: 10.5, endSec: 11.0, timingSource: "native" });
     expect(words[1].startSec).toBe(11.0);
     expect(words[1].endSec).toBeLessThanOrEqual(12);
   });
 
   it("tolerates missing timestamps/tokens", () => {
     expect(tokensToWords({ text: "x" }, 0, 1)).toEqual([]);
-    expect(tokensToWords({ text: "x", tokens: ["x"], timestamps: [] }, 0, 1)[0].startSec).toBe(0);
+    const estimated = tokensToWords({ text: "x", tokens: ["x"], timestamps: [] }, 0, 1)[0];
+    expect(estimated.startSec).toBe(0);
+    expect(estimated.timingSource).toBe("estimated");
   });
 });
 

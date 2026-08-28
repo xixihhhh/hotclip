@@ -49,6 +49,7 @@ import { detectUiCrop, type UiCrop } from "./uicrop";
 import { generateCropPlan, renderCropXExpr, mapToOutputTime } from "./reframe";
 import { detectShotBoundaries, snapClipToShots, SNAP_MAX_OUT_SEC } from "./shots";
 import { buildCaptionAss, VERTICAL_LAYOUT, HORIZONTAL_LAYOUT, type CaptionStyle } from "./subtitle";
+import { lintSubtitleTimeline } from "./subtitle-quality";
 import { buildOverlayPayload, isWebCaptionStyle, type OverlayRenderFn, type WebCaptionStyle } from "./caption-overlay/payload";
 import { probeMedia } from "./probe";
 import { runClipQa, maxVisualGapSec, missingHookPayoffs, type ClipQaReport } from "./qa";
@@ -56,7 +57,7 @@ import { lintClipContent } from "./content-lint";
 import { mapSensitiveRanges } from "./sensitive-words";
 import { planRepair, applyRepair } from "./repair";
 import { applyBrandToLayout } from "./brand";
-import type { TranscriptWord, BrandStyle } from "../shared/api-types";
+import type { AlignmentQualityReport, SubtitleQualityReport, TranscriptWord, BrandStyle } from "../shared/api-types";
 import type { WatermarkSpec } from "./cut";
 import { transformScore, type TransformInputs, type TransformScore } from "../shared/transform-score";
 import { buildLedgerCsv, type LedgerRow } from "./ledger";
@@ -233,6 +234,10 @@ export interface ClipRenderOutcome {
   shotSnap: { startDeltaSec: number; endDeltaSec: number } | null;
   /** True 表示词表经 Paraformer 二遍对齐修正过(精准切点)。 */
   preciseAligned: boolean;
+  /** Detailed final-candidate alignment receipt; absent on legacy exports, null when alignment did not run or failed open. */
+  alignment?: AlignmentQualityReport | null;
+  /** Deterministic subtitle lint; issue ranges use the final clip timeline before cold-open duplication. */
+  subtitleQuality?: SubtitleQualityReport | null;
   /** 实际打进成片的音效数(0 = 没开/无处可打/混音失败回退)。 */
   sfxCues: number;
   /** True 表示 BGM 混入成功(含人声闪避)。 */
@@ -277,7 +282,7 @@ export interface ExportRenderOptions {
   alignWords?: (
     filePath: string,
     clip: { startSec: number; endSec: number; pieces?: ClipPiece[]; words: TranscriptWord[] }
-  ) => Promise<TranscriptWord[] | null>;
+  ) => Promise<{ words: TranscriptWord[]; report: AlignmentQualityReport } | null>;
   /** Auto-detect & crop static screen-recording chrome (status bars, app UI). */
   trimUi?: boolean;
   /** Face-tracking vertical reframe (needs modelsRoot); falls back to center. */
@@ -516,6 +521,7 @@ export async function exportClips(
       // 精准切点(二遍对齐):必须在镜头吸附/跳剪/字幕之前修好词表——
       // 下游所有阶段都消费 clip.words 的时间。失败/低匹配率回退原词表。
       let preciseAligned = false;
+      let alignment: AlignmentQualityReport | null = null;
       if (options.alignWords && clip.words && clip.words.length > 0) {
         const refined = await options
           .alignWords(inputPath, { startSec: clip.startSec, endSec: clip.endSec, pieces: clip.pieces, words: clip.words })
@@ -524,9 +530,10 @@ export async function exportClips(
             console.error(`precise align failed for clip ${clip.id}, kept original words:`, e);
             return null;
           });
-        if (refined && refined.length > 0) {
-          clip = { ...clip, words: refined };
+        if (refined && refined.words.length > 0) {
+          clip = { ...clip, words: refined.words };
           preciseAligned = true;
+          alignment = refined.report;
         }
       }
 
@@ -616,6 +623,9 @@ export async function exportClips(
         ? options.captionStyle
         : undefined;
       const assStyle: CaptionStyle = isWebCaptionStyle(options.captionStyle) ? "keyword" : (options.captionStyle ?? "keyword");
+      const subtitleQuality = wantCaptions
+        ? lintSubtitleTimeline(captionWords!, layout, assStyle, plan?.breaks, clip.keywords)
+        : null;
       // Opening hook: burn the AI teaser (悬念句) big in the upper third for the
       // clip's first seconds — this is what the teaser was generated for.
       const teaser = clip.meta?.teaser?.trim();
@@ -1205,6 +1215,8 @@ export async function exportClips(
         translatedLines: transLines.length,
         shotSnap,
         preciseAligned,
+        alignment,
+        subtitleQuality,
         sfxCues: sfxApplied.length,
         bgmMixed,
         renderCache,

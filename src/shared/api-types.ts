@@ -22,6 +22,9 @@ export interface MediaInfo {
   audioCodec: string;
 }
 
+/** How a word's time range was obtained. Absent means a legacy transcript. */
+export type WordTimingSource = "native" | "aligned" | "interpolated" | "edited" | "estimated";
+
 /** One timed token/word (zh engines emit per-character tokens — same shape). */
 export interface TranscriptWord {
   text: string;
@@ -29,6 +32,48 @@ export interface TranscriptWord {
   endSec: number;
   /** Diarization speaker id (0-based); absent when diarization didn't run. */
   speaker?: number;
+  /** Categorical timing provenance; never presented as fabricated numeric confidence. */
+  timingSource?: WordTimingSource;
+}
+
+export interface TimingQualitySpan {
+  startSec: number;
+  endSec: number;
+  text: string;
+  wordCount: number;
+}
+
+export interface AlignmentQualityReport {
+  matchedFrac: number;
+  alignedWords: number;
+  interpolatedWords: number;
+  /** Absolute source-media time ranges that still relied on interpolation. */
+  uncertainSpans: TimingQualitySpan[];
+}
+
+export type SubtitleQualityIssueCode =
+  | "invalid-timing"
+  | "overlap"
+  | "reading-speed"
+  | "short-display"
+  | "oversize-token"
+  | "uncertain-timing";
+
+export interface SubtitleQualityIssue {
+  code: SubtitleQualityIssueCode;
+  severity: "warning" | "error";
+  startSec: number;
+  endSec: number;
+  value?: number;
+  wordCount?: number;
+}
+
+export interface SubtitleQualityReport {
+  status: "pass" | "warn" | "error";
+  lineCount: number;
+  maxCps: number;
+  uncertainWords: number;
+  issues: SubtitleQualityIssue[];
 }
 
 /** A sentence-ish unit built from words; the granularity shown in the editor. */

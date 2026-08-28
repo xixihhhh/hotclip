@@ -14,8 +14,8 @@ describe("parseScribeWords", () => {
       ],
     });
     expect(words).toEqual([
-      { text: "你好", startSec: 0.1, endSec: 0.5 },
-      { text: "世界", startSec: 0.6, endSec: 1.0 },
+      { text: "你好", startSec: 0.1, endSec: 0.5, timingSource: "native" },
+      { text: "世界", startSec: 0.6, endSec: 1.0, timingSource: "native" },
     ]);
   });
 

@@ -48,11 +48,12 @@ describe.runIf(RUN)("align 真模型冒烟", () => {
     expect(refined).not.toBeNull();
     // 对齐后首词回到原位 ±0.3s(Paraformer CIF 时间戳应与 SenseVoice 原始
     // 时间大致一致,而与 +0.6s 的平移版明显不同)
-    expect(Math.abs(refined![0].startSec - origFirstStart)).toBeLessThan(0.3);
-    expect(Math.abs(refined![0].startSec - shifted[0].startSec)).toBeGreaterThan(0.25);
+    expect(Math.abs(refined!.words[0].startSec - origFirstStart)).toBeLessThan(0.3);
+    expect(Math.abs(refined!.words[0].startSec - shifted[0].startSec)).toBeGreaterThan(0.25);
+    expect(refined!.report.matchedFrac).toBeGreaterThanOrEqual(0.5);
     // 单调无倒流
-    for (let i = 1; i < refined!.length; i++) {
-      expect(refined![i].startSec).toBeGreaterThanOrEqual(refined![i - 1].endSec - 1e-3);
+    for (let i = 1; i < refined!.words.length; i++) {
+      expect(refined!.words[i].startSec).toBeGreaterThanOrEqual(refined!.words[i - 1].endSec - 1e-3);
     }
     rmSync(wav, { force: true });
   });

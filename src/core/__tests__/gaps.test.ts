@@ -25,7 +25,7 @@ describe("computeJumpCut", () => {
   });
 
   it("remaps words onto the compressed output timeline", () => {
-    const plan = computeJumpCut(words, 10, 16.5);
+    const plan = computeJumpCut(words.map((word) => ({ ...word, timingSource: "aligned" as const })), 10, 16.5);
     const [, , w3] = plan.words;
     // third word starts at seg2 start → output time = seg1 duration + pad-before offset
     const seg1Dur = plan.segments[0].endSec - plan.segments[0].startSec;
@@ -35,6 +35,7 @@ describe("computeJumpCut", () => {
     for (let i = 1; i < plan.words.length; i++) {
       expect(plan.words[i].startSec).toBeGreaterThanOrEqual(plan.words[i - 1].startSec);
     }
+    expect(plan.words.every((word) => word.timingSource === "aligned")).toBe(true);
   });
 
   it("no gaps → single segment trimmed to speech bounds", () => {

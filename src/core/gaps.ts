@@ -177,6 +177,7 @@ export function computeJumpCut(
           endSec: outOffset + Math.min(w.endSec, seg.endSec) - seg.startSec,
           // 说话人标注跟着词走——丢了它,压缩时间轴上的字幕就没法按人上色/打标签
           ...(w.speaker !== undefined ? { speaker: w.speaker } : {}),
+          ...(w.timingSource !== undefined ? { timingSource: w.timingSource } : {}),
         });
       }
     }

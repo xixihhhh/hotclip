@@ -58,7 +58,7 @@ export function rebuildWords(text: string, startSec: number, endSec: number): Tr
   let t = startSec;
   for (let i = 0; i < tokens.length; i++) {
     const end = i === tokens.length - 1 ? endSec : t + (dur * weights[i]) / total;
-    out.push({ text: tokens[i], startSec: t, endSec: end });
+    out.push({ text: tokens[i], startSec: t, endSec: end, timingSource: "edited" });
     t = end;
   }
   return out;

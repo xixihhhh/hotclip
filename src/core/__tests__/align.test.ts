@@ -30,6 +30,8 @@ describe("refineWordTimings(二遍对齐时间重映射)", () => {
     expect(res.words[0].endSec).toBeCloseTo(10.6, 5);
     expect(res.words[2].startSec).toBeCloseTo(11.2, 5);
     expect(res.words[2].endSec).toBeCloseTo(12.1, 5);
+    expect(res.words.every((x) => x.timingSource === "aligned")).toBe(true);
+    expect(res.alignedWords).toBe(3);
   });
 
   it("参考流有幻觉/漏字仍能对齐,未命中词内插进前后锚点", () => {
@@ -43,6 +45,8 @@ describe("refineWordTimings(二遍对齐时间重映射)", () => {
     expect(res.words[1].startSec).toBeGreaterThanOrEqual(10.1 - 1e-6);
     expect(res.words[1].endSec).toBeLessThanOrEqual(11.5 + 1e-6);
     expect(res.matchedFrac).toBeCloseTo(4 / 6, 5);
+    expect(res.words[1].timingSource).toBe("interpolated");
+    expect(res.interpolatedWords).toBe(1);
   });
 
   it("完全对不上:matchedFrac 低于门槛(调用方回退)", () => {

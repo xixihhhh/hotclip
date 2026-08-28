@@ -60,7 +60,12 @@ export function tokensToWords(result: SherpaResult, offsetSec: number, windowEnd
     const start = offsetSec + (stamps[i] ?? 0);
     const nextStamp = stamps[i + 1];
     const end = nextStamp !== undefined ? offsetSec + nextStamp : Math.min(start + 0.3, windowEndSec);
-    words.push({ text: text.trim(), startSec: start, endSec: Math.max(end, start) });
+    words.push({
+      text: text.trim(),
+      startSec: start,
+      endSec: Math.max(end, start),
+      timingSource: stamps[i] !== undefined ? "native" : "estimated",
+    });
   }
   return words;
 }

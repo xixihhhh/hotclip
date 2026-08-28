@@ -26,8 +26,9 @@ import {
 } from "./models";
 import { toAnsiSafeDir } from "./win-ansi-path";
 import { loadSherpa, tokensToWords, type SherpaResult } from "./transcribe/sherpa-offline";
-import type { TranscriptWord } from "../shared/api-types";
+import type { AlignmentQualityReport, TranscriptWord } from "../shared/api-types";
 import type { ClipPiece } from "../shared/pieces";
+import { summarizeTimingQuality } from "../shared/transcript-quality";
 
 /** 匹配率低于此不采纳(转写幻觉/背景音乐段,对齐结果不可信)。 */
 export const ALIGN_MIN_MATCH_FRAC = 0.5;
@@ -63,6 +64,8 @@ export interface RefineOutcome {
   words: TranscriptWord[];
   /** 目标字符里成功对上参考时间的比例(0..1)。 */
   matchedFrac: number;
+  alignedWords: number;
+  interpolatedWords: number;
 }
 
 /**
@@ -74,10 +77,12 @@ export function refineWordTimings(
   words: TranscriptWord[],
   refTokens: TranscriptWord[]
 ): RefineOutcome {
-  if (words.length === 0) return { words: [], matchedFrac: 0 };
+  if (words.length === 0) return { words: [], matchedFrac: 0, alignedWords: 0, interpolatedWords: 0 };
   const tgt = toAlignUnits(words);
   const ref = toAlignUnits(refTokens);
-  if (tgt.length === 0 || ref.length === 0) return { words: [...words], matchedFrac: 0 };
+  if (tgt.length === 0 || ref.length === 0) {
+    return { words: [...words], matchedFrac: 0, alignedWords: 0, interpolatedWords: words.length };
+  }
 
   // 标准 LCS 动态规划(候选段字符量级 ~10^3,毫秒级)
   const n = tgt.length;
@@ -153,10 +158,21 @@ export function refineWordTimings(
     if (out[k].endSec < out[k].startSec + MIN_WORD_SEC) out[k].endSec = out[k].startSec + MIN_WORD_SEC;
   }
 
+  const alignedWords = out.filter((word) => word.matched).length;
   return {
-    words: out.map(({ matched: _m, ...w }) => w),
+    words: out.map(({ matched, ...word }) => ({
+      ...word,
+      timingSource: matched ? "aligned" : "interpolated",
+    })),
     matchedFrac: matchedUnits / n,
+    alignedWords,
+    interpolatedWords: out.length - alignedWords,
   };
+}
+
+export interface ClipAlignmentResult {
+  words: TranscriptWord[];
+  report: AlignmentQualityReport;
 }
 
 /** 精对齐输入(与 ExportClipSpec 的相关字段同构)。 */
@@ -177,7 +193,7 @@ export interface AlignClipInput {
 export function createClipAligner(
   modelsRoot: string,
   signal?: AbortSignal
-): (filePath: string, clip: AlignClipInput) => Promise<TranscriptWord[] | null> {
+): (filePath: string, clip: AlignClipInput) => Promise<ClipAlignmentResult | null> {
   let recognizer: any = null;
   const ensure = async (): Promise<void> => {
     await ensureModel(modelsRoot, PARAFORMER_MODEL, undefined, signal);
@@ -253,7 +269,17 @@ export function createClipAligner(
       refined.push(...res.words);
     }
     if (total === 0 || matched / total < ALIGN_MIN_MATCH_FRAC) return null;
-    return refined.sort((a, b) => a.startSec - b.startSec);
+    const words = refined.sort((a, b) => a.startSec - b.startSec);
+    const timing = summarizeTimingQuality(words);
+    return {
+      words,
+      report: {
+        matchedFrac: matched / total,
+        alignedWords: timing.sourceCounts.aligned ?? 0,
+        interpolatedWords: timing.sourceCounts.interpolated ?? 0,
+        uncertainSpans: timing.uncertainSpans,
+      },
+    };
   };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */

@@ -1,0 +1,31 @@
+{
+  "transcriptCases": [
+    {
+      "id": "sample-zh",
+      "referenceText": "今天直播间只要九十九",
+      "actualText": "今天直播间只要九十九",
+      "referenceWords": [
+        { "text": "今天", "startSec": 0, "endSec": 0.5 },
+        { "text": "直播间", "startSec": 0.5, "endSec": 1.2 },
+        { "text": "只要", "startSec": 1.2, "endSec": 1.6 },
+        { "text": "九十九", "startSec": 1.6, "endSec": 2.2 }
+      ],
+      "actualWords": [
+        { "text": "今天", "startSec": 0.03, "endSec": 0.53 },
+        { "text": "直播间", "startSec": 0.52, "endSec": 1.23 },
+        { "text": "只要", "startSec": 1.22, "endSec": 1.62 },
+        { "text": "九十九", "startSec": 1.61, "endSec": 2.23 }
+      ]
+    }
+  ],
+  "highlightCases": [
+    {
+      "id": "sample-highlight",
+      "expectedRanges": [{ "startSec": 42, "endSec": 66 }],
+      "candidates": [
+        { "startSec": 41.5, "endSec": 66.5, "score": 92 },
+        { "startSec": 90, "endSec": 110, "score": 78 }
+      ]
+    }
+  ]
+}

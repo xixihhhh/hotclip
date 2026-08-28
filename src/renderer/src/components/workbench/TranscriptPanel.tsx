@@ -3,11 +3,12 @@
  * 与旧 TranscribeView 结果态同一套逻辑,但住进工作台面板,不再是独占一屏。
  */
 import { useState } from "react";
-import { LuBookOpen, LuPencil, LuReplaceAll, LuX } from "react-icons/lu";
+import { LuBookOpen, LuPencil, LuReplaceAll, LuTriangleAlert, LuX } from "react-icons/lu";
 import { useT } from "../../i18n/store";
 import { getApi } from "../../api/provider";
 import { useSession } from "../../stores/session-store";
 import { editSegmentText } from "../../../../shared/edit-transcript";
+import { summarizeTimingQuality } from "../../../../shared/transcript-quality";
 import { diffReplacement, applyGlossaryToTranscript, countGlossaryHits, upsertGlossaryEntry } from "../../../../shared/glossary";
 import { GlossaryModal } from "../GlossaryModal";
 import type { GlossaryEntry, Transcript } from "../../../../shared/api-types";
@@ -27,6 +28,15 @@ export function TranscriptPanel({ transcript, onSeek }: { transcript: Transcript
   const [editingSeg, setEditingSeg] = useState<number | null>(null);
   const [glossaryOpen, setGlossaryOpen] = useState(false);
   const [pending, setPending] = useState<{ entry: GlossaryEntry; count: number } | null>(null);
+  const [showTimingReview, setShowTimingReview] = useState(false);
+  const timingReviewIds = new Set(
+    transcript.segments
+      .filter((segment) => summarizeTimingQuality(segment.words).uncertainWords > 0)
+      .map((segment) => segment.id)
+  );
+  const visibleSegments = showTimingReview
+    ? transcript.segments.filter((segment) => timingReviewIds.has(segment.id))
+    : transcript.segments;
 
   const commitSegEdit = (segId: number, value: string): void => {
     setEditingSeg(null);
@@ -57,6 +67,20 @@ export function TranscriptPanel({ transcript, onSeek }: { transcript: Transcript
       <div className="flex h-8 shrink-0 items-center gap-2 border-b border-line/60 px-3">
         <span className="text-[11px] text-mut">{t("resultCount", { n: transcript.segments.length, lang: transcript.language })}</span>
         <span className="flex-1" />
+        {timingReviewIds.size > 0 && (
+          <button
+            type="button"
+            title={t("timingReviewHint")}
+            aria-pressed={showTimingReview}
+            onClick={() => setShowTimingReview((value) => !value)}
+            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold transition-colors ${
+              showTimingReview ? "bg-amber-500/10 text-amber-400" : "text-mut hover:text-amber-400"
+            }`}
+          >
+            <LuTriangleAlert className="h-3 w-3" />
+            {showTimingReview ? t("timingShowAll") : t("timingReviewOnly", { n: timingReviewIds.size })}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setGlossaryOpen(true)}
@@ -88,7 +112,7 @@ export function TranscriptPanel({ transcript, onSeek }: { transcript: Transcript
         </div>
       )}
       <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
-        {transcript.segments.map((seg) => (
+        {visibleSegments.map((seg) => (
           <div key={seg.id} className="group/seg flex items-baseline gap-3 rounded-lg px-2.5 py-1.5 transition-colors hover:bg-panel-2">
             <button
               type="button"
@@ -117,6 +141,11 @@ export function TranscriptPanel({ transcript, onSeek }: { transcript: Transcript
                 {seg.glossaryApplied && (
                   <span title={t("glossaryFixedHint")} className="chip shrink-0 rounded px-1 py-0.5 text-[9px] text-ember">
                     {t("glossaryFixedBadge")}
+                  </span>
+                )}
+                {timingReviewIds.has(seg.id) && (
+                  <span title={t("timingReviewHint")} className="shrink-0 rounded border border-amber-500/30 bg-amber-500/10 px-1 py-0.5 text-[9px] text-amber-400">
+                    {t("timingReviewBadge")}
                   </span>
                 )}
                 <button

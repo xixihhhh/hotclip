@@ -54,6 +54,9 @@ function mockTranscript(): Transcript {
       text: ch,
       startSec: t + (dur * j) / text.length,
       endSec: t + (dur * (j + 1)) / text.length,
+      // Keep one deterministic estimated-timing sentence so browser QA can
+      // exercise the focused-review UI; all other mock words emulate native ASR.
+      timingSource: i === 1 ? "edited" as const : "native" as const,
     }));
     const seg = { id: i + 1, startSec: t, endSec: t + dur, text, words };
     t += dur + 0.6;

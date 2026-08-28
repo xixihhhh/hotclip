@@ -1,6 +1,6 @@
 {
   "name": "hotclip",
-  "version": "0.17.0",
+  "version": "0.18.0",
   "description": "Turn long videos & livestream replays into viral vertical shorts — AI highlight detection, auto captions, 9:16 reframe. Free, local-first, no watermark. 长视频/直播回放一键切成爆款竖屏短视频。",
   "main": "./out/main/index.js",
   "author": "xixihhhh",
@@ -12,9 +12,11 @@
   },
   "scripts": {
     "dev": "electron-vite dev",
+    "dev:web": "vite --config vite.renderer.config.ts",
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
+    "quality:eval": "tsx tools/quality-eval.ts",
     "mcp": "tsx src/mcp/server.ts",
     "cli": "tsx src/cli/index.ts",
     "start": "electron-vite preview",
