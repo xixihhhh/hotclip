@@ -25,7 +25,6 @@ import { runDiarization, labelTranscript } from "@core/diarize";
 import { ASR_CATALOG } from "../shared/asr-catalog";
 import { detectHighlights, chatComplete } from "@core/highlight/detect";
 import { listModels } from "@core/llm-models";
-import { collectVisionSignal } from "@core/highlight/vision";
 import { reviewCandidatesVision } from "@core/highlight/review-vision";
 import { composeContactSheetJpeg } from "@core/contact-sheet";
 import { collectEmotionSignal } from "@core/emotion";
@@ -37,7 +36,7 @@ import { validPlatformIds } from "../shared/platform-specs";
 import { FolderWatcher, isVideoFile, isSeen, type SeenMap, type WatchedFile } from "@core/watch";
 import { startWebhookServer, type WebhookServerHandle } from "@core/webhook";
 import { collectDanmakuSignal, readDanmakuItems, danmakuHeatCurve } from "@core/danmaku";
-import { loudnessCurve } from "@core/signals";
+import { loudnessCurve, motionCurve } from "@core/signals";
 import { extractFilmstrip } from "@core/filmstrip";
 import { collectVoiceEmotionSignal } from "@core/voice-emotion";
 import { checkForUpdate } from "@core/update-check";
@@ -70,11 +69,12 @@ import { loadAutomationTasks, normalizeAutomationTasks, saveAutomationTasks } fr
 import { sanitizeSensitiveWords } from "@core/sensitive-words";
 import { runDoctor } from "@core/doctor";
 import { clearRenderCache } from "@core/render-cache";
+import { clearEvidenceIndex, evidenceSourceId, fingerprintEvidenceSource } from "@core/evidence-index";
+import { collectSignalsEvidence, collectVisionEvidence } from "@core/media-evidence";
 import { applyGlossaryToTranscript } from "../shared/glossary";
 import { tagTranscribeError } from "../shared/transcribe-errors";
 import { autoClip, analyzeReferenceVideo } from "@core/pipeline";
 import type { ReferenceProfile } from "@core/reference";
-import { collectSignals } from "@core/signals";
 import { exportClips, sanitizeFilename } from "@core/export";
 import { sliceWords } from "@core/subtitle";
 import { wordsInPieces } from "../shared/pieces";
@@ -329,6 +329,7 @@ async function desktopDiagnostics(llm: LlmConfig | null, zh = true) {
     modelsRoot: modelsRoot(),
     cacheDir: transcriptCacheDir(),
     renderCacheDir: baseRenderCacheDir(),
+    evidenceCacheDir: baseEvidenceCacheDir(),
     toolsDir: join(app.getPath("userData"), "tools", "yt-dlp"),
     llm,
     zh,
@@ -341,6 +342,12 @@ ipcMain.handle("hotclip:diagnostics-clear-render-cache", async (_event, llm: unk
   await clearRenderCache(baseRenderCacheDir());
   return desktopDiagnostics(diagnosticsConfig(llm), locale !== "en");
 });
+ipcMain.handle("hotclip:diagnostics-clear-evidence-index", async (_event, llm: unknown, locale: unknown) => {
+  signalsCache.clear();
+  timelineCache.clear();
+  await clearEvidenceIndex(baseEvidenceCacheDir());
+  return desktopDiagnostics(diagnosticsConfig(llm), locale !== "en");
+});
 
 let diagnosticsRepairAbort: AbortController | null = null;
 ipcMain.on("hotclip:diagnostics-repair-cancel", () => diagnosticsRepairAbort?.abort());
@@ -351,6 +358,7 @@ ipcMain.handle("hotclip:diagnostics-prepare-models", async (event, llm: unknown,
     modelsRoot: modelsRoot(),
     cacheDir: transcriptCacheDir(),
     renderCacheDir: baseRenderCacheDir(),
+    evidenceCacheDir: baseEvidenceCacheDir(),
     toolsDir: join(app.getPath("userData"), "tools", "yt-dlp"),
     llm: config,
     zh: locale !== "en",
@@ -473,7 +481,8 @@ ipcMain.handle("hotclip:timeline-data", async (_event, filePath: unknown, durati
   if (typeof filePath !== "string" || !filePath.trim()) throw new Error("timeline-data requires a file path");
   const dur = typeof durationSec === "number" && Number.isFinite(durationSec) && durationSec > 0 ? durationSec : 0;
   if (dur <= 0) throw new Error("timeline-data requires a duration");
-  const key = `${filePath}|${Math.round(dur)}`;
+  const sourceId = await fingerprintEvidenceSource(filePath).then(evidenceSourceId).catch(() => filePath);
+  const key = `${sourceId}|${Math.round(dur)}`;
   let p = timelineCache.get(key);
   if (!p) {
     p = (async () => {
@@ -485,6 +494,7 @@ ipcMain.handle("hotclip:timeline-data", async (_event, filePath: unknown, durati
       ]);
       return {
         loudness: signals?.loudnessSamples ? loudnessCurve(signals.loudnessSamples, dur, bins) : [],
+        motion: signals?.motionSamples ? motionCurve(signals.motionSamples, dur, bins) : [],
         danmaku: items ? danmakuHeatCurve(items, dur, bins) : [],
         thumbs,
         binSec: dur / bins,
@@ -567,6 +577,7 @@ ipcMain.handle("hotclip:review-record", async (_event, video: unknown, kept: unk
 const modelsRoot = (): string => resolveModelsRoot(app.getPath("userData"));
 const transcriptCacheDir = (): string => join(app.getPath("userData"), "transcript-cache");
 const baseRenderCacheDir = (): string => join(app.getPath("userData"), "render-cache");
+const baseEvidenceCacheDir = (): string => join(app.getPath("userData"), "evidence-index");
 
 /** catalog id → engine factory + its model asset (for install checks). */
 const ASR_ENGINES = {
@@ -592,11 +603,13 @@ let transcribing = false;
 // the user reaches highlight detection the evidence is already there.
 const signalsCache = new Map<string, Promise<import("@core/signals").MediaSignals | undefined>>();
 
-function warmSignals(filePath: string): Promise<import("@core/signals").MediaSignals | undefined> {
-  let p = signalsCache.get(filePath);
+async function warmSignals(filePath: string): Promise<import("@core/signals").MediaSignals | undefined> {
+  const source = await fingerprintEvidenceSource(filePath).catch(() => null);
+  const key = source ? evidenceSourceId(source) : filePath;
+  let p = signalsCache.get(key);
   if (!p) {
-    p = collectSignals(filePath).catch(() => undefined);
-    signalsCache.set(filePath, p);
+    p = collectSignalsEvidence({ videoPath: filePath, evidenceDir: baseEvidenceCacheDir(), source: source ?? undefined }).catch(() => undefined);
+    signalsCache.set(key, p);
     // bound the cache — sources are large strings but promises are cheap;
     // keep the last few files only
     if (signalsCache.size > 4) {
@@ -685,6 +698,7 @@ ipcMain.handle(
         reference = await analyzeReferenceVideo(referencePath, {
           modelsRoot: modelsRoot(),
           cacheDir: transcriptCacheDir(),
+          evidenceCacheDir: baseEvidenceCacheDir(),
           glossary: await loadGlossary(app.getPath("userData")),
         });
       } catch (e) {
@@ -758,7 +772,7 @@ ipcMain.handle(
             new Promise<null>((r) => setTimeout(() => r(null), 120_000)),
           ]).catch(() => null),
           visionCfg
-            ? collectVisionSignal({
+            ? collectVisionEvidence({
                 videoPath: filePath,
                 durationSec: media.durationSec,
                 config: visionCfg,
@@ -769,6 +783,7 @@ ipcMain.handle(
                 fontFile: app.isPackaged
                   ? join(process.resourcesPath, "fonts", "SourceHanSansSC-Bold.otf")
                   : join(app.getAppPath(), "resources", "fonts", "SourceHanSansSC-Bold.otf"),
+                evidenceDir: baseEvidenceCacheDir(),
               }).catch(() => null)
             : Promise.resolve(null),
         ]);
@@ -1035,6 +1050,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       fontsDir,
       renderOverlay: renderCaptionOverlay,
       renderCacheDir: baseRenderCacheDir(),
+      evidenceCacheDir: baseEvidenceCacheDir(),
     },
     (p) => {
       if (!event.sender.isDestroyed()) event.sender.send("hotclip:export-progress", p);
@@ -1213,6 +1229,7 @@ function makeRecordingProcessor(
           modelsRoot: modelsRoot(),
           cacheDir: transcriptCacheDir(),
           renderCacheDir: baseRenderCacheDir(),
+          evidenceCacheDir: baseEvidenceCacheDir(),
           llm: config,
           fontsDir,
           glossary: await loadGlossary(app.getPath("userData")),

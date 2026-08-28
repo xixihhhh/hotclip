@@ -130,11 +130,24 @@ export function planFrameTimes(
     if (picked.length < maxFrames && fits(c)) picked.push(c);
   };
   // 信号窗口中点优先——那里"可能有画面"的先验最强
-  const priority = [...(signals?.loudPeaks ?? []), ...(signals?.cutDense ?? [])]
-    .map((r) => (r.startSec + r.endSec) / 2)
-    .sort((a, b) => a - b);
-  for (const t of priority) tryPick(t);
-  // 均匀网格补满剩余额度,防"信号盲区"整段漏掉
+  const priority = [
+    ...(signals?.loudPeaks ?? []).map((r) => (r.startSec + r.endSec) / 2),
+    ...(signals?.cutDense ?? []).map((r) => (r.startSec + r.endSec) / 2),
+    ...(signals?.motionPeaks ?? []).map((r) => (r.startSec + r.endSec) / 2),
+    ...[...(signals?.activityKeyframes ?? [])].sort((a, b) => b.score - a.score || a.t - b.t).map((frame) => frame.t),
+  ];
+  // Always reserve at least one third of the budget for uniform coverage so
+  // dense activity near the start cannot hide a quiet-but-important later scene.
+  const priorityBudget = Math.max(1, Math.floor((maxFrames * 2) / 3));
+  for (const t of priority) {
+    if (picked.length >= priorityBudget) break;
+    tryPick(t);
+  }
+  // 先显式铺满保留的全场格,再用细网格补齐;否则从头顺序补点会在有大量
+  // 优先时刻时提前耗尽额度,长片尾段仍可能失去覆盖。
+  const uniformReserve = Math.max(1, maxFrames - priorityBudget);
+  for (let i = 1; i <= uniformReserve; i++) tryPick((durationSec * i) / (uniformReserve + 1));
+  // 均匀细网格补满剩余额度,防"信号盲区"整段漏掉
   for (let i = 1; i <= maxFrames; i++) tryPick((durationSec * i) / (maxFrames + 1));
   return picked.sort((a, b) => a - b);
 }

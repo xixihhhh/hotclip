@@ -32,11 +32,11 @@
   "alternateName": "HotClip 爆款切片",
   "operatingSystem": "Windows, macOS, Linux",
   "applicationCategory": "MultimediaApplication",
-  "softwareVersion": "0.18.0",
+  "softwareVersion": "0.19.0",
   "inLanguage": ["zh-CN", "en"],
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
   "description": "免费开源、本地运行的 AI 视频切片 / 直播切片软件:长视频、直播回放一键切成爆款竖屏短视频。AI 找爆点、弹幕热度进爆点判断、横屏转竖屏 9:16、逐词点亮动态字幕,无积分制、无水印、素材不上传。",
-  "featureList": "AI 找爆点(八路证据链,附爆款分与理由)、弹幕热度进爆点判断、横屏转竖屏 9:16 人脸跟随、动态逐词点亮字幕、逐词时间来源与聚焦复核、字幕质量门、去气口剪口头禅、敏感词音频静音、项目工作区、可逆编辑与专业快捷键、重启恢复、持久自动化任务队列、有界基础渲染缓存、关键帧安全直拷、桌面健康检查、发布反馈台账、本地 A/B 实验、主题系列整理、平台发布包、SRT/双语字幕导出",
+  "featureList": "AI 找爆点(九路证据链,新增轻量运动证据,附爆款分与理由)、跨桌面/CLI/MCP/自动化复用的本地多模态证据索引、运动时间轴、弹幕热度进爆点判断、横屏转竖屏 9:16 人脸跟随、动态逐词点亮字幕、逐词时间来源与聚焦复核、字幕质量门、去气口剪口头禅、敏感词音频静音、项目工作区、可逆编辑与专业快捷键、重启恢复、持久自动化任务队列、有界基础渲染缓存、关键帧安全直拷、桌面健康检查、发布反馈台账、本地 A/B 实验、主题系列整理、平台发布包、SRT/双语字幕导出",
   "url": "https://xixihhhh.github.io/hotclip/",
   "downloadUrl": "https://github.com/xixihhhh/hotclip/releases/latest",
   "screenshot": "https://xixihhhh.github.io/hotclip/screenshots/04-highlights.png",
@@ -69,7 +69,7 @@
     { "@type": "Question", "name": "需要联网吗?视频会上传到云端吗?", "acceptedAnswer": { "@type": "Answer", "text": "素材永不上传。转写、字幕、切片、导出全程离线;只有 AI 找爆点这一步默认调用云端大模型(只发文字稿,用你自己的 Key),接本机 Ollama 后整条流水线 100% 离线。" } },
     { "@type": "Question", "name": "支持中文视频吗?方言和粤语呢?", "acceptedAnswer": { "@type": "Answer", "text": "支持且是强项。中文识别走专用引擎(SenseVoice/Paraformer/FireRedASR2),准确率显著高于通用模型;方言、粤语、中英混说都覆盖,界面、字幕、爆点判断提示词都针对中文内容做了适配。" } },
     { "@type": "Question", "name": "视频怎么自动加字幕?能导出 SRT 吗?", "acceptedAnswer": { "@type": "Answer", "text": "导入后自动逐字转写,关键词高亮/大字弹出/气泡特效等多款动态字幕一档切换、直接烧进画面;也可以一键导出 SRT 字幕文件给平台原生上传,开双语字幕还能整句翻译烧成第二行。" } },
-    { "@type": "Question", "name": "弹幕能参与选爆点吗?", "acceptedAnswer": { "@type": "Answer", "text": "能,而且是最硬的证据。HotClip 自动发现录播旁的弹幕文件(B 站录播姬 .xml、抖音直播录制 .jsonl 都认),弹幕密度与 SC/舰长/礼物/关注/点赞互动按档计权直接进爆点判断;单人刷屏有贡献封顶,突然爆发有额外加成。没有弹幕文件时,响度/镜头/表情/语气/笑声等信号兜底。" } },
+    { "@type": "Question", "name": "弹幕能参与选爆点吗?", "acceptedAnswer": { "@type": "Answer", "text": "能,而且是最硬的证据。HotClip 自动发现录播旁的弹幕文件(B 站录播姬 .xml、抖音直播录制 .jsonl 都认),弹幕密度与 SC/舰长/礼物/关注/点赞互动按档计权直接进爆点判断;单人刷屏有贡献封顶,突然爆发有额外加成。没有弹幕文件时,响度/镜头/运动/表情/语气/笑声等信号兜底。" } },
     { "@type": "Question", "name": "剪映可以自动切割片段吗?能和剪映配合用吗?", "acceptedAnswer": { "@type": "Answer", "text": "剪映的智能切片在会员档,且只能切连续区间。HotClip 免费开源,支持把相隔十几分钟的片段拼成一条,还能把每条切片导出成剪映草稿——AI 粗剪交给 HotClip,打开剪映接着精修。" } },
     { "@type": "Question", "name": "能自动剪掉口播里的停顿和口头禅吗?视频如何去气口?", "acceptedAnswer": { "@type": "Answer", "text": "能。「剪气口」自动删掉说话间的静音停顿,「剪口头禅」剪掉嗯/呃与结巴重复,字幕时间轴同步重映射;剪了什么逐条写进 clips.json,你始终知道 AI 动了哪里。" } },
     { "@type": "Question", "name": "需要显卡吗?配置要求高吗?", "acceptedAnswer": { "@type": "Answer", "text": "不需要显卡。本地转写用 int8 量化的小模型,普通 CPU 就能跑;找爆点的大模型在云端或你本机的 Ollama。" } },
@@ -139,7 +139,7 @@
   </div>
   <p class="note">不用 Python、不用 Docker、连账号都不用注册——下载安装包,双击即用</p>
   <div class="meta-badges">
-    <span>最新版本 <b id="gh-version">v0.18.0</b></span>
+    <span>最新版本 <b id="gh-version">v0.19.0</b></span>
     <span>GitHub <b id="gh-stars">★</b></span>
     <span>Windows · macOS · Linux</span>
   </div>
@@ -227,7 +227,7 @@
           <span class="st-k">STEP 02 · AI 找爆点</span>
           <h3>每条候选,都讲得出理由</h3>
           <p>本地逐字转写后,AI 通读全文挑出金句、冲突、高能段。<b>爆款分 + 四维评审 + 推荐理由</b>,切点由逐字转写反向对齐、精确到词——不是黑盒,看不顺眼取消勾选即可。</p>
-          <div class="st-chips"><span>文本</span><span>响度</span><span>镜头</span><span>表情</span><span>视觉</span><span>弹幕</span><span>语气</span><span>笑声</span></div>
+          <div class="st-chips"><span>文本</span><span>响度</span><span>镜头</span><span>运动</span><span>表情</span><span>视觉</span><span>弹幕</span><span>语气</span><span>笑声</span></div>
         </div>
         <div class="st-visual">
           <div class="cand-card">
@@ -287,7 +287,7 @@
     <div class="b-cell b-lg b-hotspot" data-reveal>
       <span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-flame"/></svg></span>
       <h3>AI 找爆点 · 直播高光切片</h3>
-      <p>八路证据链(文本/响度/镜头/表情/视觉/弹幕/语气/笑声掌声)圈出高能时刻,多路信号同秒共振才可信;每条候选附<b>爆款分与四维评审</b>,弱片自动标「不建议发布」。爆款分是同批次排名,不是玄学。</p>
+      <p>九路证据链(文本/响度/镜头/运动/表情/视觉/弹幕/语气/笑声掌声)圈出高能时刻,多路信号同秒共振才可信;每条候选附<b>爆款分与四维评审</b>,弱片自动标「不建议发布」。爆款分是同批次排名,不是玄学。</p>
       <div class="mini-cand" aria-hidden="true">
         <div class="cc-top"><span><svg class="ic" aria-hidden="true"><use href="#i-flame"/></svg> 金句时刻</span><span class="cc-score">92</span></div>
         <div class="cc-dims">
@@ -321,6 +321,7 @@
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-scissors"/></svg></span><h3>每一步都能撤销重做</h3><p>选片、标题、切点、手动加片和逐句稿纠错共用可逆历史,随项目恢复;播放、跳播和入出点有专业快捷键。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>任务断了,重开接着做</h3><p>素材、逐字稿、候选与手调切点自动恢复;录播监听和 webhook 共用<b>持久任务队列</b>,可取消、可重试。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span><h3>出片前一键健康检查</h3><p>检查 FFmpeg、解析工具、9 类模型、LLM 连通性、磁盘与缓存;核心模型可取消、可续传地准备。</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg></span><h3>证据只算一次,全入口复用</h3><p>响度、镜头、运动与可选视觉扫描按源文件指纹进入 <b>64MB 本地索引</b>;桌面、CLI、MCP 和无人值守共用,算法/模型变化自动重算,密钥不落盘。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>长视频重复出片更快</h3><p>相同基础成片直接复用本地缓存;H.264 仅在关键帧与画面条件安全时直拷,其余<b>透明回退精确编码</b>。缓存最多 1GB,可单独清理。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-scissors"/></svg></span><h3>敏感词只静音,原文仍可审</h3><p>自定义词表按逐字稿时间精准静音,跳剪/多片段也能映射;<b>字幕与逐字稿保留原文</b>。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg></span><h3>发布效果回流下一刀</h3><p>稳定内容 ID + 预填指标 CSV 保守对账;待回填/已统计状态清楚,未匹配和歧义不藏起来。</p></div>
@@ -406,7 +407,7 @@
   <details><summary>需要联网吗?视频会上传到云端吗?</summary><p>素材永不上传。转写、字幕、切片、导出全程离线;只有「AI 找爆点」默认调云端大模型(只发文字稿,用你自己的 Key),接本机 Ollama 后整条流水线 <b>100% 离线</b>。</p></details>
   <details><summary>支持中文视频吗?方言和粤语呢?</summary><p>支持且是强项:SenseVoice / Paraformer / FireRedASR2 专用引擎,方言、粤语、中英混说覆盖;界面、字幕、爆点判断提示词都为中文内容适配。</p></details>
   <details><summary>视频怎么自动加字幕?能导出 SRT 吗?</summary><p>导入后自动逐字转写,关键词高亮/大字弹出/气泡特效等多款动态字幕一档切换、直接烧进画面;也可以一键导出 <b>SRT 字幕文件</b>给平台原生上传,开双语字幕还能整句翻译烧成第二行。</p></details>
-  <details><summary>弹幕能参与选爆点吗?</summary><p>能,而且是<b>最硬的证据</b>。HotClip 自动发现录播旁的弹幕文件(B 站录播姬 .xml、抖音直播录制 .jsonl 都认),弹幕密度与 SC/舰长/礼物/关注/点赞互动按档计权直接进爆点判断;单人刷屏有贡献封顶,突然爆发有额外加成。没有弹幕文件时,响度/镜头/表情/语气/笑声等信号兜底。</p></details>
+  <details><summary>弹幕能参与选爆点吗?</summary><p>能,而且是<b>最硬的证据</b>。HotClip 自动发现录播旁的弹幕文件(B 站录播姬 .xml、抖音直播录制 .jsonl 都认),弹幕密度与 SC/舰长/礼物/关注/点赞互动按档计权直接进爆点判断;单人刷屏有贡献封顶,突然爆发有额外加成。没有弹幕文件时,响度/镜头/运动/表情/语气/笑声等信号兜底。</p></details>
   <details><summary>剪映可以自动切割片段吗?能和剪映配合用吗?</summary><p>剪映的智能切片在会员档,且只能切连续区间。HotClip 免费开源,支持把相隔十几分钟的片段拼成一条,还能把每条切片导出成<b>剪映草稿</b>——AI 粗剪交给 HotClip,打开剪映接着精修。</p></details>
   <details><summary>能自动剪掉口播里的停顿和口头禅吗?</summary><p>能。「剪气口」自动删掉说话间的静音停顿(去气口),「剪口头禅」剪掉嗯/呃与结巴重复——剪了什么逐条写进 clips.json,你始终知道 AI 动了哪里。</p></details>
   <details><summary>需要显卡吗?配置要求高吗?</summary><p>不需要显卡。本地转写用 int8 量化的小模型,普通 CPU 就能跑;找爆点的大模型在云端或你本机的 Ollama。</p></details>

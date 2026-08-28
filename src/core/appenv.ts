@@ -24,6 +24,9 @@ export const cacheDir = (): string => join(userDataDir(), "transcript-cache");
 /** 可复用基础成片缓存(有界 LRU,与转写缓存分开管理)。 */
 export const renderCacheDir = (): string => join(userDataDir(), "render-cache");
 
+/** Reusable source-analysis evidence (small JSON index, independently bounded/clearable). */
+export const evidenceCacheDir = (): string => join(userDataDir(), "evidence-index");
+
 /**
  * 成片落地目录:<导出根目录>/<片名>/。
  * 根目录默认是系统「影片」下的 HotClip(新手在文件管理器里找得到),用户在

@@ -42,6 +42,17 @@ describe("planFrameTimes", () => {
     expect(near.length).toBe(1);
   });
 
+  it("大量运动代表时刻最多占三分之二额度,仍保留全片均匀覆盖", () => {
+    const signals: MediaSignals = {
+      loudPeaks: [],
+      cutDense: [],
+      activityKeyframes: Array.from({ length: 40 }, (_, index) => ({ t: 10 + index * 9, score: 1 - index / 100 })),
+    };
+    const times = planFrameTimes(600, signals, 27, 8);
+    expect(times).toHaveLength(27);
+    expect(times.some((time) => time > 500)).toBe(true);
+  });
+
   it("短片额度自动缩水,时刻夹在片内", () => {
     const times = planFrameTimes(20, undefined);
     expect(times.length).toBeGreaterThan(0);

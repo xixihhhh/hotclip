@@ -14,7 +14,7 @@ import { join, basename } from "path";
 import { transcribeCached, detectForPipeline, autoClip, analyzeReferenceVideo } from "../core/pipeline";
 import type { ReferenceProfile } from "../core/reference";
 import { loadGlossary } from "../core/glossary-store";
-import { userDataDir, modelsRoot, cacheDir, renderCacheDir, llmFromEnv } from "../core/appenv";
+import { userDataDir, modelsRoot, cacheDir, renderCacheDir, evidenceCacheDir, llmFromEnv } from "../core/appenv";
 import { loadReviewMemory } from "../core/review-memory";
 import { loadPerformanceMemory } from "../core/performance-memory";
 import { handleMcpMessage, type JsonRpcMessage } from "./protocol";
@@ -39,6 +39,7 @@ async function loadReference(refPath: unknown): Promise<{ profile?: ReferencePro
     const p = await analyzeReferenceVideo(refPath, {
       modelsRoot: modelsRoot(),
       cacheDir: cacheDir(),
+      evidenceCacheDir: evidenceCacheDir(),
       glossary: await loadGlossary(userDataDir()),
     });
     const cuts = p.cutsPerMin !== null ? `·镜头 ${p.cutsPerMin} 切/分` : "";
@@ -69,6 +70,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
     const transcript = await transcribeCached(videoPath, modelsRoot(), cacheDir(), await loadGlossary(userDataDir()));
     const candidates = await detectForPipeline(videoPath, transcript, {
       modelsRoot: modelsRoot(),
+      evidenceCacheDir: evidenceCacheDir(),
       llm,
       maxClips: clampClips(args.maxClips),
       reference: ref.profile,
@@ -103,6 +105,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
       modelsRoot: modelsRoot(),
       cacheDir: cacheDir(),
       renderCacheDir: renderCacheDir(),
+      evidenceCacheDir: evidenceCacheDir(),
       llm,
       maxClips: clampClips(args.maxClips),
       vertical: args.vertical !== false,

@@ -913,6 +913,8 @@ function DiagnosticsSection(): React.JSX.Element {
   const [repairing, setRepairing] = useState(false);
   const [clearingCache, setClearingCache] = useState(false);
   const [confirmClearCache, setConfirmClearCache] = useState(false);
+  const [clearingEvidence, setClearingEvidence] = useState(false);
+  const [confirmClearEvidence, setConfirmClearEvidence] = useState(false);
   const [progress, setProgress] = useState<DiagnosticsProgressEvent | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -924,6 +926,7 @@ function DiagnosticsSection(): React.JSX.Element {
     setError("");
     setNotice("");
     setConfirmClearCache(false);
+    setConfirmClearEvidence(false);
     try {
       setReport(await getApi().diagnosticsRun(config.baseUrl && config.model ? config : null, locale));
     } catch (e) {
@@ -936,6 +939,7 @@ function DiagnosticsSection(): React.JSX.Element {
   const clearCache = useCallback(async (): Promise<void> => {
     if (!confirmClearCache) {
       setConfirmClearCache(true);
+      setConfirmClearEvidence(false);
       setNotice("");
       return;
     }
@@ -953,12 +957,34 @@ function DiagnosticsSection(): React.JSX.Element {
     }
   }, [config, confirmClearCache, locale, t]);
 
+  const clearEvidence = useCallback(async (): Promise<void> => {
+    if (!confirmClearEvidence) {
+      setConfirmClearEvidence(true);
+      setConfirmClearCache(false);
+      setNotice("");
+      return;
+    }
+    setClearingEvidence(true);
+    setError("");
+    setNotice("");
+    try {
+      setReport(await getApi().diagnosticsClearEvidenceIndex(config.baseUrl && config.model ? config : null, locale));
+      setNotice(t("clearEvidenceSuccess"));
+      setConfirmClearEvidence(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setClearingEvidence(false);
+    }
+  }, [config, confirmClearEvidence, locale, t]);
+
   const repair = useCallback(async (): Promise<void> => {
     setRepairing(true);
     setProgress(null);
     setError("");
     setNotice("");
     setConfirmClearCache(false);
+    setConfirmClearEvidence(false);
     try {
       setReport(await getApi().diagnosticsPrepareModels(config.baseUrl && config.model ? config : null, locale));
     } catch (e) {
@@ -973,9 +999,11 @@ function DiagnosticsSection(): React.JSX.Element {
   const failures = report?.checks.filter((check) => check.status === "fail").length ?? 0;
   const warnings = report?.checks.filter((check) => check.status === "warn").length ?? 0;
   const hasRenderCache = report?.checks.some((check) => check.id === "render-cache") ?? false;
+  const hasEvidenceIndex = report?.checks.some((check) => check.id === "evidence-index") ?? false;
+  const busy = running || repairing || clearingCache || clearingEvidence;
 
   return (
-    <div className="flex flex-col gap-5" aria-busy={running || repairing || clearingCache}>
+    <div className="flex flex-col gap-5" aria-busy={busy}>
       <section>
         <h3 className="flex items-center gap-2 text-[13.5px] font-bold">
           <LuGauge aria-hidden="true" className="h-4 w-4 text-ember" />
@@ -983,12 +1011,12 @@ function DiagnosticsSection(): React.JSX.Element {
         </h3>
         <p className="mt-1 text-[12px] leading-relaxed text-mut">{t("desc")}</p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <button type="button" disabled={running || repairing || clearingCache} onClick={() => void run()} className="btn-flame inline-flex min-h-10 items-center gap-2 rounded-lg px-4 py-2 text-[12.5px] font-bold text-white disabled:opacity-50">
+          <button type="button" disabled={busy} onClick={() => void run()} className="btn-flame inline-flex min-h-10 items-center gap-2 rounded-lg px-4 py-2 text-[12.5px] font-bold text-white disabled:opacity-50">
             {running ? <LuLoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <LuGauge aria-hidden="true" className="h-4 w-4" />}
             {running ? t("running") : t("run")}
           </button>
           {report && report.missingCoreModels > 0 && (
-            <button type="button" disabled={running || repairing || clearingCache} onClick={() => void repair()} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-line px-4 py-2 text-[12.5px] font-semibold text-fg hover:border-ember/50 disabled:opacity-50">
+            <button type="button" disabled={busy} onClick={() => void repair()} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-line px-4 py-2 text-[12.5px] font-semibold text-fg hover:border-ember/50 disabled:opacity-50">
               {repairing ? <LuLoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <LuDownload aria-hidden="true" className="h-4 w-4" />}
               {repairing ? t("preparing") : t("prepare", { n: report.missingCoreModels })}
             </button>
@@ -996,12 +1024,23 @@ function DiagnosticsSection(): React.JSX.Element {
           {hasRenderCache && (
             <button
               type="button"
-              disabled={running || repairing || clearingCache}
+              disabled={busy}
               onClick={() => void clearCache()}
               className={`inline-flex min-h-10 items-center gap-2 rounded-lg border px-3.5 py-2 text-[12px] font-semibold transition-colors disabled:opacity-50 ${confirmClearCache ? "border-red-500/60 bg-red-500/10 text-red-300" : "border-line text-mut hover:border-red-500/40 hover:text-red-300"}`}
             >
               {clearingCache ? <LuLoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <LuTrash2 aria-hidden="true" className="h-4 w-4" />}
               {clearingCache ? t("clearingCache") : confirmClearCache ? t("clearCacheConfirm") : t("clearCache")}
+            </button>
+          )}
+          {hasEvidenceIndex && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void clearEvidence()}
+              className={`inline-flex min-h-10 items-center gap-2 rounded-lg border px-3.5 py-2 text-[12px] font-semibold transition-colors disabled:opacity-50 ${confirmClearEvidence ? "border-red-500/60 bg-red-500/10 text-red-300" : "border-line text-mut hover:border-red-500/40 hover:text-red-300"}`}
+            >
+              {clearingEvidence ? <LuLoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <LuTrash2 aria-hidden="true" className="h-4 w-4" />}
+              {clearingEvidence ? t("clearingEvidence") : confirmClearEvidence ? t("clearEvidenceConfirm") : t("clearEvidence")}
             </button>
           )}
           {repairing && (

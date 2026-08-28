@@ -255,6 +255,8 @@ export async function runDoctor(opts: {
   cacheDir: string;
   /** Optional bounded base-render cache; desktop passes it for size/control visibility. */
   renderCacheDir?: string;
+  /** Optional bounded source-analysis evidence index. */
+  evidenceCacheDir?: string;
   /** 桌面地址导入工具目录;CLI 未提供时跳过此可选检查。 */
   toolsDir?: string;
   llm: LlmConfig | null;
@@ -308,6 +310,20 @@ export async function runDoctor(opts: {
             ? `${fmtMB(renderCacheBytes)}(重复导出直接复用,自动限制为 1GB)`
             : `${fmtMB(renderCacheBytes)} (reused for repeat exports; automatically limited to 1GB)`)
         : (zh ? "空(导出后按需积累)" : "Empty (builds as clips are exported)"),
+    });
+  }
+
+  if (opts.evidenceCacheDir) {
+    const evidenceBytes = await dirSize(opts.evidenceCacheDir);
+    checks.push({
+      id: "evidence-index",
+      name: zh ? "多模态证据索引" : "Multimodal evidence index",
+      status: "ok",
+      detail: evidenceBytes > 0
+        ? (zh
+            ? `${fmtMB(evidenceBytes)}(运动/镜头/视觉证据跨任务复用,自动限制为 64MB)`
+            : `${fmtMB(evidenceBytes)} (motion/shot/vision evidence reused across jobs; automatically limited to 64MB)`)
+        : (zh ? "空(分析素材后按需积累)" : "Empty (builds as sources are analyzed)"),
     });
   }
 

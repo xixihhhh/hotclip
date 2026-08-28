@@ -47,7 +47,8 @@ import {
 } from "./sound-design";
 import { detectUiCrop, type UiCrop } from "./uicrop";
 import { generateCropPlan, renderCropXExpr, mapToOutputTime } from "./reframe";
-import { detectShotBoundaries, snapClipToShots, SNAP_MAX_OUT_SEC } from "./shots";
+import { snapClipToShots, SNAP_MAX_OUT_SEC } from "./shots";
+import { detectShotBoundariesEvidence } from "./media-evidence";
 import { buildCaptionAss, VERTICAL_LAYOUT, HORIZONTAL_LAYOUT, type CaptionStyle } from "./subtitle";
 import { lintSubtitleTimeline } from "./subtitle-quality";
 import { buildOverlayPayload, isWebCaptionStyle, type OverlayRenderFn, type WebCaptionStyle } from "./caption-overlay/payload";
@@ -357,6 +358,8 @@ export interface ExportRenderOptions {
   renderCacheDir?: string;
   /** Cache budget override; defaults to a conservative 1GiB. */
   renderCacheMaxBytes?: number;
+  /** Shared bounded cache for source-derived analysis evidence. Omit to disable. */
+  evidenceCacheDir?: string;
 }
 
 export interface ExportedClip {
@@ -543,9 +546,18 @@ export async function exportClips(
       let shotSnap: ClipRenderOutcome["shotSnap"] = null;
       if (options.snapToShots && options.modelsRoot && !clip.manualBounds && !audioOnly && !stitched) {
         const pad = SNAP_MAX_OUT_SEC + 0.4;
-        const boundaries = await detectShotBoundaries(
-          inputPath, clip.startSec - pad, clip.endSec + pad, options.modelsRoot
-        ).catch(() => [] as number[]);
+        const boundaries = await detectShotBoundariesEvidence({
+          videoPath: inputPath,
+          startSec: clip.startSec - pad,
+          endSec: clip.endSec + pad,
+          modelsRoot: options.modelsRoot,
+          evidenceDir: options.evidenceCacheDir,
+          signal,
+          source: cacheSource ?? undefined,
+        }).catch((error) => {
+          if (signal?.aborted) throw error;
+          return [] as number[];
+        });
         const w = clip.words;
         const snap = snapClipToShots(clip.startSec, clip.endSec, boundaries, {
           firstWordStartSec: w?.[0]?.startSec,

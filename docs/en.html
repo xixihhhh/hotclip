@@ -31,11 +31,11 @@
   "name": "HotClip",
   "operatingSystem": "Windows, macOS, Linux",
   "applicationCategory": "MultimediaApplication",
-  "softwareVersion": "0.18.0",
+  "softwareVersion": "0.19.0",
   "inLanguage": ["en", "zh-CN"],
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
   "description": "Free, open-source, local-first AI video clipper: turn long videos and livestream replays into 9:16 shorts with AI highlight detection, dynamic word-level captions and face-tracked auto-reframe. No credits or watermark.",
-  "featureList": "AI highlight detection with virality scores and reasoning, live-chat heat evidence, face-tracked 9:16 auto-reframe, dynamic word-level captions, word-timing provenance and focused review, caption quality lint, filler removal, transcript-timed sensitive-term muting, multi-project workspace, reversible editing and professional shortcuts, restart-safe recovery, durable automation queue, bounded base-render cache, keyframe-safe H.264 copy, desktop health diagnostics, publishing feedback ledger, local A/B experiments, topic-series packs, per-platform publish packs, SRT and bilingual captions",
+  "featureList": "Nine-channel AI highlight detection with lightweight motion evidence, virality scores and reasoning, reusable local multimodal evidence shared by desktop/CLI/MCP/automation, motion timeline, live-chat heat evidence, face-tracked 9:16 auto-reframe, dynamic word-level captions, word-timing provenance and focused review, caption quality lint, filler removal, transcript-timed sensitive-term muting, multi-project workspace, reversible editing and professional shortcuts, restart-safe recovery, durable automation queue, bounded base-render cache, keyframe-safe H.264 copy, desktop health diagnostics, publishing feedback ledger, local A/B experiments, topic-series packs, per-platform publish packs, SRT and bilingual captions",
   "url": "https://xixihhhh.github.io/hotclip/en.html",
   "downloadUrl": "https://github.com/xixihhhh/hotclip/releases/latest",
   "screenshot": "https://xixihhhh.github.io/hotclip/screenshots/04-highlights.png",
@@ -67,7 +67,7 @@
     { "@type": "Question", "name": "How is HotClip different from OpusClip, Klap or Vizard?", "acceptedAnswer": { "@type": "Answer", "text": "Your footage never leaves your machine. Those SaaS tools require cloud uploads and meter credits per source minute (credits expire monthly; free tiers add watermarks). HotClip is free, local, watermark-free and cap-free, and every AI cut ships with auditable reasoning you can veto." } },
     { "@type": "Question", "name": "How do I add dynamic word-level captions to a video?", "acceptedAnswer": { "@type": "Answer", "text": "HotClip transcribes locally with word-level timestamps and burns word-by-word highlighted captions into every clip automatically. You can also export SRT files for native platform upload, and enable bilingual captions with full-sentence translation." } },
     { "@type": "Question", "name": "Can it remove filler words and silences for free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Silence jump-cuts remove pauses between sentences and the filler-word pass cuts ums/uhs and stutters — caption timing is remapped automatically, and every edit is logged to clips.json so you can audit what the AI did." } },
-    { "@type": "Question", "name": "Can live-chat data help pick highlights?", "acceptedAnswer": { "@type": "Answer", "text": "Yes — HotClip auto-discovers the chat log next to a recording (BililiveRecorder .xml and Douyin-recorder .jsonl both work) and feeds chat density plus superchats, memberships, gifts, follows and like bursts into highlight detection, with per-sender spam caps and surge bonuses. Without a chat file, loudness, shot-cut, facial-emotion and laughter signals take over." } },
+    { "@type": "Question", "name": "Can live-chat data help pick highlights?", "acceptedAnswer": { "@type": "Answer", "text": "Yes — HotClip auto-discovers the chat log next to a recording (BililiveRecorder .xml and Douyin-recorder .jsonl both work) and feeds chat density plus superchats, memberships, gifts, follows and like bursts into highlight detection, with per-sender spam caps and surge bonuses. Without a chat file, loudness, shot-cut, motion, facial-emotion and laughter signals take over." } },
     { "@type": "Question", "name": "Do I need a GPU?", "acceptedAnswer": { "@type": "Answer", "text": "No. The local speech-recognition models are int8-quantized and run fine on a normal CPU." } },
     { "@type": "Question", "name": "Does it work for Chinese video?", "acceptedAnswer": { "@type": "Answer", "text": "Yes — Chinese speech goes through dedicated ASR engines (SenseVoice, Paraformer, FireRedASR2) with noticeably better accuracy than general-purpose models, covering dialects, Cantonese and code-switching." } },
     { "@type": "Question", "name": "Can I clip other people's streams?", "acceptedAnswer": { "@type": "Answer", "text": "HotClip is for your own content or clips you are authorized to make (e.g. streamer clipping programs). Unauthorized re-uploading is not supported and not welcome." } }
@@ -136,7 +136,7 @@
   </div>
   <p class="note">No Python, no Docker, no account — a real desktop app you double-click</p>
   <div class="meta-badges">
-    <span>Latest <b id="gh-version">v0.18.0</b></span>
+    <span>Latest <b id="gh-version">v0.19.0</b></span>
     <span>GitHub <b id="gh-stars">★</b></span>
     <span>Windows · macOS · Linux</span>
   </div>
@@ -223,7 +223,7 @@
           <span class="st-k">STEP 02 · AI HIGHLIGHTS</span>
           <h3>Every candidate comes with receipts</h3>
           <p>After local word-level transcription, the AI nominates quotables, conflicts and peak moments. <b>Virality score + four-dimension review + reasoning</b>; timestamps are reverse-aligned from the transcript, accurate to the word. Untick anything you don't like.</p>
-          <div class="st-chips"><span>transcript</span><span>loudness</span><span>shots</span><span>emotion</span><span>vision</span><span>live chat</span><span>vocal tone</span><span>laughter</span></div>
+          <div class="st-chips"><span>transcript</span><span>loudness</span><span>shots</span><span>motion</span><span>emotion</span><span>vision</span><span>live chat</span><span>vocal tone</span><span>laughter</span></div>
         </div>
         <div class="st-visual">
           <div class="cand-card">
@@ -283,7 +283,7 @@
     <div class="b-cell b-lg b-hotspot" data-reveal>
       <span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-flame"/></svg></span>
       <h3>AI highlights generator</h3>
-      <p>Eight evidence channels (transcript, loudness, shot density, facial emotion, vision, live-chat heat, vocal tone, laughter/applause) nominate peak moments — trusted most when several fire at once — each with a <b>virality score and four-dimension review</b>. The score is a within-batch ranking, not astrology.</p>
+      <p>Nine evidence channels (transcript, loudness, shot density, motion, facial emotion, vision, live-chat heat, vocal tone, laughter/applause) nominate peak moments — trusted most when several fire at once — each with a <b>virality score and four-dimension review</b>. The score is a within-batch ranking, not astrology.</p>
       <div class="mini-cand" aria-hidden="true">
         <div class="cc-top"><span><svg class="ic" aria-hidden="true"><use href="#i-flame"/></svg> Quotable moment</span><span class="cc-score">92</span></div>
         <div class="cc-dims">
@@ -317,6 +317,7 @@
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-scissors"/></svg></span><h3>Every human edit can step back</h3><p>Selection, copy, boundaries, manual clips and transcript fixes share persistent undo/redo, plus keyboard transport, seek and in/out controls.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>Restart-safe work, durable queue</h3><p>Sources, transcripts, candidates and manual cuts recover; folder watch and webhooks share a <b>persistent queue</b> with cancel and retry.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span><h3>Health check before a long run</h3><p>Checks FFmpeg, downloader, nine model roles, LLM routing, disk and cache; core model preparation supports cancel and resume.</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg></span><h3>Analyze once, reuse everywhere</h3><p>Loudness, shots, motion and optional visual scans enter a <b>64MB source-fingerprinted index</b> shared by desktop, CLI, MCP and automation; model/detector changes rebuild safely and keys are never stored.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>Repeat long-video exports get faster</h3><p>Matching base renders restore from a local cache; H.264 copies only when keyframes and pixel operations make it safe, otherwise it <b>falls back to accurate encoding</b>. The 1GB cache clears separately.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-scissors"/></svg></span><h3>Mute terms, keep the audit trail</h3><p>An editable local list drives transcript-timed audio muting across jump cuts and multi-piece clips; <b>captions keep the original text</b>.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg></span><h3>Published results teach the next cut</h3><p>Stable content IDs and a prefilled metrics CSV correlate outcomes conservatively; awaiting/measured and unmatched/ambiguous states stay visible.</p></div>
@@ -401,7 +402,7 @@
   <details><summary>How is it different from OpusClip / Klap / Vizard?</summary><p>Your footage never leaves your machine. Those tools upload to the cloud and meter credits per source minute (expiring monthly; watermarked free tiers). HotClip is free, local, watermark-free — and every cut comes with auditable reasoning.</p></details>
   <details><summary>How do I add dynamic word-level captions?</summary><p>They're automatic: local word-level transcription drives word-by-word highlighted captions burned into every clip. <b>SRT export</b> and bilingual captions are one toggle away.</p></details>
   <details><summary>Can it remove filler words and silences?</summary><p>Yes — silence jump-cuts plus an um/uh filler pass, with caption timing remapped automatically. Every edit is logged to clips.json so you can audit what the AI did.</p></details>
-  <details><summary>Can live-chat data help pick highlights?</summary><p>Yes — HotClip auto-discovers the chat log next to a recording (<b>BililiveRecorder .xml and Douyin-recorder .jsonl</b> both work) and feeds chat density plus superchats, gifts, follows and like bursts into detection, with per-sender spam caps and surge bonuses. No chat file? Loudness, shot-cut, facial-emotion and laughter signals take over.</p></details>
+  <details><summary>Can live-chat data help pick highlights?</summary><p>Yes — HotClip auto-discovers the chat log next to a recording (<b>BililiveRecorder .xml and Douyin-recorder .jsonl</b> both work) and feeds chat density plus superchats, gifts, follows and like bursts into detection, with per-sender spam caps and surge bonuses. No chat file? Loudness, shot-cut, motion, facial-emotion and laughter signals take over.</p></details>
   <details><summary>Do I need a GPU?</summary><p>No — the local ASR models are int8-quantized and run fine on CPU.</p></details>
   <details><summary>Does it work for Chinese video?</summary><p>Yes, exceptionally well — dedicated Chinese ASR engines (SenseVoice / Paraformer / FireRedASR2) cover dialects, Cantonese and code-switching.</p></details>
   <details><summary>Can I clip other people's streams?</summary><p>HotClip is for your own content or clips you're authorized to make (e.g. streamer clipping programs). Unauthorized re-uploading is not supported and not welcome.</p></details>

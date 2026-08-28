@@ -33,6 +33,7 @@
 - **Ready to post, not just cut**: vertical clips + dynamic captions + covers + post copy + per-platform publish packs, all in one run
 - **Interrupted work picks up safely**: source, transcript, candidates, selections and hand-tuned cuts recover after restart; folder watch and webhooks share a durable queue with retry and cancel
 - **Real projects, not disposable tasks**: a project workspace manages multiple edits with offline/changed-source relinking; selections, copy, boundaries and transcript fixes all undo/redo, even after reopening
+- **Analyze once, reuse everywhere**: loudness, shots, motion and optional visual scans enter a source-fingerprinted local evidence index shared by desktop, CLI, MCP, folder watch and webhooks; model or detector changes invalidate only what must be rebuilt
 - **Long videos get faster on repeat**: identical base renders come straight from a bounded local cache; H.264 video is stream-copied only for keyframe-aligned, pixel-unchanged single cuts, while audio processing remains intact and every uncertain case falls back to accurate encoding
 - **Publishing teaches the next cut**: every export gets a stable content ID; multi-version exports form local A/B groups and only receive a direction when platform, publish window and sample evidence are comparable
 - **Clips while you sleep**: a 24/7 watch folder turns finished recordings into clips; one-click health diagnostics catch missing tools/models first, while CLI / MCP make it a one-sentence agent deliverable
@@ -123,7 +124,7 @@ Fast SenseVoice (5 languages, 170MB) / balanced Paraformer / most-accurate FireR
 - **Speaker diarization**: one toggle (local pyannote + 3D-Speaker, zero upload) labels who's speaking; the AI picks segments per speaker and never stitches two people out of context; bubble captions can color per speaker
 </details>
 
-### 🔥 AI highlights: eight evidence channels, every cut with receipts
+### 🔥 AI highlights: nine evidence channels, every cut with receipts
 
 The LLM only picks *which part* and must quote the transcript; timestamps come from **reverse-aligning the word-level transcript** — the AI never guesses times. Every candidate ships with a virality score, hook, reasoning and four-dimension review; weak picks are flagged "not recommended".
 
@@ -132,9 +133,10 @@ The LLM only picks *which part* and must quote the transcript; timestamps come f
 
 - **AI review quality gate**: a strict second-pass blind reviewer scores hook / structure / value / trend with one-line rationales, plus a printable teaser line
 - **Virality score = ranking, not astrology**: dimension-weighted totals normalized by relative rank within the batch (76–99), immune to LLM scoring drift — honestly labeled a ranker, not a view-count oracle
-- **Audio-visual evidence**: loudness peaks and shot-change density collected locally and injected into judgment
+- **Audio-visual evidence**: loudness peaks, shot-change density and lightweight motion peaks are collected locally and injected into judgment; the workbench renders motion as a visible timeline curve
 - **Live-chat density signal (Bilibili & Douyin)**: auto-discovers the chat file next to a recording — BililiveRecorder .xml and Douyin-recorder .jsonl both work; sliding-window density with hype-word weighting, plus interaction events (superchats, memberships, gifts, follows, like bursts) weighted on their own tier — money and action votes beat plain messages. Per-sender caps stop one spammer from faking a hot moment, and sudden surges score extra — the audience voting second by second, the strongest evidence there is
-- **Signal resonance & focused compute**: a moment is trusted when multiple signals fire together — loudness alone might be BGM, chat alone might be spam; loudness + chat + laughter lighting up at once is the real thing. Expensive models (facial emotion, vocal tone) spend their sampling budget where the chat explodes and the loudness peaks, so long streams scan both sharper and cheaper
+- **Signal resonance & focused compute**: a moment is trusted when multiple signals fire together — loudness alone might be BGM, chat alone might be spam; loudness + chat + laughter lighting up at once is the real thing. Motion peaks guide frame sampling while an explicit uniform reserve still covers the whole source, so early spectacle cannot hide a later quiet-but-important scene
+- **Reusable local multimodal evidence**: Tier-0 signals, TransNetV2 boundaries and optional vision-scan outcomes are atomically indexed by source fingerprint, capability version and model. Desktop, CLI, MCP, folder watch and webhooks reuse the same results; the 64MB LRU index rebuilds corrupt/stale entries automatically and never persists a vision API key
 - **Facial-emotion peaks (zero-config)**: YuNet + FER+ (MIT-licensed, a few MB) find laughter/surprise/excitement peaks — visual evidence without installing anything
 - **Visual peak signal (optional)**: a local Ollama vision model samples frames for spectacle transcripts can't see; contact-sheet scoring drops VLM calls 20→3
 - **AI visual review (optional)**: after detection, top candidates get a contact-sheet look-over by a vision model — striking visuals boost the score, lifeless visuals demote signal-driven candidates, title/visual mismatches get flagged, and the scene note lands in the reasoning; free with local Ollama, or drop an API key into vision settings for a cloud model
@@ -246,7 +248,7 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 - **Durable task center**: folder watch and webhooks share one single-concurrency queue with persisted stages, history and attempt counts; tasks can be cancelled or explicitly retried, in-flight work becomes "interrupted" after restart, and credentials are never stored in history
 - **Long-video performance layer**: repeat exports with the same source, cuts and base effects restore an exact local base render; H.264 video is copied only for a continuous cut whose start is proven keyframe-aligned and whose pixels are unchanged. Audio still receives fades, denoise, loudness and sensitive-term muting, and any failure transparently falls back to accurate encoding. LRU storage is capped at 1GB and can be inspected or cleared separately
 - **Recording watch folder (24/7)**: point it at your OBS/recorder output dir; recordings are transcribed, mined and exported the moment they finish writing ("two rounds of stable size" — half-written files are never cut)
-- **Desktop health diagnostics**: one click checks FFmpeg/FFprobe, downloader integrity, nine model roles, LLM connectivity/auth/routing, disk, transcript cache and render cache; missing core models can be prepared with cancel/resume, and generated render cache can be cleared safely on its own
+- **Desktop health diagnostics**: one click checks FFmpeg/FFprobe, downloader integrity, nine model roles, LLM connectivity/auth/routing, disk, transcript cache, render cache and the multimodal evidence index; missing core models can be prepared with cancel/resume, while the 1GB render cache and 64MB evidence index clear independently
 - **Headless CLI** (same outputs as the desktop app):
 
   ```bash
@@ -286,6 +288,8 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 </details>
 
 ## What's new
+
+**[v0.19.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.19.0)** (2026-08-28) "Analyze once, make every next cut faster and sharper": **local multimodal evidence index** (source fingerprint + capability version + model identity, atomic writes, corrupt-entry invalidation and 64MB LRU bound); **nine-channel evidence chain** (model-free motion peaks join transcript, loudness, shots, facial emotion, vision, live chat, vocal tone and laughter/applause); **visible motion evidence** (a workbench timeline curve plus representative frames with reserved full-source coverage); **cross-entry reuse** (Tier-0 signals, TransNetV2 boundaries and optional VLM scans shared by desktop, CLI, MCP, folder watch/webhooks, with automatic rebuild after model/detector changes and no API key persistence); **independent diagnostics and cleanup** (analysis evidence never deletes render or transcript cache, and is always regenerable)
 
 **[v0.18.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.18.0)** (2026-08-28) "Quality you can inspect, upgrades you can measure": **word timing provenance** (native / second-pass aligned / interpolated / edited / estimated, legacy-safe); **focused review** (estimated-timing badges and filter in the transcript, timing receipt in candidate details); **localized alignment reports** (coverage, aligned/interpolated counts and uncertain spans in `clips.json`); **caption quality gate** (invalid timing, overlap, reading speed, flashes, oversize tokens and estimated ranges checked on the final rendered timeline); **repeatable golden evaluation** (local CER/WER, boundary error and highlight recall@K without new model downloads); plus a standalone `dev:web` browser preview for UI regression without the Electron runtime
 
@@ -328,6 +332,7 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 | v0.15.1 (hardware export · URL import · recovery · durable queue · publishing feedback · diagnostics · topic series) | ✅ Shipped |
 | v0.16 (project workspace · reversible editing · pro shortcuts · local A/B experiments) | ✅ Shipped |
 | v0.17 (bounded render cache · keyframe-safe copy · shared across entry points · scoped cleanup) | ✅ Shipped |
+| v0.18 – v0.19 (quality evaluation · caption quality gate · multimodal evidence reuse · motion timeline) | ✅ Shipped |
 | English ASR upgrade (Parakeet) · code signing · deeper unattended mode | 🗺️ [Planned](docs/PRODUCT-PLAN.md) |
 
 </details>
@@ -352,7 +357,7 @@ They're automatic — word-level timestamps drive dynamic captions burned into e
 Yes — silence jump cuts plus an um/uh filler pass, with caption timing remapped and every edit logged to clips.json.
 
 **Can live-chat data help pick highlights?**
-Yes — and it's the strongest evidence there is. HotClip auto-discovers the chat file sitting next to a recording (BililiveRecorder .xml and Douyin-recorder .jsonl both work); chat density plus superchats, memberships, gifts, follows and like bursts feed straight into highlight detection, with per-sender spam caps and surge bonuses. No chat file? Loudness, shot cuts, facial emotion, vocal tone and laughter signals cover for it.
+Yes — and it's the strongest evidence there is. HotClip auto-discovers the chat file sitting next to a recording (BililiveRecorder .xml and Douyin-recorder .jsonl both work); chat density plus superchats, memberships, gifts, follows and like bursts feed straight into highlight detection, with per-sender spam caps and surge bonuses. No chat file? Loudness, shot cuts, motion, facial emotion, vocal tone and laughter signals cover for it.
 
 **Does it work for Chinese video?**
 Yes, exceptionally well — dedicated Chinese ASR engines (SenseVoice / Paraformer / FireRedASR2) cover dialects, Cantonese and code-switching; UI, captions and prompts are language-routed.

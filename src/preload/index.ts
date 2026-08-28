@@ -61,6 +61,7 @@ const api: HotClipApi = {
   performanceClear: () => ipcRenderer.invoke("hotclip:performance-clear"),
   diagnosticsRun: (llm, locale) => ipcRenderer.invoke("hotclip:diagnostics-run", llm, locale),
   diagnosticsClearRenderCache: (llm, locale) => ipcRenderer.invoke("hotclip:diagnostics-clear-render-cache", llm, locale),
+  diagnosticsClearEvidenceIndex: (llm, locale) => ipcRenderer.invoke("hotclip:diagnostics-clear-evidence-index", llm, locale),
   diagnosticsPrepareModels: (llm, locale) => ipcRenderer.invoke("hotclip:diagnostics-prepare-models", llm, locale),
   onDiagnosticsProgress: (cb) => {
     const listener = (_e: IpcRendererEvent, p: DiagnosticsProgressEvent): void => cb(p);

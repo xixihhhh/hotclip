@@ -535,7 +535,7 @@ export default function App(): React.JSX.Element {
               className="btn-flame flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-white"
             >
               <LuWandSparkles className="h-3.5 w-3.5" />
-              {th("autoRun")}
+              <span className="hidden xl:inline">{th("autoRun")}</span>
             </button>
           )}
           <button

@@ -427,7 +427,7 @@ const browserMock: HotClipApi = {
     await sleep(250);
     mockPerformanceEntries = [];
   },
-  async diagnosticsRun(llm) {
+  async diagnosticsRun(llm, locale) {
     await sleep(450);
     return {
       generatedAt: new Date().toISOString(),
@@ -440,10 +440,11 @@ const browserMock: HotClipApi = {
         { id: "llm", name: "LLM 端点", status: llm ? "ok" as const : "warn" as const, detail: llm ? `${llm.model} endpoint reachable` : "未配置" },
         { id: "cache", name: "转写缓存", status: "ok" as const, detail: "248MB" },
         { id: "render-cache", name: "基础渲染缓存", status: "ok" as const, detail: "386MB(重复导出直接复用,自动限制为 1GB)" },
+        { id: "evidence-index", name: locale === "en" ? "Multimodal evidence index" : "多模态证据索引", status: "ok" as const, detail: locale === "en" ? "18MB (motion/shot/vision evidence reused across jobs; automatically limited to 64MB)" : "18MB(运动/镜头/视觉证据跨任务复用,自动限制为 64MB)" },
       ],
     };
   },
-  async diagnosticsClearRenderCache(llm) {
+  async diagnosticsClearRenderCache(llm, locale) {
     await sleep(350);
     return {
       generatedAt: new Date().toISOString(),
@@ -456,10 +457,28 @@ const browserMock: HotClipApi = {
         { id: "llm", name: "LLM 端点", status: llm ? "ok" as const : "warn" as const, detail: llm ? `${llm.model} endpoint reachable` : "未配置" },
         { id: "cache", name: "转写缓存", status: "ok" as const, detail: "248MB" },
         { id: "render-cache", name: "基础渲染缓存", status: "ok" as const, detail: "空(导出后按需积累)" },
+        { id: "evidence-index", name: locale === "en" ? "Multimodal evidence index" : "多模态证据索引", status: "ok" as const, detail: locale === "en" ? "18MB (motion/shot/vision evidence reused across jobs; automatically limited to 64MB)" : "18MB(运动/镜头/视觉证据跨任务复用,自动限制为 64MB)" },
       ],
     };
   },
-  async diagnosticsPrepareModels(llm) {
+  async diagnosticsClearEvidenceIndex(llm, locale) {
+    await sleep(350);
+    return {
+      generatedAt: new Date().toISOString(),
+      missingCoreModels: 1,
+      checks: [
+        { id: "binary:ffmpeg", name: "ffmpeg", status: "ok" as const, detail: "ffmpeg 7.1 bundled" },
+        { id: "binary:ffprobe", name: "ffprobe", status: "ok" as const, detail: "ffprobe 7.1 bundled" },
+        { id: "model:sensevoice-2024-07-17", name: "SenseVoice", status: "warn" as const, detail: "未安装(约 1.1GB)", fix: "可预先下载,也可首次转写时自动下载" },
+        { id: "disk", name: "磁盘空间", status: "ok" as const, detail: "可用 86.8GB" },
+        { id: "llm", name: "LLM 端点", status: llm ? "ok" as const : "warn" as const, detail: llm ? `${llm.model} endpoint reachable` : "未配置" },
+        { id: "cache", name: "转写缓存", status: "ok" as const, detail: "248MB" },
+        { id: "render-cache", name: "基础渲染缓存", status: "ok" as const, detail: "386MB(重复导出直接复用,自动限制为 1GB)" },
+        { id: "evidence-index", name: locale === "en" ? "Multimodal evidence index" : "多模态证据索引", status: "ok" as const, detail: locale === "en" ? "Empty (builds as sources are analyzed)" : "空(分析素材后按需积累)" },
+      ],
+    };
+  },
+  async diagnosticsPrepareModels(llm, locale) {
     await sleep(1200);
     return {
       generatedAt: new Date().toISOString(),
@@ -472,6 +491,7 @@ const browserMock: HotClipApi = {
         { id: "llm", name: "LLM 端点", status: llm ? "ok" as const : "warn" as const, detail: llm ? `${llm.model} endpoint reachable` : "未配置" },
         { id: "cache", name: "转写缓存", status: "ok" as const, detail: "248MB" },
         { id: "render-cache", name: "基础渲染缓存", status: "ok" as const, detail: "386MB(重复导出直接复用,自动限制为 1GB)" },
+        { id: "evidence-index", name: locale === "en" ? "Multimodal evidence index" : "多模态证据索引", status: "ok" as const, detail: locale === "en" ? "18MB (motion/shot/vision evidence reused across jobs; automatically limited to 64MB)" : "18MB(运动/镜头/视觉证据跨任务复用,自动限制为 64MB)" },
       ],
     };
   },
@@ -508,6 +528,7 @@ const browserMock: HotClipApi = {
       });
     return {
       loudness: curve([0.7, 0.5, 0.6, 0.4, 0.65, 0.55], 0.18, 0.03),
+      motion: curve([0.35, 0.88, 0.52, 0.76, 0.45, 0.82], 0.12, 0.02),
       danmaku: curve([0.95, 0.7, 0.4, 0.55, 0.6, 0.8], 0.06, 0.018),
       thumbs: [],
       binSec: durationSec / bins,

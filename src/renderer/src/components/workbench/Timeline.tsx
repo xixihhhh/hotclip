@@ -1,6 +1,6 @@
 /**
- * 工作台时间轴:标尺 + 缩略图胶片带 + 响度/弹幕热度曲线 + 候选段 + 播放头。
- * 八路信号里最会"说话"的两条曲线画在这里——候选段落在曲线的峰上,
+ * 工作台时间轴:标尺 + 缩略图胶片带 + 响度/运动/弹幕热度曲线 + 候选段 + 播放头。
+ * 八路信号里最会"说话"的三条曲线画在这里——候选段落在曲线的峰上,
  * 「为什么选这段」从一段文字变成一眼可见的形状。
  *
  * 交互:点轨道跳播;点候选段聚焦该候选并跳到它的起点。
@@ -73,6 +73,7 @@ export function Timeline({
   const W = 1000;
   const H = 44;
   const loudPath = useMemo(() => (data ? areaPath(data.loudness, W, H) : ""), [data]);
+  const motionPath = useMemo(() => (data ? areaPath(data.motion, W, H) : ""), [data]);
   const dmPath = useMemo(() => (data ? areaPath(data.danmaku, W, H) : ""), [data]);
   const ticks = useMemo(() => tickMarks(durationSec), [durationSec]);
   const frac = (sec: number): number => Math.min(1, Math.max(0, durationSec > 0 ? sec / durationSec : 0));
@@ -107,13 +108,14 @@ export function Timeline({
             />
           ))}
         </div>
-        {/* 信号热度曲线:响度(橙)+ 弹幕(粉) */}
+        {/* 信号热度曲线:响度(橙)+ 运动(青)+ 弹幕(粉) */}
         <svg
           className="absolute inset-x-0 top-[50px] h-[44px] w-full"
           viewBox={`0 0 ${W} ${H}`}
           preserveAspectRatio="none"
         >
           {loudPath && <path d={loudPath} fill="rgba(255,154,61,0.24)" stroke="rgba(255,154,61,0.7)" strokeWidth="1" />}
+          {motionPath && <path d={motionPath} fill="rgba(34,211,238,0.12)" stroke="rgba(34,211,238,0.72)" strokeWidth="1" />}
           {dmPath && <path d={dmPath} fill="rgba(244,114,182,0.18)" stroke="rgba(244,114,182,0.75)" strokeWidth="1" />}
         </svg>
         {/* 候选段:落在曲线峰上的发光切口;判弃的暗一档虚线 */}
@@ -164,6 +166,10 @@ export function Timeline({
         <span className="inline-flex items-center gap-1">
           <span className="h-2 w-2 rounded-[3px] bg-[rgba(255,154,61,0.7)]" />
           {t("legendLoud")}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="h-2 w-2 rounded-[3px] bg-[rgba(34,211,238,0.72)]" />
+          {t("legendMotion")}
         </span>
         <span className="inline-flex items-center gap-1">
           <span className="h-2 w-2 rounded-[3px] bg-[rgba(244,114,182,0.7)]" />

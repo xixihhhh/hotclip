@@ -660,13 +660,14 @@ export interface AudioPeaks {
 }
 
 /**
- * 工作台时间轴数据:全场响度/弹幕热度曲线(每格 0..1)+ 缩略图胶片带。
+ * 工作台时间轴数据:全场响度/运动/弹幕热度曲线(每格 0..1)+ 缩略图胶片带。
  * 曲线画在时间轴上,「为什么选这段」从一段文字变成一眼可见的峰。
  * 各路 fail-open:没有的信号给空数组,时间轴照常渲染其余部分。
  */
 export interface TimelineData {
   /** 每格一个值(0..1);空数组 = 无此信号。 */
   loudness: number[];
+  motion: number[];
   danmaku: number[];
   /** 均匀抽帧的 JPEG base64(无 data: 前缀);空串格 = 该帧抽取失败。 */
   thumbs: string[];
@@ -855,6 +856,8 @@ export interface HotClipApi {
   diagnosticsRun: (llm: LlmConfig | null, locale?: "zh" | "en") => Promise<DiagnosticsReport>;
   /** Clear only generated base renders, then return a refreshed health report. */
   diagnosticsClearRenderCache: (llm: LlmConfig | null, locale?: "zh" | "en") => Promise<DiagnosticsReport>;
+  /** Clear only regenerable source-analysis evidence, then return a refreshed health report. */
+  diagnosticsClearEvidenceIndex: (llm: LlmConfig | null, locale?: "zh" | "en") => Promise<DiagnosticsReport>;
   /** 显式预下载缺失的默认管线模型;支持断点续传。 */
   diagnosticsPrepareModels: (llm: LlmConfig | null, locale?: "zh" | "en") => Promise<DiagnosticsReport>;
   onDiagnosticsProgress: (cb: (p: DiagnosticsProgressEvent) => void) => () => void;

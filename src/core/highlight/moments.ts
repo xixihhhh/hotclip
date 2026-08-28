@@ -6,8 +6,8 @@
  * 是空的(只有零散寒暄),户外收音差、峰值时刻的话常常只有"卧槽"两个字。
  * 没有可引用的原话 = 一条候选都出不来,品类判据写得再好也救不回来。
  *
- * 所以这里换一条路:把七路视听信号(响度/镜头切换/视觉模型/表情/语气/笑声
- * 掌声/弹幕)按品类权重融合成一条时间轴热度曲线,直接从曲线上取窗口。
+ * 所以这里换一条路:把八路视听信号(响度/镜头切换/帧差运动/视觉模型/表情/
+ * 语气/笑声掌声/弹幕)按品类权重融合成一条时间轴热度曲线,直接从曲线上取窗口。
  * 时间由信号给,LLM 只负责在这些窗口里挑哪几个值得发、起什么标题——
  * 它不需要引用任何原话,自然也就不会因为"没话可引"而交白卷。
  *
@@ -22,10 +22,11 @@ export interface TimeRange {
   endSec: number;
 }
 
-/** 七路信号各自的权重(融合曲线用)。 */
+/** 八路信号各自的权重(融合曲线用)。 */
 export interface MomentWeights {
   loud: number;
   cut: number;
+  motion: number;
   visual: number;
   emotion: number;
   voice: number;
@@ -40,8 +41,8 @@ export interface MomentWeights {
  *  - reaction(游戏/户外/聊天):语气爆发和弹幕是主证据,画面只作参考
  */
 export const MOMENT_WEIGHTS: Record<Exclude<EvidenceClass, "words">, MomentWeights> = {
-  visual: { loud: 1.2, cut: 2.5, visual: 3, emotion: 1.5, voice: 0.5, audioEvent: 1, danmaku: 3 },
-  reaction: { loud: 2, cut: 1, visual: 1.5, emotion: 2, voice: 3, audioEvent: 2.5, danmaku: 3 },
+  visual: { loud: 1.2, cut: 2.2, motion: 2.8, visual: 3, emotion: 1.5, voice: 0.5, audioEvent: 1, danmaku: 3 },
+  reaction: { loud: 2, cut: 1, motion: 1.5, visual: 1.5, emotion: 2, voice: 3, audioEvent: 2.5, danmaku: 3 },
 };
 
 /** 热度曲线的采样粒度。1 秒足够——再细也超出信号本身的分辨率。 */
@@ -180,7 +181,7 @@ export interface FuseOptions {
 }
 
 /**
- * 融合七路信号 → 按热度排序的时刻清单。
+ * 融合八路信号 → 按热度排序的时刻清单。
  *
  * 取窗口的办法:反复取当前最热的一格,从峰向两侧扩到热度跌破峰值比例
  * (窗口随内容伸缩:碎峰给短窗、持续高潮给长窗,都夹在目标片长档内),
@@ -202,6 +203,7 @@ export function fuseMoments(
   const w = options.weights;
   addSignal(heat, hits, signals.loudPeaks, w.loud, "loud", binSec, durationSec);
   addSignal(heat, hits, signals.cutDense, w.cut, "cut", binSec, durationSec);
+  addSignal(heat, hits, signals.motionPeaks, w.motion, "motion", binSec, durationSec);
   addSignal(heat, hits, signals.visualPeaks, w.visual, "visual", binSec, durationSec);
   addSignal(heat, hits, signals.emotionPeaks, w.emotion, "emotion", binSec, durationSec);
   addSignal(heat, hits, signals.voiceEmotionPeaks, w.voice, "voice", binSec, durationSec);

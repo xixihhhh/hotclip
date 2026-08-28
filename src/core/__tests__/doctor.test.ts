@@ -140,6 +140,25 @@ describe("runDoctor", () => {
     expect(report.checks.find((c) => c.id === "render-cache")).toMatchObject({ name: "Render cache", detail: expect.stringContaining("limited to 1GB") });
   });
 
+  it("多模态证据索引独立显示占用和 64MB 上限", async () => {
+    const { modelsRoot, cacheDir } = await freshRoot();
+    const evidenceCacheDir = join(root, "evidence-index");
+    await mkdir(evidenceCacheDir, { recursive: true });
+    await writeFile(join(evidenceCacheDir, "signals.json"), Buffer.alloc(2 * 1024 * 1024));
+
+    let report = await runDoctor({ modelsRoot, cacheDir, evidenceCacheDir, llm: null, resolveBinaries: fakeBins, probeBinaryVersion: fakeProbe });
+    expect(report.checks.find((check) => check.id === "evidence-index")).toMatchObject({
+      name: "多模态证据索引",
+      status: "ok",
+      detail: expect.stringContaining("2MB"),
+    });
+    report = await runDoctor({ modelsRoot, cacheDir, evidenceCacheDir, llm: null, zh: false, resolveBinaries: fakeBins, probeBinaryVersion: fakeProbe });
+    expect(report.checks.find((check) => check.id === "evidence-index")).toMatchObject({
+      name: "Multimodal evidence index",
+      detail: expect.stringContaining("limited to 64MB"),
+    });
+  });
+
   it("LLM 端点:区分成功、路由错误、凭据错误和网络错误", async () => {
     const { modelsRoot, cacheDir } = await freshRoot();
     const llm = { baseUrl: "http://127.0.0.1:1/v1", apiKey: "k", model: "m" };

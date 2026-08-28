@@ -215,8 +215,10 @@ export async function detectShotBoundaries(
   inputPath: string,
   startSec: number,
   endSec: number,
-  modelsRoot: string
+  modelsRoot: string,
+  signal?: AbortSignal
 ): Promise<number[]> {
+  signal?.throwIfAborted();
   const base = Math.max(0, startSec);
   const dur = endSec - base;
   if (!(dur > 0)) return [];
@@ -230,7 +232,7 @@ export async function detectShotBoundaries(
       "-f", "rawvideo", "-pix_fmt", "rgb24", "-",
     ],
     // 512MB ≈ 2.3 小时帧数据上限——单片窗口远在其下,只是兜底
-    { encoding: "buffer", maxBuffer: 512 * 1024 * 1024 }
+    { encoding: "buffer", maxBuffer: 512 * 1024 * 1024, signal }
   );
   const n = Math.floor(stdout.length / FRAME_BYTES);
   if (n < 2) return [];
@@ -240,6 +242,7 @@ export async function detectShotBoundaries(
   const clamp = (i: number) => Math.min(n - 1, Math.max(0, i));
   const probs = new Float32Array(n);
   for (let winStart = 0; winStart < n; winStart += STRIDE) {
+    signal?.throwIfAborted();
     const buf = new Float32Array(WINDOW * FRAME_BYTES);
     for (let k = 0; k < WINDOW; k++) {
       const src = clamp(winStart - CONTEXT + k) * FRAME_BYTES;
@@ -248,6 +251,7 @@ export async function detectShotBoundaries(
     const out = await session.run({
       input: new ortMod.Tensor("float32", buf, [1, WINDOW, FRAME_H, FRAME_W, 3]),
     });
+    signal?.throwIfAborted();
     const p = out["534"].data as Float32Array;
     for (let k = CONTEXT; k < CONTEXT + STRIDE; k++) {
       const idx = winStart - CONTEXT + k;

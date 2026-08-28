@@ -10,11 +10,10 @@ import { applyGlossaryToTranscript } from "../shared/glossary";
 import { SenseVoiceEngine } from "./transcribe/sensevoice";
 import { readTranscriptCache, writeTranscriptCache } from "./transcribe/cache";
 import { detectHighlights } from "./highlight/detect";
-import { detectShotBoundaries } from "./shots";
+import { collectSignalsEvidence, detectShotBoundariesEvidence } from "./media-evidence";
 import { buildReferenceProfile, type ReferenceProfile } from "./reference";
 import type { ReviewRecord } from "./review-memory";
 import type { PerformanceEntry } from "./performance-memory";
-import { collectSignals } from "./signals";
 import { collectEmotionSignal } from "./emotion";
 import { collectDanmakuSignal } from "./danmaku";
 import { collectVoiceEmotionSignal } from "./voice-emotion";
@@ -27,6 +26,8 @@ export interface AutoClipConfig {
   cacheDir: string;
   /** Reusable bounded base-render cache; omit to disable. */
   renderCacheDir?: string;
+  /** Reusable bounded source-analysis evidence; omit to disable. */
+  evidenceCacheDir?: string;
   llm: LlmConfig;
   /** 输出目录;缺省源视频旁 `<名>-hotclip/`。 */
   outDir?: string;
@@ -85,16 +86,21 @@ export async function transcribeCached(
  */
 export async function analyzeReferenceVideo(
   refPath: string,
-  cfg: Pick<AutoClipConfig, "modelsRoot" | "cacheDir" | "glossary" | "signal">
+  cfg: Pick<AutoClipConfig, "modelsRoot" | "cacheDir" | "evidenceCacheDir" | "glossary" | "signal">
 ): Promise<ReferenceProfile> {
   const transcript = await transcribeCached(refPath, cfg.modelsRoot, cfg.cacheDir, cfg.glossary, cfg.signal);
   const durationSec =
     transcript.durationSec > 0
       ? transcript.durationSec
       : transcript.segments[transcript.segments.length - 1]?.endSec ?? 0;
-  const boundaries = await detectShotBoundaries(refPath, 0, durationSec, cfg.modelsRoot).catch(
-    () => null
-  );
+  const boundaries = await detectShotBoundariesEvidence({
+    videoPath: refPath,
+    startSec: 0,
+    endSec: durationSec,
+    modelsRoot: cfg.modelsRoot,
+    evidenceDir: cfg.evidenceCacheDir,
+    signal: cfg.signal,
+  }).catch(() => null);
   return buildReferenceProfile(transcript, boundaries);
 }
 
@@ -102,10 +108,17 @@ export async function analyzeReferenceVideo(
 export async function detectForPipeline(
   videoPath: string,
   transcript: Transcript,
-  cfg: Pick<AutoClipConfig, "modelsRoot" | "llm" | "maxClips" | "reference" | "reviewMemory" | "performanceMemory" | "signal">
+  cfg: Pick<AutoClipConfig, "modelsRoot" | "evidenceCacheDir" | "llm" | "maxClips" | "reference" | "reviewMemory" | "performanceMemory" | "signal">
 ): Promise<HighlightCandidate[]> {
   if (transcript.segments.length === 0) throw new Error("转写结果为空(可能是无人声素材)");
-  const signals = await collectSignals(videoPath).catch(() => undefined);
+  const signals = await collectSignalsEvidence({
+    videoPath,
+    evidenceDir: cfg.evidenceCacheDir,
+    signal: cfg.signal,
+  }).catch((error) => {
+    if (cfg.signal?.aborted) throw error;
+    return undefined;
+  });
   // 弹幕热度(零配置):录播姬随录播落的同名 .xml 自动发现——录播监听场景的
   // 主证据。它只是读个文件,先于贵信号采集:弹幕峰值(观众逐秒投的票)要
   // 参与引导表情/语音情绪的采样预算,笑声和表情最该去观众炸锅的地方找
@@ -195,6 +208,7 @@ export async function autoClip(videoPath: string, cfg: AutoClipConfig): Promise<
       modelsRoot: cfg.modelsRoot,
       fontsDir: cfg.fontsDir,
       renderCacheDir: cfg.renderCacheDir,
+      evidenceCacheDir: cfg.evidenceCacheDir,
     },
     undefined,
     cfg.signal

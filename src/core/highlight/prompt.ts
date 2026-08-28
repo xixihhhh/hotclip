@@ -307,6 +307,9 @@ export function renderSignals(signals: MediaSignals | undefined, zh: boolean): s
   if (signals.cutDense.length > 0) {
     lines.push(zh ? `- 镜头切换密集段(画面高能): ${fmt(signals.cutDense)}` : `- Dense scene-cut windows (visual action): ${fmt(signals.cutDense)}`);
   }
+  if (signals.motionPeaks && signals.motionPeaks.length > 0) {
+    lines.push(zh ? `- 画面运动活跃段(低分辨率帧差,动作/移动线索): ${fmt(signals.motionPeaks)}` : `- Motion-active windows (low-resolution frame differences; action/movement cue): ${fmt(signals.motionPeaks)}`);
+  }
   if (signals.visualPeaks && signals.visualPeaks.length > 0) {
     lines.push(zh ? `- 视觉模型判定的画面爆点时刻(夸张表情/激烈动作/场面炸裂): ${fmt(signals.visualPeaks)}` : `- Vision-model visual peaks (expressions/action/spectacle): ${fmt(signals.visualPeaks)}`);
   }
@@ -441,6 +444,7 @@ const MOMENT_SHAPE = `{
 export const EVIDENCE_LABELS: Record<string, { zh: string; en: string }> = {
   loud: { zh: "响度峰值", en: "loudness peak" },
   cut: { zh: "镜头切换密集", en: "dense scene cuts" },
+  motion: { zh: "画面运动", en: "motion activity" },
   visual: { zh: "画面高能(视觉模型)", en: "visual energy (vision model)" },
   emotion: { zh: "人脸表情峰值", en: "facial-emotion peak" },
   voice: { zh: "语气激动", en: "vocal-emotion peak" },

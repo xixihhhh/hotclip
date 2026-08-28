@@ -14,7 +14,7 @@ import { join, basename } from "path";
 import { transcribeCached, detectForPipeline, autoClip, analyzeReferenceVideo } from "../core/pipeline";
 import type { ReferenceProfile } from "../core/reference";
 import { loadGlossary } from "../core/glossary-store";
-import { userDataDir, modelsRoot, cacheDir, renderCacheDir, llmFromEnv } from "../core/appenv";
+import { userDataDir, modelsRoot, cacheDir, renderCacheDir, evidenceCacheDir, llmFromEnv } from "../core/appenv";
 import { runDoctor } from "../core/doctor";
 import { ensureModel } from "../core/models";
 import { loadReviewMemory } from "../core/review-memory";
@@ -118,7 +118,7 @@ async function main(): Promise<void> {
     } catch {
       // 保持 null
     }
-    const report = await runDoctor({ modelsRoot: modelsRoot(), cacheDir: cacheDir(), renderCacheDir: renderCacheDir(), llm });
+    const report = await runDoctor({ modelsRoot: modelsRoot(), cacheDir: cacheDir(), renderCacheDir: renderCacheDir(), evidenceCacheDir: evidenceCacheDir(), llm });
     const icon = { ok: "✅", warn: "⚠️", fail: "❌" } as const;
     for (const c of report.checks) {
       process.stdout.write(`${icon[c.status]} ${c.name}:${c.detail}\n`);
@@ -165,6 +165,7 @@ async function main(): Promise<void> {
       const p = await analyzeReferenceVideo(args.referencePath, {
         modelsRoot: modelsRoot(),
         cacheDir: cacheDir(),
+        evidenceCacheDir: evidenceCacheDir(),
         glossary,
       });
       const cuts = p.cutsPerMin !== null ? `·镜头 ${p.cutsPerMin} 切/分` : "";
@@ -194,6 +195,7 @@ async function main(): Promise<void> {
     process.stderr.write("AI 找爆点中…\n");
     const candidates = await detectForPipeline(args.videoPath, transcript, {
       modelsRoot: modelsRoot(),
+      evidenceCacheDir: evidenceCacheDir(),
       llm,
       maxClips: args.maxClips,
       reference,
@@ -236,6 +238,7 @@ async function main(): Promise<void> {
       modelsRoot: modelsRoot(),
       cacheDir: cacheDir(),
       renderCacheDir: renderCacheDir(),
+      evidenceCacheDir: evidenceCacheDir(),
       llm,
       maxClips: args.maxClips,
       vertical: args.vertical,

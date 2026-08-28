@@ -15,11 +15,23 @@ export interface TimeRange {
   endSec: number;
 }
 
+export interface MotionSample {
+  t: number;
+  /** Low-resolution frame-difference score, 0..1. */
+  score: number;
+}
+
 export interface MediaSignals {
   /** Sustained loudness bursts well above the programme's median. */
   loudPeaks: TimeRange[];
   /** Windows with dense scene cuts (fast visual pace). */
   cutDense: TimeRange[];
+  /** Sustained low-resolution frame-difference activity (movement/action, not semantic understanding). */
+  motionPeaks?: TimeRange[];
+  /** One max frame-difference value per source second, retained for reuse/evaluation. */
+  motionSamples?: MotionSample[];
+  /** Strong, well-spaced source timestamps that can guide later visual sampling. */
+  activityKeyframes?: MotionSample[];
   /**
    * ebur128 原始采样(t + momentary dB)。采集时顺手保留——工作台时间轴要画
    * 全场响度曲线,不留的话同一条 2 小时音轨得再解码一遍。仅主进程内使用,
@@ -62,6 +74,79 @@ export function parseShowinfoTimes(stderr: string): number[] {
     if (Number.isFinite(t)) out.push(t);
   }
   return out;
+}
+
+/** Parse FFmpeg metadata=print pairs containing pts_time and lavfi.scene_score. */
+export function parseSceneScoreSamples(stderr: string): MotionSample[] {
+  const out: MotionSample[] = [];
+  let pendingTime: number | null = null;
+  for (const line of stderr.split(/\r?\n/)) {
+    const time = line.match(/\bpts_time:([\d.]+)/);
+    if (time) {
+      const value = Number(time[1]);
+      pendingTime = Number.isFinite(value) ? value : null;
+    }
+    const score = line.match(/lavfi\.scene_score=([\d.eE+-]+)/);
+    if (score && pendingTime !== null) {
+      const value = Number(score[1]);
+      if (Number.isFinite(value)) out.push({ t: pendingTime, score: Math.max(0, Math.min(1, value)) });
+      pendingTime = null;
+    }
+  }
+  return out;
+}
+
+/** Keep a compact, deterministic max activity sample for each source second. */
+export function compactMotionSamples(samples: MotionSample[]): MotionSample[] {
+  const bins = new Map<number, MotionSample>();
+  for (const sample of samples) {
+    if (!Number.isFinite(sample.t) || !Number.isFinite(sample.score) || sample.t < 0) continue;
+    const second = Math.floor(sample.t);
+    const current = bins.get(second);
+    if (!current || sample.score > current.score) bins.set(second, sample);
+  }
+  return [...bins.values()]
+    .sort((a, b) => a.t - b.t)
+    .map((sample) => ({ t: Number(sample.t.toFixed(3)), score: Number(sample.score.toFixed(5)) }));
+}
+
+/** High frame-difference samples become short activity ranges, ranked then capped. */
+export function motionPeakRanges(samples: MotionSample[], durationSec: number, maxRanges = 12): TimeRange[] {
+  const usable = samples.filter((sample) => Number.isFinite(sample.score) && sample.score > 0);
+  if (usable.length < 8 || !(durationSec > 0)) return [];
+  const scores = usable.map((sample) => sample.score).sort((a, b) => a - b);
+  const threshold = Math.max(0.012, scores[Math.floor(scores.length * 0.85)] ?? 0);
+  const hits = usable
+    .filter((sample) => sample.score >= threshold)
+    .map((sample) => ({ startSec: Math.max(0, sample.t - 1), endSec: Math.min(durationSec, sample.t + 1), score: sample.score }))
+    .sort((a, b) => a.startSec - b.startSec);
+  const merged: Array<TimeRange & { score: number }> = [];
+  for (const hit of hits) {
+    const last = merged[merged.length - 1];
+    if (last && hit.startSec <= last.endSec + 1.5) {
+      last.endSec = Math.max(last.endSec, hit.endSec);
+      last.score = Math.max(last.score, hit.score);
+    } else merged.push({ ...hit });
+  }
+  return merged
+    .sort((a, b) => b.score - a.score || a.startSec - b.startSec)
+    .slice(0, Math.max(0, maxRanges))
+    .sort((a, b) => a.startSec - b.startSec)
+    .map(({ startSec, endSec }) => ({ startSec: Number(startSec.toFixed(3)), endSec: Number(endSec.toFixed(3)) }));
+}
+
+/** Strong, separated timestamps for contact-sheet/VLM sampling; no image bytes are persisted. */
+export function activityKeyframes(samples: MotionSample[], maxFrames = 48, minSpacingSec = 8): MotionSample[] {
+  const scores = samples.map((sample) => sample.score).filter((score) => Number.isFinite(score) && score > 0).sort((a, b) => a - b);
+  if (scores.length < 8) return [];
+  const threshold = Math.max(0.012, scores[Math.floor(scores.length * 0.85)] ?? 0);
+  const picked: MotionSample[] = [];
+  for (const sample of [...samples].sort((a, b) => b.score - a.score || a.t - b.t)) {
+    if (sample.score < threshold || picked.some((item) => Math.abs(item.t - sample.t) < minSpacingSec)) continue;
+    picked.push({ t: Number(sample.t.toFixed(3)), score: Number(sample.score.toFixed(5)) });
+    if (picked.length >= maxFrames) break;
+  }
+  return picked.sort((a, b) => a.t - b.t);
 }
 
 /** Samples ≥ median+`riseDb` merged into ranges (≥ minDurSec, gap-tolerant). */
@@ -154,27 +239,35 @@ export function planSignalGuidedTimes(
  * Fail-open: any probe error yields empty signals — detection must not die
  * because a source has no audio/video stream or ffmpeg hiccupped.
  */
-export async function collectSignals(inputPath: string): Promise<MediaSignals> {
+export async function collectSignals(inputPath: string, signal?: AbortSignal): Promise<MediaSignals> {
   const ffmpeg = resolveFfmpegPath();
   const run = (args: string[]): Promise<string> =>
-    execFileAsync(ffmpeg, args, { maxBuffer: 128 * 1024 * 1024 }).then(
+    execFileAsync(ffmpeg, args, { maxBuffer: 128 * 1024 * 1024, signal }).then(
       (r) => r.stderr,
-      () => ""
+      (error) => {
+        if (signal?.aborted) throw error;
+        return "";
+      }
     );
 
   const [loudErr, sceneErr] = await Promise.all([
     run(["-hide_banner", "-i", inputPath, "-vn", "-filter_complex", "ebur128", "-f", "null", "-"]),
     run([
       "-hide_banner", "-i", inputPath, "-an",
-      "-vf", "fps=4,scale=160:-2,select='gt(scene,0.3)',showinfo",
+      "-vf", "fps=4,scale=160:-2,select='gte(scene,0)',metadata=print:key=lavfi.scene_score",
       "-f", "null", "-",
     ]),
   ]);
 
   const loudSamples = parseEbur128(loudErr);
+  const frameSamples = parseSceneScoreSamples(sceneErr);
+  const compactMotion = compactMotionSamples(frameSamples);
   return {
     loudPeaks: loudnessPeaks(loudSamples).slice(0, MAX_RANGES),
-    cutDense: cutDensity(parseShowinfoTimes(sceneErr)).slice(0, MAX_RANGES),
+    cutDense: cutDensity(frameSamples.filter((sample) => sample.score > 0.3).map((sample) => sample.t)).slice(0, MAX_RANGES),
+    motionPeaks: motionPeakRanges(frameSamples, frameSamples.at(-1)?.t ?? 0),
+    motionSamples: compactMotion,
+    activityKeyframes: activityKeyframes(frameSamples),
     loudnessSamples: loudSamples,
   };
 }
@@ -200,4 +293,20 @@ export function loudnessCurve(
   const hi = present[Math.min(present.length - 1, Math.floor(present.length * 0.99))];
   const span = Math.max(1, hi - lo);
   return [...out].map((v) => (Number.isFinite(v) ? Math.min(1, Math.max(0, (v - lo) / span)) : 0));
+}
+
+/** Compact motion samples → 0..1 timeline curve using robust upper-percentile scaling. */
+export function motionCurve(samples: MotionSample[], durationSec: number, bins: number): number[] {
+  if (!(durationSec > 0) || bins < 1) return [];
+  const out = new Float64Array(bins);
+  for (const sample of samples) {
+    const index = Math.min(bins - 1, Math.max(0, Math.floor((sample.t / durationSec) * bins)));
+    out[index] = Math.max(out[index], sample.score);
+  }
+  const present = [...out].filter((value) => value > 0).sort((a, b) => a - b);
+  if (present.length < 4) return new Array(bins).fill(0);
+  const lo = present[Math.floor(present.length * 0.25)];
+  const hi = present[Math.min(present.length - 1, Math.floor(present.length * 0.98))];
+  const span = Math.max(0.001, hi - lo);
+  return [...out].map((value) => Math.min(1, Math.max(0, (value - lo) / span)));
 }

@@ -1,5 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { parseEbur128, parseShowinfoTimes, loudnessPeaks, cutDensity, planSignalGuidedTimes, loudnessCurve } from "../signals";
+import {
+  activityKeyframes,
+  compactMotionSamples,
+  cutDensity,
+  loudnessCurve,
+  loudnessPeaks,
+  motionCurve,
+  motionPeakRanges,
+  parseEbur128,
+  parseSceneScoreSamples,
+  parseShowinfoTimes,
+  planSignalGuidedTimes,
+} from "../signals";
 
 describe("parseEbur128", () => {
   it("extracts t/M sample pairs and drops silence-floor readings", () => {
@@ -19,6 +31,35 @@ describe("parseShowinfoTimes", () => {
   it("extracts pts_time values", () => {
     const stderr = "[Parsed_showinfo_2 @ 0x0] n:0 pts:12 pts_time:1.5 ...\n[Parsed_showinfo_2 @ 0x0] n:1 pts:24 pts_time:3.0 ...";
     expect(parseShowinfoTimes(stderr)).toEqual([1.5, 3.0]);
+  });
+});
+
+describe("frame-difference motion evidence", () => {
+  it("parses FFmpeg scene metadata pairs and compacts to one max sample per second", () => {
+    const stderr = [
+      "frame:0 pts:0 pts_time:0.00", "lavfi.scene_score=0.010000",
+      "frame:1 pts:1 pts_time:0.25", "lavfi.scene_score=0.080000",
+      "frame:2 pts:4 pts_time:1.00", "lavfi.scene_score=0.020000",
+    ].join("\n");
+    const parsed = parseSceneScoreSamples(stderr);
+    expect(parsed).toEqual([{ t: 0, score: 0.01 }, { t: 0.25, score: 0.08 }, { t: 1, score: 0.02 }]);
+    expect(compactMotionSamples(parsed)).toEqual([{ t: 0.25, score: 0.08 }, { t: 1, score: 0.02 }]);
+  });
+
+  it("derives bounded activity ranges, separated representative times, and a normalized curve", () => {
+    const samples = Array.from({ length: 120 }, (_, index) => ({
+      t: index,
+      score: index >= 40 && index <= 50 ? 0.2 + (index % 3) * 0.05 : 0.01 + (index % 5) * 0.001,
+    }));
+    const ranges = motionPeakRanges(samples, 120);
+    expect(ranges.some((range) => range.startSec <= 45 && range.endSec >= 45)).toBe(true);
+    const frames = activityKeyframes(samples, 4, 8);
+    expect(frames.length).toBeGreaterThanOrEqual(2);
+    expect(frames.length).toBeLessThanOrEqual(4);
+    for (let index = 1; index < frames.length; index++) expect(frames[index].t - frames[index - 1].t).toBeGreaterThanOrEqual(8);
+    const curve = motionCurve(samples, 120, 24);
+    expect(curve).toHaveLength(24);
+    expect(curve[Math.floor((45 / 120) * 24)]).toBeGreaterThan(0.8);
   });
 });
 
