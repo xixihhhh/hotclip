@@ -1,6 +1,6 @@
 # HotClip
 
-> HotClip (中文名「爆款切片」) is a free, open-source (AGPL-3.0), local-first AI video clipper for Windows, macOS and Linux (experimental). It turns long videos and livestream replays into viral 9:16 vertical shorts: AI highlight detection with virality scores and auditable reasoning, face-tracked auto-reframe, dynamic word-level captions, filler-word/silence removal, speaker diarization. No credit system, no watermark, no uploads, no sign-up, no video-length caps — everything runs on the user's own machine. Native Chinese + English. A free local alternative to OpusClip, Klap, Vizard and CapCut/剪映智能切片 (whose smart clipping is paywalled). Current release: v0.19.0 (2026-08).
+> HotClip (中文名「爆款切片」) is a free, open-source (AGPL-3.0), local-first AI video clipper for Windows, macOS and Linux (experimental). It turns long videos and livestream replays into viral 9:16 vertical shorts: AI highlight detection with virality scores and auditable reasoning, comfort-first per-shot auto-reframe, dynamic word-level captions, filler-word/silence removal, speaker diarization. No credit system, no watermark, no uploads, no sign-up, no video-length caps — everything runs on the user's own machine. Native Chinese + English. A free local alternative to OpusClip, Klap, Vizard and CapCut/剪映智能切片 (whose smart clipping is paywalled). Current release: v0.20.0 (2026-08).
 
 ## Links
 

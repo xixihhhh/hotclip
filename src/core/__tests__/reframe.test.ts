@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { OneEuro, fillGaps, planCropTrack, renderSendcmd, type FaceSample } from "../reframe/track";
+import {
+  LOST_HOLD_SEC,
+  OneEuro,
+  fillGaps,
+  planCropComposition,
+  planCropTrack,
+  renderSendcmd,
+  type FaceSample,
+} from "../reframe/track";
 import { mapToOutputTime } from "../reframe";
 import { decodeYunet, pickMainFace, YUNET_INPUT, type FaceBox } from "../reframe/yunet";
 
@@ -16,6 +24,40 @@ describe("planCropTrack modes", () => {
     expect(kfs).toHaveLength(1);
     const cropW = Math.floor((H * 9) / 16 / 2) * 2;
     expect(kfs![0].x).toBe(Math.round(0.5 * W - cropW / 2));
+  });
+
+  it("locks a moving subject when its full shot envelope fits safely", () => {
+    const samples = samplesOf([0.4, 0.43, 0.48, 0.53, 0.57]);
+    const planned = planCropComposition(samples, [], W, H)!;
+    expect(planned.keyframes).toHaveLength(1);
+    expect(planned.stats).toMatchObject({ lockedShots: 1, trackedShots: 0 });
+  });
+
+  it("locks a group envelope and snaps a near-centred composition to centre", () => {
+    const samples: FaceSample[] = [0, 1 / 3, 2 / 3, 1].map((t) => ({
+      t,
+      cx: 0.42,
+      left: 0.36,
+      right: 0.6,
+      faceCount: 2,
+    }));
+    const planned = planCropComposition(samples, [], W, H)!;
+    const cropW = Math.floor((H * 9) / 16 / 2) * 2;
+    expect(planned.keyframes).toEqual([{ t: 0, x: Math.round(W / 2 - cropW / 2) }]);
+    expect(planned.stats).toMatchObject({ lockedShots: 1, groupLockedShots: 1 });
+  });
+
+  it("returns toward centre after a sustained detection loss", () => {
+    const samples: FaceSample[] = [];
+    for (let i = 0; i < 5; i++) samples.push({ t: i / 3, cx: 0.25 });
+    for (let i = 5; i < 11; i++) samples.push({ t: i / 3, cx: null });
+    const filled = fillGaps(samples);
+    expect(filled[5].cx).toBe(0.25);
+    expect(filled.find((sample) => sample.t - 4 / 3 > LOST_HOLD_SEC)?.cx).toBe(0.5);
+    const planned = planCropComposition(samples, [], W, H)!;
+    expect(planned.stats.recoveryShots).toBe(1);
+    expect(planned.keyframes.length).toBeGreaterThan(1);
+    expect(planned.keyframes.at(-1)!.x).toBeGreaterThan(planned.keyframes[0].x);
   });
 
   it("steady drift → interpolated pan keyframes", () => {
@@ -44,6 +86,19 @@ describe("planCropTrack modes", () => {
     const kfs = planCropTrack(samples, [1.0], W, H)!;
     expect(kfs).toHaveLength(2);
     expect(kfs[1].x).toBeGreaterThan(kfs[0].x);
+  });
+
+  it("centres a sparse face-free shot instead of holding the previous crop", () => {
+    const samples = [
+      ...samplesOf([0.25, 0.25, 0.25]),
+      { t: 1, cx: null },
+      { t: 4 / 3, cx: null },
+      { t: 5 / 3, cx: null },
+    ];
+    const planned = planCropComposition(samples, [1], W, H)!;
+    const cropW = Math.floor((H * 9) / 16 / 2) * 2;
+    expect(planned.keyframes.at(-1)).toEqual({ t: 1, x: Math.round(W / 2 - cropW / 2) });
+    expect(planned.stats).toMatchObject({ totalShots: 2, centeredShots: 1 });
   });
 
   it("x is clamped inside the source", () => {

@@ -154,7 +154,15 @@ async function cropPlanOverPieces(
     const shift = p.startSec - clipStartSec;
     const kfs = cp.keyframes.map((k) => ({ ...k, t: k.t + shift }));
     if (!merged) merged = { ...cp, keyframes: kfs };
-    else merged.keyframes.push(...kfs);
+    else {
+      merged.keyframes.push(...kfs);
+      merged.composition.totalShots += cp.composition.totalShots;
+      merged.composition.lockedShots += cp.composition.lockedShots;
+      merged.composition.groupLockedShots += cp.composition.groupLockedShots;
+      merged.composition.trackedShots += cp.composition.trackedShots;
+      merged.composition.recoveryShots += cp.composition.recoveryShots;
+      merged.composition.centeredShots += cp.composition.centeredShots;
+    }
   }
   return merged;
 }
@@ -209,6 +217,15 @@ export interface ClipRenderOutcome {
   captionsBurned: boolean;
   /** "face-track" when the crop followed a face, "center-crop" on fallback, "none" for horizontal, "audiogram" for audio-only sources. */
   reframe: "face-track" | "center-crop" | "none" | "audiogram";
+  /** Per-shot comfort-composition receipt when face-aware reframing ran. */
+  reframeComposition?: {
+    totalShots: number;
+    lockedShots: number;
+    groupLockedShots: number;
+    trackedShots: number;
+    recoveryShots: number;
+    centeredShots: number;
+  };
   /** Jump-cut / filler splice outcome; null when the clip was cut whole. */
   edit: { splices: number; keptSec: number; removedSec: number; cutRatio: number } | null;
   /** Number of filler/stutter words removed. */
@@ -674,6 +691,7 @@ export async function exportClips(
 
       // Face-aware reframe: plan per clip; any failure falls back to center.
       let trackPlan;
+      let reframeComposition: ClipRenderOutcome["reframeComposition"];
       if (options.vertical && options.faceTrack && options.modelsRoot && !audioOnly) {
         // 拼接片逐段各算一版:整段跨度可能有几十分钟,人脸检测按跨度跑纯属白烧。
         // 每段的关键帧相对本段起点,统一平移到「相对切片起点」再走同一条重映射。
@@ -694,6 +712,7 @@ export async function exportClips(
               .filter((k): k is { t: number; x: number } => k !== null);
           }
           if (kfs.length > 0) {
+            reframeComposition = cp.composition;
             trackPlan = {
               cropXExpr: renderCropXExpr(kfs),
               cropW: cp.cropW,
@@ -1214,6 +1233,7 @@ export async function exportClips(
         captionStyle: wantCaptions ? (webStyle ?? assStyle) : "none",
         captionsBurned: wantCaptions && !webRenderFailed,
         reframe: audioOnly ? "audiogram" : options.vertical ? (trackPlan ? "face-track" : "center-crop") : "none",
+        reframeComposition,
         edit: summarizeEdit(origDur, plan),
         fillersRemoved: fillerHits.length,
         retakesRemoved: retakeHits.length,

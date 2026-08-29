@@ -18,7 +18,7 @@
   <a href="https://github.com/xixihhhh/hotclip/stargazers"><img src="https://img.shields.io/github/stars/xixihhhh/hotclip?style=social" alt="GitHub stars"></a>
 </p>
 
-**AI highlight detection (with reasoning) · 9:16 face-tracked auto-reframe · dynamic word-level captions · filler-word & silence removal**
+**AI highlight detection (with reasoning) · comfort-first 9:16 auto-reframe · dynamic word-level captions · filler-word & silence removal**
 
 100% local · no watermark · no credits · no length caps · no account
 
@@ -47,7 +47,7 @@
 
 1. **Import**: drop in a podcast, livestream replay, lecture or vlog (MP4 / MKV / MOV / FLV / TS, audio-only too), or paste a public Bilibili / YouTube-style video URL. The official resolver is downloaded and verified on first use; the source lands locally and enters the same on-device workflow
 2. **Pick highlights**: local word-level transcription → the AI reads the whole transcript and nominates quotables, conflicts and peak moments — each with a **virality score, an opening hook and its reasoning**, cut points accurate to the word; untick anything you don't like
-3. **Export**: one click produces vertical 9:16 clips — face-tracked reframe, dynamic word-synced captions, title cards, -14 LUFS loudness — plus a cover image and post copy, ready for **TikTok / Reels / Shorts / Douyin / Bilibili**
+3. **Export**: one click produces vertical 9:16 clips — comfort-first reframe, dynamic word-synced captions, title cards, -14 LUFS loudness — plus a cover image and post copy, ready for **TikTok / Reels / Shorts / Douyin / Bilibili**
 
 ## Screenshots
 
@@ -172,12 +172,13 @@ Dynamic captions in multiple styles — keyword highlight, word pop, bubble, min
 
 ### 🎬 Finishing: edits that feel hand-made
 
-Face-tracked 9:16 reframing (three per-shot modes), silence jump cuts, filler-word removal, -14 LUFS loudness, frame-accurate cutting — with render QA and self-repair after every export.
+Comfort-first 9:16 reframing, silence jump cuts, filler-word removal, -14 LUFS loudness, frame-accurate cutting — with render QA and self-repair after every export.
 
 <details>
 <summary><b>Details</b>: reframe · silence cuts · denoise · SFX · BGM · QA & self-repair · smart covers</summary>
 
-- **Face-tracked smart reframing**: locked / smooth-pan / One Euro tracking per shot; center-crop fallback when no face is found
+- **Comfort-first smart reframing**: each shot considers every visible face; if a single moving subject or a group fits safely, the virtual camera stays locked. It follows only when the subject truly exceeds the crop, holds through brief detector flicker, returns to centre after sustained loss, and falls back safely when detections are sparse
+- **Composition receipt**: `clips.json` records total, locked, group-locked, tracked, recovery and centered-fallback shot counts for auditable quality regression
 - **Screen-recording UI removal**: status bars and letterboxing detected via temporal variance and cropped out
 - **Silence jump cuts**: pauses cut and spliced with caption timeline remapped; requires *no words AND acoustic silence*, so laughter and applause survive; optionally keep 0.25s breathing room — tight pacing without the suffocation
 - **Filler-word removal**: um/uh-class fillers and stutters cut (deliberately conservative), itemized in clips.json
@@ -289,6 +290,8 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 
 ## What's new
 
+**[v0.20.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.20.0)** (2026-08-30) "Keep the subject in frame, keep the camera calm": **comfort-first vertical composition** (all visible face envelopes are fused per shot; lock the camera whenever one moving subject or a group fits safely, follow only when framing truly requires it); **centre snap** (near-centred source composition stays centred instead of gaining artificial drift); **lost-subject recovery** (hold through brief detector flicker, then ease back to centre after 1.25 seconds; a new shot without reliable faces centres immediately); **end-to-end receipt** (`clips.json` records total, locked, group-locked, tracked, recovery and centered-fallback shots, aggregated across stitched pieces). No new model or installer weight; sparse detection still falls back safely to centre crop.
+
 **[v0.19.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.19.0)** (2026-08-28) "Analyze once, make every next cut faster and sharper": **local multimodal evidence index** (source fingerprint + capability version + model identity, atomic writes, corrupt-entry invalidation and 64MB LRU bound); **nine-channel evidence chain** (model-free motion peaks join transcript, loudness, shots, facial emotion, vision, live chat, vocal tone and laughter/applause); **visible motion evidence** (a workbench timeline curve plus representative frames with reserved full-source coverage); **cross-entry reuse** (Tier-0 signals, TransNetV2 boundaries and optional VLM scans shared by desktop, CLI, MCP, folder watch/webhooks, with automatic rebuild after model/detector changes and no API key persistence); **independent diagnostics and cleanup** (analysis evidence never deletes render or transcript cache, and is always regenerable)
 
 **[v0.18.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.18.0)** (2026-08-28) "Quality you can inspect, upgrades you can measure": **word timing provenance** (native / second-pass aligned / interpolated / edited / estimated, legacy-safe); **focused review** (estimated-timing badges and filter in the transcript, timing receipt in candidate details); **localized alignment reports** (coverage, aligned/interpolated counts and uncertain spans in `clips.json`); **caption quality gate** (invalid timing, overlap, reading speed, flashes, oversize tokens and estimated ranges checked on the final rendered timeline); **repeatable golden evaluation** (local CER/WER, boundary error and highlight recall@K without new model downloads); plus a standalone `dev:web` browser preview for UI regression without the Electron runtime
@@ -324,7 +327,7 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 
 | Milestone | Status |
 |---|---|
-| Desktop app · three local ASR tiers · AI highlights · vertical clips with captions · face tracking | ✅ Done |
+| Desktop app · three local ASR tiers · AI highlights · vertical clips with captions · comfort-first composition | ✅ Done |
 | Diarization · bubble captions · jump cuts · hands-off mode · installers | ✅ Done |
 | v0.5 – v0.9 (workbench · MCP · watch folder · QA/repair · feedback loop · settings) | ✅ Shipped |
 | v0.10 – v0.14 (multi-part stitching · genre criteria · quality gate · publish packs · variants · JianYing drafts · transform score · AI covers/BGM) | ✅ Shipped |
@@ -332,7 +335,7 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 | v0.15.1 (hardware export · URL import · recovery · durable queue · publishing feedback · diagnostics · topic series) | ✅ Shipped |
 | v0.16 (project workspace · reversible editing · pro shortcuts · local A/B experiments) | ✅ Shipped |
 | v0.17 (bounded render cache · keyframe-safe copy · shared across entry points · scoped cleanup) | ✅ Shipped |
-| v0.18 – v0.19 (quality evaluation · caption quality gate · multimodal evidence reuse · motion timeline) | ✅ Shipped |
+| v0.18 – v0.20 (quality evaluation · caption quality gate · multimodal evidence reuse · comfort-first reframing) | ✅ Shipped |
 | English ASR upgrade (Parakeet) · code signing · deeper unattended mode | 🗺️ [Planned](docs/PRODUCT-PLAN.md) |
 
 </details>

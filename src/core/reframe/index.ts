@@ -11,7 +11,7 @@ import { probeMedia } from "../probe";
 import { ensureModel, YUNET_MODEL } from "../models";
 import { parseShowinfoTimes } from "../signals";
 import { YunetDetector, YUNET_INPUT, pickMainFace, type FaceBox } from "./yunet";
-import { planCropTrack, renderSendcmd, renderCropXExpr, type FaceSample, type CropKeyframe } from "./track";
+import { planCropComposition, renderSendcmd, renderCropXExpr, type FaceSample, type CropKeyframe, type CropPlanningStats } from "./track";
 
 const execFileAsync = promisify(execFile);
 
@@ -26,6 +26,8 @@ export interface CropPlan {
   cropY: number;
   /** First keyframe x — the crop's initial position. */
   x0: number;
+  /** Machine-readable composition receipt for this source range. */
+  composition: CropPlanningStats;
 }
 
 export { renderSendcmd, renderCropXExpr };
@@ -83,9 +85,19 @@ export async function generateCropPlan(
     const faces = await detector.detect(new Uint8Array(stdout.subarray(off, off + frameBytes)));
     const main = pickMainFace(faces, prevMain);
     prevMain = main;
+    const visible = faces
+      .filter((face) => face.x + face.w > padX && face.x < padX + scaledW)
+      .map((face) => ({
+        left: Math.min(1, Math.max(0, (face.x - padX) / scaledW)),
+        right: Math.min(1, Math.max(0, (face.x + face.w - padX) / scaledW)),
+      }))
+      .filter((face) => face.right > face.left);
     samples.push({
       t: idx / SAMPLE_FPS,
       cx: main ? Math.min(1, Math.max(0, (main.x + main.w / 2 - padX) / scaledW)) : null,
+      left: visible.length > 0 ? Math.min(...visible.map((face) => face.left)) : null,
+      right: visible.length > 0 ? Math.max(...visible.map((face) => face.right)) : null,
+      faceCount: visible.length,
     });
   }
 
@@ -102,9 +114,16 @@ export async function generateCropPlan(
   ).then((r) => r.stderr, () => "");
   const cuts = parseShowinfoTimes(sceneErr);
 
-  const keyframes = planCropTrack(samples, cuts, info.width, cropH);
-  if (!keyframes) return null;
-  return { keyframes, cropW, cropH, cropY, x0: keyframes[0].x };
+  const planned = planCropComposition(samples, cuts, info.width, cropH);
+  if (!planned) return null;
+  return {
+    keyframes: planned.keyframes,
+    cropW,
+    cropH,
+    cropY,
+    x0: planned.keyframes[0].x,
+    composition: planned.stats,
+  };
 }
 
 /** Map a clip-relative source time onto the jump-cut output timeline (null = spliced out). */

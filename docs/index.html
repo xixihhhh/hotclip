@@ -32,11 +32,11 @@
   "alternateName": "HotClip 爆款切片",
   "operatingSystem": "Windows, macOS, Linux",
   "applicationCategory": "MultimediaApplication",
-  "softwareVersion": "0.19.0",
+  "softwareVersion": "0.20.0",
   "inLanguage": ["zh-CN", "en"],
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
   "description": "免费开源、本地运行的 AI 视频切片 / 直播切片软件:长视频、直播回放一键切成爆款竖屏短视频。AI 找爆点、弹幕热度进爆点判断、横屏转竖屏 9:16、逐词点亮动态字幕,无积分制、无水印、素材不上传。",
-  "featureList": "AI 找爆点(九路证据链,新增轻量运动证据,附爆款分与理由)、跨桌面/CLI/MCP/自动化复用的本地多模态证据索引、运动时间轴、弹幕热度进爆点判断、横屏转竖屏 9:16 人脸跟随、动态逐词点亮字幕、逐词时间来源与聚焦复核、字幕质量门、去气口剪口头禅、敏感词音频静音、项目工作区、可逆编辑与专业快捷键、重启恢复、持久自动化任务队列、有界基础渲染缓存、关键帧安全直拷、桌面健康检查、发布反馈台账、本地 A/B 实验、主题系列整理、平台发布包、SRT/双语字幕导出",
+  "featureList": "AI 找爆点(九路证据链,附爆款分与理由)、跨桌面/CLI/MCP/自动化复用的本地多模态证据索引、运动时间轴、弹幕热度进爆点判断、舒适优先横转竖 9:16 构图(单人/多人镜头锁定、按需跟随、丢失回正)、动态逐词点亮字幕、逐词时间来源与聚焦复核、字幕质量门、去气口剪口头禅、敏感词音频静音、项目工作区、可逆编辑与专业快捷键、重启恢复、持久自动化任务队列、有界基础渲染缓存、关键帧安全直拷、桌面健康检查、发布反馈台账、本地 A/B 实验、主题系列整理、平台发布包、SRT/双语字幕导出",
   "url": "https://xixihhhh.github.io/hotclip/",
   "downloadUrl": "https://github.com/xixihhhh/hotclip/releases/latest",
   "screenshot": "https://xixihhhh.github.io/hotclip/screenshots/04-highlights.png",
@@ -54,7 +54,7 @@
   "step": [
     { "@type": "HowToStep", "position": 1, "name": "导入长视频", "text": "把播客、直播回放、课程、Vlog 拖进 HotClip(支持 MP4/MKV/MOV/FLV/TS,纯音频也可以),或粘贴 B站/YouTube 等公开视频地址;源视频落到本机后进入同一套处理流程。" },
     { "@type": "HowToStep", "position": 2, "name": "AI 找爆点", "text": "本地逐字转写后,AI 通读全文挑出金句、冲突、高能片段,每条附爆款分、开场钩子和推荐理由,切点精确到词,看不顺眼的取消勾选即可。" },
-    { "@type": "HowToStep", "position": 3, "name": "一键出片", "text": "一键导出竖屏 9:16 成片:人脸跟随取景、逐词点亮动态字幕、标题贴片、响度归一,附封面图和发布文案,直接发抖音、快手、B站、视频号、小红书、TikTok。" }
+    { "@type": "HowToStep", "position": 3, "name": "一键出片", "text": "一键导出竖屏 9:16 成片:舒适优先智能构图、逐词点亮动态字幕、标题贴片、响度归一,附封面图和发布文案,直接发抖音、快手、B站、视频号、小红书、TikTok。" }
   ]
 }
 </script>
@@ -139,7 +139,7 @@
   </div>
   <p class="note">不用 Python、不用 Docker、连账号都不用注册——下载安装包,双击即用</p>
   <div class="meta-badges">
-    <span>最新版本 <b id="gh-version">v0.19.0</b></span>
+    <span>最新版本 <b id="gh-version">v0.20.0</b></span>
     <span>GitHub <b id="gh-stars">★</b></span>
     <span>Windows · macOS · Linux</span>
   </div>
@@ -251,7 +251,7 @@
         <div class="st-copy">
           <span class="st-k">STEP 03 · 一键出片</span>
           <h3>出来就是能发的成片</h3>
-          <p><b>人脸跟随</b>横转竖 9:16、<b>动态逐词点亮字幕</b>烧进画面、标题贴片、去气口、响度归一 -14 LUFS——每条附封面图和发布文案,打开就能发。</p>
+          <p><b>舒适优先构图</b>横转竖 9:16、<b>动态逐词点亮字幕</b>烧进画面、标题贴片、去气口、响度归一 -14 LUFS——每条附封面图和发布文案,打开就能发。</p>
           <div class="st-chips"><span>抖音</span><span>快手</span><span>B站</span><span>视频号</span><span>小红书</span><span>TikTok</span></div>
         </div>
         <div class="st-visual">
@@ -309,7 +309,7 @@
     </div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-caption"/></svg></span><h3>自动加动态字幕 · 逐词点亮</h3><p>词级时间戳驱动,语义断行不「拦腰截断」;<b>SRT 可导出</b>,双语字幕一键开。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg></span><h3>字幕哪里不稳,直接告诉你</h3><p>原生/对齐/内插/手改估时来源可见,逐句稿一键只看需复核句;最终成片还检查<b>重叠、阅读速度与闪现</b>,结果写进回执。</p></div>
-    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-reframe"/></svg></span><h3>横屏转竖屏 9:16</h3><p><b>人脸跟随取景</b>(镜头级三模式),无人脸自动回退居中;一键双画幅竖横同出。</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-reframe"/></svg></span><h3>横屏转竖屏 9:16</h3><p><b>舒适优先构图</b>:单人移动或多人同框能装下就锁住镜头,确有需要才平滑跟随;持续漏检自动回正,决策写进回执。</p></div>
     <div class="b-cell b-wave" data-reveal>
       <span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-scissors"/></svg></span><h3>口播剪辑:去气口、剪口头禅</h3><p>自动删停顿、剪掉嗯/呃,响度归一 <b>-14 LUFS</b>,成片像人剪的。</p>
       <div class="wave-demo" aria-hidden="true"><i></i><i></i><i></i><i class="cut-gap"></i><i></i><i></i><i class="cut-gap"></i><i></i><i></i><i></i></div>

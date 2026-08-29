@@ -3,9 +3,10 @@
  *
  * Doctrine (AutoFlip-style, per 2026 research): "don't move unless you must".
  * Per shot segment, pick one of three modes:
- *  - static: face barely moves → one constant crop (zero jitter = pro look)
+ *  - locked: all visible faces fit one safe crop → one constant crop
  *  - pan: steady drift → linear interpolation between endpoints
  *  - track: real movement → One Euro filtered keyframes with a dead zone
+ *  - recover: a sustained detection loss eases the crop back toward centre
  * Falls back to center crop (null) when faces are too sparse to trust.
  */
 
@@ -14,12 +15,31 @@ export interface FaceSample {
   t: number;
   /** Face-center x normalized to [0,1] of source width; null = no detection. */
   cx: number | null;
+  /** Horizontal envelope of every visible face, normalized to source width. */
+  left?: number | null;
+  right?: number | null;
+  /** Number of visible faces represented by the envelope. */
+  faceCount?: number;
 }
 
 export interface CropKeyframe {
   t: number;
   /** Crop left edge in source pixels. */
   x: number;
+}
+
+export interface CropPlanningStats {
+  totalShots: number;
+  lockedShots: number;
+  groupLockedShots: number;
+  trackedShots: number;
+  recoveryShots: number;
+  centeredShots: number;
+}
+
+export interface CropPlanningResult {
+  keyframes: CropKeyframe[];
+  stats: CropPlanningStats;
 }
 
 /** Standard One Euro filter (1D). */
@@ -59,16 +79,39 @@ export class OneEuro {
   }
 }
 
-/** Fill null gaps with the nearest valid neighbour (segment-local). */
+/** Hold briefly through detector flicker, then recover to source centre. */
 export function fillGaps(samples: FaceSample[]): Array<{ t: number; cx: number }> {
-  const valid = samples.filter((s) => s.cx !== null) as Array<{ t: number; cx: number }>;
-  if (valid.length === 0) return [];
+  const firstValid = samples.find((s): s is FaceSample & { cx: number } => s.cx !== null);
+  if (!firstValid) return [];
+  let last: { t: number; cx: number } | null = null;
   return samples.map((s) => {
-    if (s.cx !== null) return { t: s.t, cx: s.cx };
-    let best = valid[0];
-    for (const v of valid) if (Math.abs(v.t - s.t) < Math.abs(best.t - s.t)) best = v;
-    return { t: s.t, cx: best.cx };
+    if (s.cx !== null) {
+      last = { t: s.t, cx: s.cx };
+      return last;
+    }
+    return {
+      t: s.t,
+      cx: last
+        ? (s.t - last.t <= LOST_HOLD_SEC ? last.cx : 0.5)
+        : (firstValid.t - s.t <= LOST_HOLD_SEC ? firstValid.cx : 0.5),
+    };
   });
+}
+
+function hasSustainedLoss(samples: FaceSample[]): boolean {
+  let lastValidT: number | null = null;
+  const firstValid = samples.find((s) => s.cx !== null);
+  for (const sample of samples) {
+    if (sample.cx !== null) {
+      lastValidT = sample.t;
+      continue;
+    }
+    const distance = lastValidT === null
+      ? (firstValid ? firstValid.t - sample.t : Number.POSITIVE_INFINITY)
+      : sample.t - lastValidT;
+    if (distance > LOST_HOLD_SEC) return true;
+  }
+  return false;
 }
 
 /** Minimum face-detection coverage to trust tracking at all. */
@@ -77,18 +120,25 @@ const MIN_COVERAGE = 0.4;
 const STATIC_STD = 0.04;
 /** Dead zone: ignore moves smaller than this fraction of width. */
 const DEAD_ZONE = 0.02;
+/** Keep the last reliable subject through short detector flicker only. */
+export const LOST_HOLD_SEC = 1.25;
+/** Breathing room outside the union of visible face boxes. */
+const FACE_ENVELOPE_MARGIN = 0.025;
+/** Preserve intentional source centering when the ideal crop is already near it. */
+const CENTER_SNAP_DISTANCE = 0.035;
 
-export function planCropTrack(
+export function planCropComposition(
   samples: FaceSample[],
   cuts: number[],
   srcW: number,
   srcH: number
-): CropKeyframe[] | null {
+): CropPlanningResult | null {
   const cropW = Math.floor((srcH * 9) / 16 / 2) * 2;
   if (cropW >= srcW || samples.length === 0) return null;
   const coverage = samples.filter((s) => s.cx !== null).length / samples.length;
   if (coverage < MIN_COVERAGE) return null;
 
+  const cropFrac = cropW / srcW;
   const clampX = (cxNorm: number): number =>
     Math.round(Math.min(Math.max(cxNorm * srcW - cropW / 2, 0), srcW - cropW));
 
@@ -107,30 +157,65 @@ export function planCropTrack(
   }
   if (seg.length > 0) segments.push(seg);
 
+  const stats: CropPlanningStats = {
+    totalShots: 0,
+    lockedShots: 0,
+    groupLockedShots: 0,
+    trackedShots: 0,
+    recoveryShots: 0,
+    centeredShots: 0,
+  };
   const keyframes: CropKeyframe[] = [];
   for (const segment of segments) {
+    stats.totalShots++;
+    const segmentCoverage = segment.filter((s) => s.cx !== null).length / segment.length;
+    if (segmentCoverage < MIN_COVERAGE) {
+      keyframes.push({ t: segment[0].t, x: clampX(0.5) });
+      stats.centeredShots++;
+      continue;
+    }
     const filled = fillGaps(segment);
     if (filled.length === 0) continue;
+
+    const hasRecovery = hasSustainedLoss(segment);
+    if (hasRecovery) stats.recoveryShots++;
+
+    const visible = segment.filter((s) => s.cx !== null);
+    const envelopeLeft = Math.min(...visible.map((s) => s.left ?? s.cx ?? 0.5));
+    const envelopeRight = Math.max(...visible.map((s) => s.right ?? s.cx ?? 0.5));
+    const envelopeWidth = envelopeRight - envelopeLeft + FACE_ENVELOPE_MARGIN * 2;
+    const hasGroup = visible.some((s) => (s.faceCount ?? 1) > 1);
+
+    // Comfort-first composition: if every observed face position fits in one
+    // crop, lock the virtual camera for the entire shot. This prevents small
+    // body movement and multi-person turn-taking from creating artificial pan.
+    if (!hasRecovery && envelopeWidth <= cropFrac) {
+      let center = (envelopeLeft + envelopeRight) / 2;
+      if (Math.abs(center - 0.5) <= CENTER_SNAP_DISTANCE) center = 0.5;
+      keyframes.push({ t: filled[0].t, x: clampX(center) });
+      stats.lockedShots++;
+      if (hasGroup) stats.groupLockedShots++;
+      continue;
+    }
+
     const xs = filled.map((f) => f.cx);
     const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
     const std = Math.sqrt(xs.reduce((a, b) => a + (b - mean) ** 2, 0) / xs.length);
     const median = [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
 
     if (std < STATIC_STD) {
-      // static shot: one keyframe, hold the median
       keyframes.push({ t: filled[0].t, x: clampX(median) });
+      stats.lockedShots++;
     } else {
+      stats.trackedShots++;
       const drift = xs[xs.length - 1] - xs[0];
-      if (Math.abs(drift) > 2 * std) {
-        // steady pan: endpoints only (ffmpeg holds values between commands, so
-        // emit a few interpolated steps for smoothness)
+      if (!hasRecovery && Math.abs(drift) > 2 * std) {
         const steps = Math.min(12, filled.length);
         for (let i = 0; i < steps; i++) {
           const f = filled[Math.floor((i * (filled.length - 1)) / Math.max(1, steps - 1))];
           keyframes.push({ t: f.t, x: clampX(xs[0] + (drift * i) / Math.max(1, steps - 1)) });
         }
       } else {
-        // real movement: One Euro + dead zone
         const euro = new OneEuro();
         let lastX: number | null = null;
         for (const f of filled) {
@@ -144,7 +229,6 @@ export function planCropTrack(
     }
   }
   if (keyframes.length === 0) return null;
-  // ensure monotonic time + dedupe consecutive identical x
   keyframes.sort((a, b) => a.t - b.t);
   const out: CropKeyframe[] = [];
   for (const k of keyframes) {
@@ -152,7 +236,16 @@ export function planCropTrack(
     if (last && k.x === last.x) continue;
     out.push(k);
   }
-  return out;
+  return { keyframes: out, stats };
+}
+
+export function planCropTrack(
+  samples: FaceSample[],
+  cuts: number[],
+  srcW: number,
+  srcH: number
+): CropKeyframe[] | null {
+  return planCropComposition(samples, cuts, srcW, srcH)?.keyframes ?? null;
 }
 
 /** Render keyframes as an ffmpeg sendcmd file targeting `crop@track`. */
