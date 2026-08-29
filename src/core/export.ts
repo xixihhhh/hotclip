@@ -46,14 +46,14 @@ import {
   type SfxCue,
 } from "./sound-design";
 import { detectUiCrop, type UiCrop } from "./uicrop";
-import { generateCropPlan, renderCropXExpr, mapToOutputTime } from "./reframe";
+import { generateCropPlan, renderCropXExpr, mapToOutputTime, remapCropKeyframes } from "./reframe";
 import { snapClipToShots, SNAP_MAX_OUT_SEC } from "./shots";
 import { detectShotBoundariesEvidence } from "./media-evidence";
 import { buildCaptionAss, VERTICAL_LAYOUT, HORIZONTAL_LAYOUT, type CaptionStyle } from "./subtitle";
 import { lintSubtitleTimeline } from "./subtitle-quality";
 import { buildOverlayPayload, isWebCaptionStyle, type OverlayRenderFn, type WebCaptionStyle } from "./caption-overlay/payload";
 import { probeMedia } from "./probe";
-import { runClipQa, maxVisualGapSec, missingHookPayoffs, type ClipQaReport } from "./qa";
+import { runClipQa, maxVisualGapSec, missingHookPayoffs, summarizeSubjectCoverage, type ClipQaReport } from "./qa";
 import { lintClipContent } from "./content-lint";
 import { mapSensitiveRanges } from "./sensitive-words";
 import { planRepair, applyRepair } from "./repair";
@@ -153,9 +153,11 @@ async function cropPlanOverPieces(
     if (!cp) continue;
     const shift = p.startSec - clipStartSec;
     const kfs = cp.keyframes.map((k) => ({ ...k, t: k.t + shift }));
-    if (!merged) merged = { ...cp, keyframes: kfs };
+    const coverageSamples = cp.coverageSamples.map((sample) => ({ ...sample, t: sample.t + shift }));
+    if (!merged) merged = { ...cp, keyframes: kfs, coverageSamples };
     else {
       merged.keyframes.push(...kfs);
+      merged.coverageSamples.push(...coverageSamples);
       merged.composition.totalShots += cp.composition.totalShots;
       merged.composition.lockedShots += cp.composition.lockedShots;
       merged.composition.groupLockedShots += cp.composition.groupLockedShots;
@@ -692,6 +694,7 @@ export async function exportClips(
       // Face-aware reframe: plan per clip; any failure falls back to center.
       let trackPlan;
       let reframeComposition: ClipRenderOutcome["reframeComposition"];
+      let reframeCoverage: ClipQaReport["subjectCoverage"];
       if (options.vertical && options.faceTrack && options.modelsRoot && !audioOnly) {
         // 拼接片逐段各算一版:整段跨度可能有几十分钟,人脸检测按跨度跑纯属白烧。
         // 每段的关键帧相对本段起点,统一平移到「相对切片起点」再走同一条重映射。
@@ -702,17 +705,17 @@ export async function exportClips(
             ).catch(() => null);
         if (cp) {
           let kfs = cp.keyframes;
+          let coverageSamples = cp.coverageSamples;
           if (plan) {
-            // jump cut: remap keyframes onto the compressed output timeline
-            kfs = kfs
-              .map((k) => {
-                const t = mapToOutputTime(k.t, plan.segments, clip.startSec);
-                return t === null ? null : { t, x: k.x };
-              })
-              .filter((k): k is { t: number; x: number } => k !== null);
+            // jump cut: preserve retained motion without interpolating through removed gaps
+            kfs = remapCropKeyframes(kfs, plan.segments, clip.startSec);
+            coverageSamples = coverageSamples.filter(
+              (sample) => mapToOutputTime(sample.t, plan.segments, clip.startSec) !== null
+            );
           }
           if (kfs.length > 0) {
             reframeComposition = cp.composition;
+            reframeCoverage = summarizeSubjectCoverage(coverageSamples);
             trackPlan = {
               cropXExpr: renderCropXExpr(kfs),
               cropW: cp.cropW,
@@ -1102,6 +1105,7 @@ export async function exportClips(
           contentHits,
           pacingGapSec,
           hookPayoffMissing,
+          subjectCoverage: reframeCoverage,
           signal,
         };
         const expected = clipDuration + (coldOpenSec ?? 0);

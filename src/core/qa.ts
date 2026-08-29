@@ -34,6 +34,8 @@ export interface ClipQaReport {
   blackSpans: QaSpan[];
   /** 长静音区间(≥2s;开了跳剪还剩长静音尤其可疑)。 */
   silenceSpans: QaSpan[];
+  /** 像素近乎不变的冻结区间(≥3s);旧回执可能缺省。 */
+  frozenSpans?: QaSpan[];
   /** 响度实测(EBU R128);音频扫描失败为 null。 */
   loudness: { integratedLufs: number; truePeakDb: number } | null;
   /** 落在词中间的切点数(0 = 每个切点都在词边界外,无半词风险)。 */
@@ -44,6 +46,8 @@ export interface ClipQaReport {
   pacingGapSec: number | null;
   /** 钩子/标题承诺了、片中转写却没出现的数字类实体;没评估为 null。 */
   hookPayoffMissing: string[] | null;
+  /** 人脸取景的采样覆盖率;没跑人脸取景为 null。 */
+  subjectCoverage?: SubjectCoverage | null;
   /** 自动修复记录(qa 修复循环执行过才有);见 repair.ts。 */
   repair?: QaRepairRecord;
 }
@@ -62,6 +66,10 @@ export interface QaRepairRecord {
 const BLACK_MIN_SEC = 0.5;
 /** 静音判定:-50dB 以下持续 2s 起报。 */
 const SILENCE_MIN_SEC = 2;
+/** 冻结判定:3s 起报,避开默认 2.2s 标题/钩子停留。 */
+const FREEZE_MIN_SEC = 3;
+/** 低于此逐帧差异视为同一画面。 */
+const FREEZE_NOISE = 0.0005;
 /** 响度容差:偏离 -14 LUFS 目标超过 ±2 LU 才告警(loudnorm 单遍本有浮动)。 */
 const LOUDNESS_TOLERANCE_LU = 2;
 /** 真峰值上限:超过 -1 dBTP 有平台转码削波风险。 */
@@ -151,6 +159,54 @@ export function parseSilenceSpans(stderr: string, streamEndSec?: number): QaSpan
   return spans;
 }
 
+/** freezedetect 输出解析;冻结延续到 EOF 时用 streamEndSec 闭合。 */
+export function parseFreezeSpans(stderr: string, streamEndSec?: number): QaSpan[] {
+  const spans: QaSpan[] = [];
+  let open: number | null = null;
+  const re = /lavfi\.freezedetect\.freeze_(start|end):\s*(-?[\d.]+)/g;
+  for (let m = re.exec(stderr); m; m = re.exec(stderr)) {
+    const value = Number(m[2]);
+    if (!Number.isFinite(value)) continue;
+    if (m[1] === "start") {
+      open = value;
+    } else if (open !== null) {
+      if (value > open) spans.push({ startSec: Math.max(0, open), endSec: value });
+      open = null;
+    }
+  }
+  if (open !== null && streamEndSec !== undefined && streamEndSec > open) {
+    spans.push({ startSec: Math.max(0, open), endSec: streamEndSec });
+  }
+  return spans;
+}
+
+export interface SubjectCoverage {
+  sampledFrames: number;
+  clippedFrames: number;
+  severeFrames: number;
+  clippedRatio: number;
+  worstVisibleFraction: number;
+}
+
+/** Aggregate crop-planner face visibility after jump-cut filtering. */
+export function summarizeSubjectCoverage(
+  samples: Array<{ minVisibleFraction: number }>
+): SubjectCoverage | null {
+  const valid = samples
+    .map((sample) => Math.min(1, Math.max(0, sample.minVisibleFraction)))
+    .filter(Number.isFinite);
+  if (valid.length === 0) return null;
+  const clippedFrames = valid.filter((fraction) => fraction < 0.9).length;
+  const severeFrames = valid.filter((fraction) => fraction < 0.6).length;
+  return {
+    sampledFrames: valid.length,
+    clippedFrames,
+    severeFrames,
+    clippedRatio: Number((clippedFrames / valid.length).toFixed(3)),
+    worstVisibleFraction: Number(Math.min(...valid).toFixed(3)),
+  };
+}
+
 /**
  * ebur128 汇总解析:取末尾 Summary 的整片响度与真峰值。
  * 形如 `I: -14.1 LUFS` / `Peak: -1.3 dBFS`(peak=true 时为真峰值)。
@@ -191,6 +247,7 @@ export interface QaAssessment {
   expectedDurationSec: number;
   blackSpans: QaSpan[];
   silenceSpans: QaSpan[];
+  frozenSpans?: QaSpan[];
   loudness: ClipQaReport["loudness"];
   /** 出片时开了响度标准化才核对 -14 LUFS 目标。 */
   loudnessNormalized: boolean;
@@ -201,6 +258,8 @@ export interface QaAssessment {
   pacingGapSec?: number | null;
   /** 未兑付的钩子承诺(missingHookPayoffs 算好传入);缺省 = 不评估。 */
   hookPayoffMissing?: string[] | null;
+  /** 人脸取景样本的主体覆盖汇总;缺省 = 未使用人脸取景。 */
+  subjectCoverage?: SubjectCoverage | null;
 }
 
 const fmtSec = (v: number): string => v.toFixed(1);
@@ -219,6 +278,10 @@ export function assessClipQa(input: QaAssessment): ClipQaReport {
   if (input.silenceSpans.length > 0) {
     const longest = Math.max(...input.silenceSpans.map((s) => s.endSec - s.startSec));
     issues.push(`检测到长静音 ${input.silenceSpans.length} 段(最长 ${fmtSec(longest)}s)`);
+  }
+  if ((input.frozenSpans?.length ?? 0) > 0) {
+    const longest = Math.max(...input.frozenSpans!.map((s) => s.endSec - s.startSec));
+    issues.push(`检测到画面冻结 ${input.frozenSpans!.length} 段(最长 ${fmtSec(longest)}s,建议回放核对)`);
   }
   if (input.loudnessNormalized && input.loudness) {
     const dev = Math.abs(input.loudness.integratedLufs - -14);
@@ -242,6 +305,11 @@ export function assessClipQa(input: QaAssessment): ClipQaReport {
       `钩子/标题承诺的「${input.hookPayoffMissing!.join("、")}」未在片中出现(不兑付=标题党,完播率与账号权重双降,建议改钩子或换切点)`
     );
   }
+  if (input.subjectCoverage && (input.subjectCoverage.clippedRatio >= 0.15 || input.subjectCoverage.severeFrames >= 2)) {
+    issues.push(
+      `竖屏取景有 ${(input.subjectCoverage.clippedRatio * 100).toFixed(0)}% 采样帧未完整保留人脸(最差 ${(input.subjectCoverage.worstVisibleFraction * 100).toFixed(0)}%,建议检查构图)`
+    );
+  }
   const lintIssue = formatLintIssue(input.contentHits ?? []);
   if (lintIssue) issues.push(lintIssue);
   return {
@@ -251,6 +319,7 @@ export function assessClipQa(input: QaAssessment): ClipQaReport {
     expectedDurationSec: Number(input.expectedDurationSec.toFixed(3)),
     blackSpans: input.blackSpans.map((s) => ({ startSec: Number(s.startSec.toFixed(2)), endSec: Number(s.endSec.toFixed(2)) })),
     silenceSpans: input.silenceSpans.map((s) => ({ startSec: Number(s.startSec.toFixed(2)), endSec: Number(s.endSec.toFixed(2)) })),
+    frozenSpans: (input.frozenSpans ?? []).map((s) => ({ startSec: Number(s.startSec.toFixed(2)), endSec: Number(s.endSec.toFixed(2)) })),
     loudness: input.loudness
       ? { integratedLufs: Number(input.loudness.integratedLufs.toFixed(1)), truePeakDb: Number(input.loudness.truePeakDb.toFixed(1)) }
       : null,
@@ -258,6 +327,7 @@ export function assessClipQa(input: QaAssessment): ClipQaReport {
     contentHits: input.contentHits ?? null,
     pacingGapSec: input.pacingGapSec ?? null,
     hookPayoffMissing: input.hookPayoffMissing ?? null,
+    subjectCoverage: input.subjectCoverage ?? null,
   };
 }
 
@@ -272,7 +342,7 @@ export async function scanClipMedia(path: string, signal?: AbortSignal): Promise
   const args = [
     "-hide_banner", "-nostats",
     "-i", path,
-    "-vf", `blackdetect=d=${BLACK_MIN_SEC}:pix_th=0.10`,
+    "-vf", `blackdetect=d=${BLACK_MIN_SEC}:pix_th=0.10,freezedetect=n=${FREEZE_NOISE}:d=${FREEZE_MIN_SEC}`,
     "-af", `silencedetect=n=-50dB:d=${SILENCE_MIN_SEC},ebur128=peak=true`,
     "-f", "null", "-",
   ];
@@ -305,6 +375,8 @@ export interface RunClipQaOptions {
   pacingGapSec?: number | null;
   /** 未兑付的钩子承诺(missingHookPayoffs 算好传入);缺省 = 不评估。 */
   hookPayoffMissing?: string[] | null;
+  /** 已按最终保留片段过滤的人脸覆盖汇总。 */
+  subjectCoverage?: SubjectCoverage | null;
   signal?: AbortSignal;
 }
 
@@ -316,11 +388,13 @@ export async function runClipQa(path: string, opts: RunClipQaOptions): Promise<C
     expectedDurationSec: opts.expectedDurationSec,
     blackSpans: parseBlackSpans(stderr),
     silenceSpans: parseSilenceSpans(stderr, info.durationSec),
+    frozenSpans: parseFreezeSpans(stderr, info.durationSec),
     loudness: parseLoudnessSummary(stderr),
     loudnessNormalized: opts.loudnessNormalized,
     midWordCuts: opts.words && opts.segments ? countMidWordCuts(opts.words, opts.segments) : null,
     contentHits: opts.contentHits,
     pacingGapSec: opts.pacingGapSec,
     hookPayoffMissing: opts.hookPayoffMissing,
+    subjectCoverage: opts.subjectCoverage,
   });
 }

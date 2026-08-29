@@ -11,7 +11,7 @@ import { probeMedia } from "../probe";
 import { ensureModel, YUNET_MODEL } from "../models";
 import { parseShowinfoTimes } from "../signals";
 import { YunetDetector, YUNET_INPUT, pickMainFace, type FaceBox } from "./yunet";
-import { planCropComposition, renderSendcmd, renderCropXExpr, type FaceSample, type CropKeyframe, type CropPlanningStats } from "./track";
+import { compileCropKeyframes, cropHoldAtTime, cropXAtTime, evaluateCropCoverage, planCropComposition, renderSendcmd, renderCropXExpr, type CropCoverageSample, type FaceSample, type CropKeyframe, type CropPlanningStats } from "./track";
 
 const execFileAsync = promisify(execFile);
 
@@ -28,6 +28,8 @@ export interface CropPlan {
   x0: number;
   /** Machine-readable composition receipt for this source range. */
   composition: CropPlanningStats;
+  /** Sampled face visibility against the exact planned crop trajectory. */
+  coverageSamples: CropCoverageSample[];
 }
 
 export { renderSendcmd, renderCropXExpr };
@@ -98,6 +100,7 @@ export async function generateCropPlan(
       left: visible.length > 0 ? Math.min(...visible.map((face) => face.left)) : null,
       right: visible.length > 0 ? Math.max(...visible.map((face) => face.right)) : null,
       faceCount: visible.length,
+      faces: visible,
     });
   }
 
@@ -116,13 +119,15 @@ export async function generateCropPlan(
 
   const planned = planCropComposition(samples, cuts, info.width, cropH);
   if (!planned) return null;
+  const keyframes = compileCropKeyframes(planned.keyframes);
   return {
-    keyframes: planned.keyframes,
+    keyframes,
     cropW,
     cropH,
     cropY,
-    x0: planned.keyframes[0].x,
+    x0: keyframes[0].x,
     composition: planned.stats,
+    coverageSamples: evaluateCropCoverage(samples, keyframes, info.width, cropW),
   };
 }
 
@@ -140,4 +145,44 @@ export function mapToOutputTime(
     out += seg.endSec - seg.startSec;
   }
   return null;
+}
+
+/**
+ * Preserve the source crop trajectory across removed jump-cut intervals.
+ * A 1ms pre-cut endpoint prevents interpolation through the discarded gap,
+ * while the next segment starts at the exact output splice time.
+ */
+export function remapCropKeyframes(
+  keyframes: CropKeyframe[],
+  segments: Array<{ startSec: number; endSec: number }>,
+  clipStartSec: number
+): CropKeyframe[] {
+  if (keyframes.length === 0) return [];
+  const out: CropKeyframe[] = [];
+  let outOffset = 0;
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    const duration = seg.endSec - seg.startSec;
+    if (duration <= 0) continue;
+    const sourceStart = seg.startSec - clipStartSec;
+    const sourceEnd = seg.endSec - clipStartSec;
+    out.push({
+      t: outOffset,
+      x: cropXAtTime(keyframes, sourceStart),
+      hold: cropHoldAtTime(keyframes, sourceStart),
+    });
+    for (const keyframe of keyframes) {
+      if (keyframe.t <= sourceStart + 1e-4 || keyframe.t >= sourceEnd - 1e-4) continue;
+      out.push({ ...keyframe, t: outOffset + keyframe.t - sourceStart });
+    }
+    const hasFollowingSegment = i < segments.length - 1;
+    const seamInset = hasFollowingSegment ? Math.min(0.001, duration / 2) : 0;
+    out.push({
+      t: outOffset + duration - seamInset,
+      x: cropXAtTime(keyframes, sourceEnd - seamInset),
+      hold: true,
+    });
+    outOffset += duration;
+  }
+  return compileCropKeyframes(out);
 }

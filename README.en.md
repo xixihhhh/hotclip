@@ -178,7 +178,7 @@ Comfort-first 9:16 reframing, silence jump cuts, filler-word removal, -14 LUFS l
 <summary><b>Details</b>: reframe · silence cuts · denoise · SFX · BGM · QA & self-repair · smart covers</summary>
 
 - **Comfort-first smart reframing**: each shot considers every visible face; if a single moving subject or a group fits safely, the virtual camera stays locked. It follows only when the subject truly exceeds the crop, holds through brief detector flicker, returns to centre after sustained loss, and falls back safely when detections are sparse
-- **Composition receipt**: `clips.json` records total, locked, group-locked, tracked, recovery and centered-fallback shot counts for auditable quality regression
+- **Composition receipt**: `clips.json` records total, locked, group-locked, tracked, recovery and centered-fallback shots; locked framing now holds until the next shot, and jump cuts never pan through discarded source time
 - **Screen-recording UI removal**: status bars and letterboxing detected via temporal variance and cropped out
 - **Silence jump cuts**: pauses cut and spliced with caption timeline remapped; requires *no words AND acoustic silence*, so laughter and applause survive; optionally keep 0.25s breathing room — tight pacing without the suffocation
 - **Filler-word removal**: um/uh-class fillers and stutters cut (deliberately conservative), itemized in clips.json
@@ -186,7 +186,7 @@ Comfort-first 9:16 reframing, silence jump cuts, filler-word removal, -14 LUFS l
 - **One-click denoise**: double highpass + spectral subtraction; measured -7.9dB noise floor with speech moved just 0.2dB — honest basic denoising, not AI audio repair
 - **SFX cues**: a whoosh on stitch/cold-open hard cuts, a ding on the clip's emotional peak, a soft pop as the opening hook lands — rule-based placement, at most 3 per clip; effects are synthesized locally (zero assets, zero licensing), drop in your own same-named wav files to replace them
 - **Background music (with ducking)**: pick any local audio file — it loops to fit the clip, sits well under the voice, ducks automatically while speech plays and fades out at the end; mixed in a separate pass with the video stream copied untouched
-- **Render QA + self-repair**: black frames / silences / loudness / duration / mid-word cuts re-checked into clips.json; fixable warnings fixed on the spot and kept only if the re-check improves
+- **Render QA + self-repair**: black frames, long silences, frozen video, subject crop coverage, loudness, duration and mid-word cuts land in `clips.json`; semantic framing warnings ask for review, while only safe fixable faults are repaired and retained after a better re-check
 - **Smart cover frame**: the loudest moment inside the clip becomes the cover (usually the laugh or the shout); transitions avoided
 - **Frame-accurate cutting**: fast seek + re-encode; hours-long FLV/TS replays go straight in
 - **Hardware-accelerated export**: automatically uses VideoToolbox / NVENC / QSV when the bundled ffmpeg supports it; an unavailable device or driver transparently retries with x264, keeping reliability intact
@@ -290,6 +290,8 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 
 ## What's new
 
+**[v0.21.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.21.0)** (2026-08-30) "Don't just export — prove the picture survived": **frozen-frame QA** (the existing FFmpeg pass flags near-static spans lasting 3+ seconds, including a freeze that runs to EOF); **subject-coverage receipt** (reuses existing YuNet samples to measure partially and severely cropped faces against the final vertical trajectory, with no extra model pass); **true shot locks** (locked compositions hold until the next shot instead of drifting toward it); **jump-cut-safe camera motion** (crop trajectories switch at retained seams instead of interpolating through discarded source time). Freeze and composition findings are review-only semantic warnings, never risky automatic recuts.
+
 **[v0.20.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.20.0)** (2026-08-30) "Keep the subject in frame, keep the camera calm": **comfort-first vertical composition** (all visible face envelopes are fused per shot; lock the camera whenever one moving subject or a group fits safely, follow only when framing truly requires it); **centre snap** (near-centred source composition stays centred instead of gaining artificial drift); **lost-subject recovery** (hold through brief detector flicker, then ease back to centre after 1.25 seconds; a new shot without reliable faces centres immediately); **end-to-end receipt** (`clips.json` records total, locked, group-locked, tracked, recovery and centered-fallback shots, aggregated across stitched pieces). No new model or installer weight; sparse detection still falls back safely to centre crop.
 
 **[v0.19.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.19.0)** (2026-08-28) "Analyze once, make every next cut faster and sharper": **local multimodal evidence index** (source fingerprint + capability version + model identity, atomic writes, corrupt-entry invalidation and 64MB LRU bound); **nine-channel evidence chain** (model-free motion peaks join transcript, loudness, shots, facial emotion, vision, live chat, vocal tone and laughter/applause); **visible motion evidence** (a workbench timeline curve plus representative frames with reserved full-source coverage); **cross-entry reuse** (Tier-0 signals, TransNetV2 boundaries and optional VLM scans shared by desktop, CLI, MCP, folder watch/webhooks, with automatic rebuild after model/detector changes and no API key persistence); **independent diagnostics and cleanup** (analysis evidence never deletes render or transcript cache, and is always regenerable)
@@ -335,7 +337,7 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 | v0.15.1 (hardware export · URL import · recovery · durable queue · publishing feedback · diagnostics · topic series) | ✅ Shipped |
 | v0.16 (project workspace · reversible editing · pro shortcuts · local A/B experiments) | ✅ Shipped |
 | v0.17 (bounded render cache · keyframe-safe copy · shared across entry points · scoped cleanup) | ✅ Shipped |
-| v0.18 – v0.20 (quality evaluation · caption quality gate · multimodal evidence reuse · comfort-first reframing) | ✅ Shipped |
+| v0.18 – v0.21 (quality evaluation · caption quality gate · multimodal evidence reuse · comfort-first reframing · freeze/subject-crop QA) | ✅ Shipped |
 | English ASR upgrade (Parakeet) · code signing · deeper unattended mode | 🗺️ [Planned](docs/PRODUCT-PLAN.md) |
 
 </details>

@@ -2,13 +2,17 @@ import { describe, it, expect } from "vitest";
 import {
   LOST_HOLD_SEC,
   OneEuro,
+  cropXAtTime,
+  downsampleKeyframes,
+  evaluateCropCoverage,
   fillGaps,
   planCropComposition,
   planCropTrack,
   renderSendcmd,
+  renderCropXExpr,
   type FaceSample,
 } from "../reframe/track";
-import { mapToOutputTime } from "../reframe";
+import { mapToOutputTime, remapCropKeyframes } from "../reframe";
 import { decodeYunet, pickMainFace, YUNET_INPUT, type FaceBox } from "../reframe/yunet";
 
 function samplesOf(cxs: Array<number | null>, fps = 3): FaceSample[] {
@@ -43,7 +47,7 @@ describe("planCropTrack modes", () => {
     }));
     const planned = planCropComposition(samples, [], W, H)!;
     const cropW = Math.floor((H * 9) / 16 / 2) * 2;
-    expect(planned.keyframes).toEqual([{ t: 0, x: Math.round(W / 2 - cropW / 2) }]);
+    expect(planned.keyframes).toEqual([{ t: 0, x: Math.round(W / 2 - cropW / 2), hold: true }]);
     expect(planned.stats).toMatchObject({ lockedShots: 1, groupLockedShots: 1 });
   });
 
@@ -97,7 +101,7 @@ describe("planCropTrack modes", () => {
     ];
     const planned = planCropComposition(samples, [1], W, H)!;
     const cropW = Math.floor((H * 9) / 16 / 2) * 2;
-    expect(planned.keyframes.at(-1)).toEqual({ t: 1, x: Math.round(W / 2 - cropW / 2) });
+    expect(planned.keyframes.at(-1)).toEqual({ t: 1, x: Math.round(W / 2 - cropW / 2), hold: true });
     expect(planned.stats).toMatchObject({ totalShots: 2, centeredShots: 1 });
   });
 
@@ -108,6 +112,57 @@ describe("planCropTrack modes", () => {
       expect(k.x).toBeGreaterThanOrEqual(0);
       expect(k.x).toBeLessThanOrEqual(W - cropW);
     }
+  });
+});
+
+describe("crop trajectory / subject coverage", () => {
+  it("holds a locked shot until the next cut instead of drifting across it", () => {
+    const keyframes = [
+      { t: 0, x: 100, hold: true },
+      { t: 2, x: 500, hold: true },
+    ];
+    expect(cropXAtTime(keyframes, 1.9)).toBe(100);
+    expect(cropXAtTime(keyframes, 2)).toBe(500);
+    expect(renderCropXExpr(keyframes)).toContain("if(lt(t,2.000),100,500)");
+  });
+
+  it("keeps linear motion inside a tracking shot then holds its tail", () => {
+    const keyframes = [
+      { t: 0, x: 100 },
+      { t: 1, x: 300, hold: true },
+      { t: 3, x: 700, hold: true },
+    ];
+    expect(cropXAtTime(keyframes, 0.5)).toBe(200);
+    expect(cropXAtTime(keyframes, 2.5)).toBe(300);
+  });
+
+  it("reports the least-visible face per sampled frame", () => {
+    const samples: FaceSample[] = [
+      { t: 0, cx: 0.3, faces: [{ left: 0.25, right: 0.35 }] },
+      { t: 1, cx: 0.5, faces: [{ left: 0.45, right: 0.6 }] },
+    ];
+    const coverage = evaluateCropCoverage(samples, [{ t: 0, x: 200, hold: true }], 1000, 300);
+    expect(coverage[0].minVisibleFraction).toBe(1);
+    expect(coverage[1].minVisibleFraction).toBeCloseTo(1 / 3, 3);
+  });
+
+  it("keeps every shot boundary even when it exceeds the soft keyframe limit", () => {
+    const keyframes = Array.from({ length: 40 }, (_, i) => ({ t: i, x: i * 10, hold: true }));
+    expect(downsampleKeyframes(keyframes, 8)).toEqual(keyframes);
+  });
+
+  it("does not interpolate crop motion through a removed jump-cut gap", () => {
+    const source = [
+      { t: 0, x: 0 },
+      { t: 10, x: 1000, hold: true },
+    ];
+    const mapped = remapCropKeyframes(source, [
+      { startSec: 100, endSec: 102 },
+      { startSec: 108, endSec: 110 },
+    ], 100);
+    expect(cropXAtTime(mapped, 1)).toBeCloseTo(100, 3);
+    expect(cropXAtTime(mapped, 2)).toBeCloseTo(800, 3);
+    expect(cropXAtTime(mapped, 3)).toBeCloseTo(900, 3);
   });
 });
 

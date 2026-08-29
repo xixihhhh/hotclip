@@ -2,7 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   parseBlackSpans,
   parseSilenceSpans,
+  parseFreezeSpans,
   parseLoudnessSummary,
+  summarizeSubjectCoverage,
   countMidWordCuts,
   assessClipQa,
   type QaAssessment,
@@ -19,6 +21,13 @@ const SILENCE_LINES = [
   "[silencedetect @ 0x600] silence_start: 5.2",
   "[silencedetect @ 0x600] silence_end: 8.1 | silence_duration: 2.9",
   "[silencedetect @ 0x600] silence_start: 20.0",
+].join("\n");
+
+const FREEZE_LINES = [
+  "[freezedetect @ 0x600] lavfi.freezedetect.freeze_start: 2.4",
+  "[freezedetect @ 0x600] lavfi.freezedetect.freeze_duration: 3.8",
+  "[freezedetect @ 0x600] lavfi.freezedetect.freeze_end: 6.2",
+  "[freezedetect @ 0x600] lavfi.freezedetect.freeze_start: 20.0",
 ].join("\n");
 
 const EBUR128_SUMMARY = `
@@ -66,6 +75,39 @@ describe("parseSilenceSpans", () => {
   it("silence_start 可为负(编码器前置静音),钳到 0", () => {
     const spans = parseSilenceSpans("silence_start: -0.02\nsilence_end: 3.0 | silence_duration: 3.02");
     expect(spans).toEqual([{ startSec: 0, endSec: 3 }]);
+  });
+});
+
+describe("parseFreezeSpans", () => {
+  it("parses completed spans and closes a trailing freeze at EOF", () => {
+    expect(parseFreezeSpans(FREEZE_LINES, 25)).toEqual([
+      { startSec: 2.4, endSec: 6.2 },
+      { startSec: 20, endSec: 25 },
+    ]);
+  });
+
+  it("drops an unclosed trailing freeze without stream duration", () => {
+    expect(parseFreezeSpans(FREEZE_LINES)).toEqual([{ startSec: 2.4, endSec: 6.2 }]);
+  });
+});
+
+describe("summarizeSubjectCoverage", () => {
+  it("summarizes clipped and severe sampled frames", () => {
+    expect(summarizeSubjectCoverage([
+      { minVisibleFraction: 1 },
+      { minVisibleFraction: 0.85 },
+      { minVisibleFraction: 0.4 },
+    ])).toEqual({
+      sampledFrames: 3,
+      clippedFrames: 2,
+      severeFrames: 1,
+      clippedRatio: 0.667,
+      worstVisibleFraction: 0.4,
+    });
+  });
+
+  it("returns null when no face samples survived", () => {
+    expect(summarizeSubjectCoverage([])).toBeNull();
   });
 });
 
@@ -153,6 +195,37 @@ describe("assessClipQa (纯判定)", () => {
     expect(r.issues).toHaveLength(2);
     expect(r.issues[0]).toContain("黑屏");
     expect(r.issues[1]).toContain("静音");
+  });
+
+  it("长冻结 → 告警并保留机器可读区间", () => {
+    const r = assessClipQa({ ...clean, frozenSpans: [{ startSec: 2.4, endSec: 6.2 }] });
+    expect(r.issues[0]).toContain("画面冻结");
+    expect(r.frozenSpans).toEqual([{ startSec: 2.4, endSec: 6.2 }]);
+  });
+
+  it("持续人脸裁切 → 构图告警;少量轻微边缘不误报", () => {
+    const warn = assessClipQa({
+      ...clean,
+      subjectCoverage: {
+        sampledFrames: 10,
+        clippedFrames: 2,
+        severeFrames: 0,
+        clippedRatio: 0.2,
+        worstVisibleFraction: 0.7,
+      },
+    });
+    expect(warn.issues[0]).toContain("未完整保留人脸");
+    const pass = assessClipQa({
+      ...clean,
+      subjectCoverage: {
+        sampledFrames: 20,
+        clippedFrames: 1,
+        severeFrames: 0,
+        clippedRatio: 0.05,
+        worstVisibleFraction: 0.85,
+      },
+    });
+    expect(pass.status).toBe("pass");
   });
 
   it("响度偏离与真峰值超限 → 仅在开了响度标准化时核对", () => {

@@ -20,12 +20,23 @@ export interface FaceSample {
   right?: number | null;
   /** Number of visible faces represented by the envelope. */
   faceCount?: number;
+  /** Individual visible-face intervals for crop-coverage QA. */
+  faces?: Array<{ left: number; right: number }>;
 }
 
 export interface CropKeyframe {
   t: number;
   /** Crop left edge in source pixels. */
   x: number;
+  /** Hold this crop until the next keyframe (used at shot boundaries). */
+  hold?: boolean;
+}
+
+export interface CropCoverageSample {
+  t: number;
+  faceCount: number;
+  /** Least-visible detected face in this sampled frame, from 0 to 1. */
+  minVisibleFraction: number;
 }
 
 export interface CropPlanningStats {
@@ -170,7 +181,7 @@ export function planCropComposition(
     stats.totalShots++;
     const segmentCoverage = segment.filter((s) => s.cx !== null).length / segment.length;
     if (segmentCoverage < MIN_COVERAGE) {
-      keyframes.push({ t: segment[0].t, x: clampX(0.5) });
+      keyframes.push({ t: segment[0].t, x: clampX(0.5), hold: true });
       stats.centeredShots++;
       continue;
     }
@@ -192,7 +203,7 @@ export function planCropComposition(
     if (!hasRecovery && envelopeWidth <= cropFrac) {
       let center = (envelopeLeft + envelopeRight) / 2;
       if (Math.abs(center - 0.5) <= CENTER_SNAP_DISTANCE) center = 0.5;
-      keyframes.push({ t: filled[0].t, x: clampX(center) });
+      keyframes.push({ t: filled[0].t, x: clampX(center), hold: true });
       stats.lockedShots++;
       if (hasGroup) stats.groupLockedShots++;
       continue;
@@ -204,7 +215,7 @@ export function planCropComposition(
     const median = [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
 
     if (std < STATIC_STD) {
-      keyframes.push({ t: filled[0].t, x: clampX(median) });
+      keyframes.push({ t: filled[0].t, x: clampX(median), hold: true });
       stats.lockedShots++;
     } else {
       stats.trackedShots++;
@@ -226,6 +237,8 @@ export function planCropComposition(
           }
         }
       }
+      const last = keyframes[keyframes.length - 1];
+      if (last) last.hold = true;
     }
   }
   if (keyframes.length === 0) return null;
@@ -233,7 +246,7 @@ export function planCropComposition(
   const out: CropKeyframe[] = [];
   for (const k of keyframes) {
     const last = out[out.length - 1];
-    if (last && k.x === last.x) continue;
+    if (last && k.x === last.x && !last.hold) continue;
     out.push(k);
   }
   return { keyframes: out, stats };
@@ -256,9 +269,91 @@ export function renderSendcmd(keyframes: CropKeyframe[]): string {
 /** Even keyframe downsampling (keeps first & last). */
 export function downsampleKeyframes(kfs: CropKeyframe[], max: number): CropKeyframe[] {
   if (kfs.length <= max) return kfs;
-  const out: CropKeyframe[] = [];
-  for (let i = 0; i < max; i++) {
-    out.push(kfs[Math.round((i * (kfs.length - 1)) / (max - 1))]);
+  const mandatory = new Set<number>([0, kfs.length - 1]);
+  for (let i = 0; i < kfs.length; i++) {
+    if (!kfs[i].hold) continue;
+    mandatory.add(i);
+    if (i + 1 < kfs.length) mandatory.add(i + 1);
+  }
+  const selected = new Set<number>();
+  const must = [...mandatory].sort((a, b) => a - b);
+  if (must.length >= max) {
+    // `max` is a soft expression-size target. Dropping a hold boundary makes
+    // the crop drift across a shot cut, which is worse than a longer filter.
+    return must.map((i) => kfs[i]);
+  } else {
+    for (const i of must) selected.add(i);
+    for (let i = 0; selected.size < max && i < max * 3; i++) {
+      selected.add(Math.round((i * (kfs.length - 1)) / Math.max(1, max * 3 - 1)));
+    }
+  }
+  return [...selected].sort((a, b) => a - b).slice(0, max).map((i) => kfs[i]);
+}
+
+/** The exact reduced trajectory used by the FFmpeg crop expression. */
+export function compileCropKeyframes(keyframes: CropKeyframe[], maxKeyframes = 32): CropKeyframe[] {
+  return downsampleKeyframes(keyframes, maxKeyframes).filter(
+    (k, i, arr) => i === 0 || k.t > arr[i - 1].t + 1e-4
+  );
+}
+
+/** Evaluate the same hold/linear trajectory that is compiled for FFmpeg. */
+export function cropXAtTime(keyframes: CropKeyframe[], t: number): number {
+  if (keyframes.length === 0) return 0;
+  if (t <= keyframes[0].t) return keyframes[0].x;
+  for (let i = 0; i < keyframes.length - 1; i++) {
+    const a = keyframes[i];
+    const b = keyframes[i + 1];
+    if (t >= b.t) continue;
+    if (a.hold || b.t <= a.t) return a.x;
+    const p = Math.min(1, Math.max(0, (t - a.t) / (b.t - a.t)));
+    return a.x + (b.x - a.x) * p;
+  }
+  return keyframes[keyframes.length - 1].x;
+}
+
+/** Whether the active source trajectory is holding at this instant. */
+export function cropHoldAtTime(keyframes: CropKeyframe[], t: number): boolean {
+  if (keyframes.length === 0) return true;
+  if (t < keyframes[0].t) return true;
+  for (let i = keyframes.length - 1; i >= 0; i--) {
+    if (t >= keyframes[i].t) return keyframes[i].hold === true || i === keyframes.length - 1;
+  }
+  return true;
+}
+
+/** Reuse detection samples to prove how much of every face the crop retains. */
+export function evaluateCropCoverage(
+  samples: FaceSample[],
+  keyframes: CropKeyframe[],
+  srcW: number,
+  cropW: number
+): CropCoverageSample[] {
+  if (srcW <= 0 || cropW <= 0 || keyframes.length === 0) return [];
+  const out: CropCoverageSample[] = [];
+  for (const sample of samples) {
+    const faces = sample.faces?.length
+      ? sample.faces
+      : sample.left !== null && sample.left !== undefined && sample.right !== null && sample.right !== undefined
+        ? [{ left: sample.left, right: sample.right }]
+        : [];
+    if (faces.length === 0) continue;
+    const cropLeft = cropXAtTime(keyframes, sample.t);
+    const cropRight = cropLeft + cropW;
+    let minVisible = 1;
+    for (const face of faces) {
+      const left = Math.min(1, Math.max(0, face.left)) * srcW;
+      const right = Math.min(1, Math.max(0, face.right)) * srcW;
+      const width = right - left;
+      if (width <= 0) continue;
+      const visible = Math.max(0, Math.min(right, cropRight) - Math.max(left, cropLeft)) / width;
+      minVisible = Math.min(minVisible, visible);
+    }
+    out.push({
+      t: sample.t,
+      faceCount: faces.length,
+      minVisibleFraction: Number(minVisible.toFixed(4)),
+    });
   }
   return out;
 }
@@ -270,9 +365,7 @@ export function downsampleKeyframes(kfs: CropKeyframe[], max: number): CropKeyfr
  * one expression. Nested ifs stay shallow via keyframe downsampling.
  */
 export function renderCropXExpr(keyframes: CropKeyframe[], maxKeyframes = 32): string {
-  const kfs = downsampleKeyframes(keyframes, maxKeyframes).filter(
-    (k, i, arr) => i === 0 || k.t > arr[i - 1].t + 1e-4
-  );
+  const kfs = compileCropKeyframes(keyframes, maxKeyframes);
   if (kfs.length === 0) return "0";
   if (kfs.length === 1) return String(kfs[0].x);
   let expr = String(kfs[kfs.length - 1].x);
@@ -280,7 +373,7 @@ export function renderCropXExpr(keyframes: CropKeyframe[], maxKeyframes = 32): s
     const a = kfs[i];
     const b = kfs[i + 1];
     const dt = (b.t - a.t).toFixed(4);
-    const seg = `${a.x}+${b.x - a.x}*(t-${a.t.toFixed(3)})/${dt}`;
+    const seg = a.hold ? String(a.x) : `${a.x}+${b.x - a.x}*(t-${a.t.toFixed(3)})/${dt}`;
     expr = `if(lt(t,${b.t.toFixed(3)}),${seg},${expr})`;
   }
   return `if(lt(t,${kfs[0].t.toFixed(3)}),${kfs[0].x},${expr})`;
