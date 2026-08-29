@@ -92,6 +92,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
         reason: c.reason,
         recommended: c.recommended,
         reviewNote: c.reviewNote || undefined,
+        visualEvidence: c.visualEvidence,
       })),
       null,
       2

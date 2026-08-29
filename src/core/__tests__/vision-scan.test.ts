@@ -33,6 +33,14 @@ describe("pickVisualNotes", () => {
       { t: 300, energy: 8, note: "翻车瞬间" },
     ]);
   });
+  it("屏显文字随画面时刻线保留", () => {
+    expect(pickVisualNotes([{ t: 20, energy: 9, note: "计分板", visibleText: ["3 : 2"] }]))
+      .toEqual([{ t: 20, energy: 9, note: "计分板", visibleText: ["3 : 2"] }]);
+  });
+  it("静态低能量画面的清晰文字仍可进入选段证据", () => {
+    expect(pickVisualNotes([{ t: 20, energy: 2, note: "PPT", visibleText: ["转化率提升 32%"] }]))
+      .toEqual([{ t: 20, energy: 2, note: "PPT", visibleText: ["转化率提升 32%"] }]);
+  });
   it("条数封顶", () => {
     const many = Array.from({ length: 40 }, (_, i) => ({ t: i * 10, energy: 7, note: `画面${i}` }));
     expect(pickVisualNotes(many)).toHaveLength(SCAN_NOTES_MAX);

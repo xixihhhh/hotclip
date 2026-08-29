@@ -980,6 +980,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
         text: c.text,
         recommended: c.recommended,
         reviewNote: c.reviewNote,
+        visualEvidence: c.visualEvidence,
         scoreDims: c.scoreDims,
         teaser: c.teaser,
       },

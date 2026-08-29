@@ -341,7 +341,12 @@ export function renderSignals(signals: MediaSignals | undefined, zh: boolean): s
   }
   if (signals.visualNotes && signals.visualNotes.length > 0) {
     const notes = signals.visualNotes
-      .map((n) => `${fmtClock(n.t)} ${n.note || (zh ? "画面高能" : "visual peak")}(${n.energy}/10)`)
+      .map((n) => {
+        const text = n.visibleText?.length
+          ? (zh ? ` [屏显:${n.visibleText.join(" / ")}]` : ` [visible text: ${n.visibleText.join(" / ")}]`)
+          : "";
+        return `${fmtClock(n.t)} ${n.note || (zh ? "画面高能" : "visual peak")}(${n.energy}/10)${text}`;
+      })
       .join(zh ? ";" : "; ");
     lines.push(
       zh

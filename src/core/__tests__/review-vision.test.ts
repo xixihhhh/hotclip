@@ -55,6 +55,13 @@ describe("parseCandidateReview(复核输出解析)", () => {
     const v = parseCandidateReview('<think>嗯</think>好的:{"visual":12,"scene":"猫跳上键盘","match":false}');
     expect(v).toEqual({ visual: 10, scene: "猫跳上键盘", match: false });
   });
+  it("屏显文字只保留短字符串并结构化回流候选", () => {
+    const review = parseCandidateReview('{"visual":8,"scene":"价格牌特写","match":true,"visibleText":["¥19.9"," ¥19.9 ","限时"]}')!;
+    expect(review.visibleText).toEqual(["¥19.9", "限时"]);
+    const { candidates } = applyCandidateReviews([cand({ id: 1 })], new Map([[1, review]]));
+    expect(candidates[0].visualEvidence).toEqual({ score: 8, scene: "价格牌特写", match: true, visibleText: ["¥19.9", "限时"] });
+    expect(candidates[0].reason).toContain("屏显文字:¥19.9 / 限时");
+  });
   it("垃圾输出返回 null", () => {
     expect(parseCandidateReview("画面很精彩")).toBeNull();
     expect(parseCandidateReview('{"scene":"没分数"}')).toBeNull();

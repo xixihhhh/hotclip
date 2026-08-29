@@ -668,6 +668,9 @@ const browserMock: HotClipApi = {
       utility: id === 2 ? { score: 5, hits: ["十几块", "两块多"] } : undefined,
       recommended: id === 1,
       reviewNote: id === 3 ? "开场是问候语,前3秒没有钩子,独立可看性弱" : id === 2 ? "结尾截在逗号上,建议人工顺一下切点" : "",
+      visualEvidence: id === 1
+        ? { score: 9, scene: "主播近景展示纸巾吸水实验", match: true, visibleText: ["三层加厚", "¥2.9"] }
+        : undefined,
       // 质量门三档演示:1=建议发 2=需人审(规则层抓到硬伤) 3=弃
       gate: id === 1 ? "publish" : id === 2 ? "review" : "drop",
       gateNotes:

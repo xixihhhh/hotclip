@@ -257,6 +257,14 @@ export interface HighlightCandidate {
   recommended: boolean;
   /** One-line reviewer note (why weak / why strong); may be empty. */
   reviewNote: string;
+  /** Optional structured evidence from the already-enabled candidate vision review. */
+  visualEvidence?: {
+    score: number;
+    scene: string;
+    match: boolean;
+    /** Short strings confidently readable in sampled frames; empty/absent means uncertain. */
+    visibleText?: string[];
+  };
   /**
    * 质量门三档(v0.13):publish=建议发 / review=有硬伤需人工确认 / drop=不建议发。
    * 缺省 = 没过质量门(信号候选/复评失败/老数据),UI 按普通候选对待。

@@ -15,7 +15,7 @@
 import type { HighlightCandidate, LlmConfig } from "../../shared/api-types";
 import { composeContactSheetJpeg } from "../contact-sheet";
 import { stripThinkBlocks } from "./prefilter";
-import { visionChatComplete, VISION_CALL_TIMEOUT_MS, type VisionChatFn, type VisionConfig, type SheetComposer } from "./vision";
+import { sanitizeVisibleText, visionChatComplete, VISION_CALL_TIMEOUT_MS, type VisionChatFn, type VisionConfig, type SheetComposer } from "./vision";
 
 /** 每条候选的抽帧上限(一张 3×3 接触表 = 一次调用)。 */
 export const REVIEW_FRAMES_PER_CANDIDATE = 9;
@@ -40,6 +40,8 @@ export interface CandidateReview {
   scene: string;
   /** 画面与标题/钩子是否对得上(明显货不对板会标 false)。 */
   match: boolean;
+  /** 抽样帧中可以逐字确认的屏显文字;不确定时省略。 */
+  visibleText?: string[];
 }
 
 export interface ReviewVisionStats {
@@ -94,7 +96,8 @@ export function reviewSystemPrompt(cellCount: number): string {
     "visual:这条切片的画面精彩度 0-10(夸张表情/激烈动作/冲突互动/场面炸裂高分;静态口播/空镜/PPT 低分);",
     "scene:一句话说出画面最大的看点(≤30字,没有就写画面平淡之处);",
     "match:画面与给出的标题/钩子是否对得上(标题说的东西画面里根本没有 = false)。",
-    '严格只输出 JSON:{"visual":0-10,"scene":"…","match":true/false},不要输出其他内容。',
+    "visibleText:只抄所有帧里清晰可逐字确认的产品名/价格/比分/标题/PPT要点;不确定或只是推断就给空数组,最多5条。",
+    '严格只输出 JSON:{"visual":0-10,"scene":"…","match":true/false,"visibleText":["原样文字"]},不要输出其他内容。',
   ].join("\n");
 }
 
@@ -120,13 +123,15 @@ export function parseCandidateReview(content: string): CandidateReview | null {
   } catch {
     return null;
   }
-  const rec = obj as { visual?: unknown; scene?: unknown; match?: unknown };
+  const rec = obj as { visual?: unknown; scene?: unknown; match?: unknown; visibleText?: unknown };
   const visual = Number(rec.visual);
   if (!Number.isFinite(visual)) return null;
+  const visibleText = sanitizeVisibleText(rec.visibleText);
   return {
     visual: Math.max(0, Math.min(10, visual)),
     scene: typeof rec.scene === "string" ? rec.scene.trim().slice(0, 40) : "",
     match: rec.match !== false,
+    ...(visibleText.length > 0 ? { visibleText } : {}),
   };
 }
 
@@ -156,9 +161,20 @@ export function applyCandidateReviews(
     }
     const notes = [
       r.scene ? `画面复核 ${r.visual}/10:${r.scene}` : `画面复核 ${r.visual}/10`,
+      ...(r.visibleText?.length ? [`屏显文字:${r.visibleText.join(" / ")}`] : []),
       ...(r.match ? [] : ["⚠画面与标题可能货不对板"]),
     ].join(";");
-    return { ...c, score, reason: c.reason ? `${c.reason};${notes}` : notes };
+    return {
+      ...c,
+      score,
+      reason: c.reason ? `${c.reason};${notes}` : notes,
+      visualEvidence: {
+        score: r.visual,
+        scene: r.scene,
+        match: r.match,
+        ...(r.visibleText?.length ? { visibleText: r.visibleText } : {}),
+      },
+    };
   });
   out.sort((a, b) => b.score - a.score);
   return { candidates: out, stats: { reviewed: reviews.size, boosted, demoted } };

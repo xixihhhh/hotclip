@@ -117,6 +117,12 @@ export interface ExportClipSpec {
     text: string;
     recommended: boolean;
     reviewNote: string;
+    visualEvidence?: {
+      score: number;
+      scene: string;
+      match: boolean;
+      visibleText?: string[];
+    };
     scoreDims?: { hook: number; flow: number; value: number; trend: number };
     teaser?: string;
   };
@@ -1443,6 +1449,7 @@ export async function exportClips(
               tier: ac.tier,
               title: r.title,
               hook: spec?.meta?.hook,
+              visualContext: spec?.meta?.visualEvidence?.scene,
               zh: ac.zh !== false,
               baseUrl: ac.baseUrl,
               apiKey: ac.apiKey,

@@ -59,15 +59,25 @@ export function scanFrameBudget(durationSec: number): number {
  * 这是全场扫描回流给选段 LLM 的第九路证据(文字稿看不见的画面事件)。纯函数。
  */
 export function pickVisualNotes(
-  scored: Array<{ t: number; energy: number; note: string }>,
+  scored: Array<{ t: number; energy: number; note: string; visibleText?: string[] }>,
   energyMin = SCAN_NOTE_ENERGY_MIN,
   max = SCAN_NOTES_MAX
-): Array<{ t: number; energy: number; note: string }> {
-  return scored
-    .filter((s) => s.energy >= energyMin)
-    .sort((a, b) => b.energy - a.energy)
-    .slice(0, max)
-    .sort((a, b) => a.t - b.t);
+): Array<{ t: number; energy: number; note: string; visibleText?: string[] }> {
+  const byEnergy = [...scored].filter((s) => s.energy >= energyMin).sort((a, b) => b.energy - a.energy);
+  // 静态 PPT/价格牌的画面能量可能很低,但清晰屏显文字对知识/带货切片很关键。
+  // 给它们保留四分之一席位;没有文字证据时额度自动全部还给高能画面。
+  const textReserve = Math.min(max, Math.ceil(max / 4));
+  const byText = [...scored]
+    .filter((s) => (s.visibleText?.length ?? 0) > 0)
+    .sort((a, b) => b.energy - a.energy || a.t - b.t);
+  const selected = new Set<typeof scored[number]>();
+  for (const item of byEnergy.slice(0, Math.max(0, max - textReserve))) selected.add(item);
+  for (const item of byText.slice(0, textReserve)) selected.add(item);
+  for (const item of [...byEnergy, ...byText]) {
+    if (selected.size >= max) break;
+    selected.add(item);
+  }
+  return [...selected].slice(0, max).sort((a, b) => a.t - b.t);
 }
 
 export interface VisionConfig {
@@ -93,7 +103,7 @@ export interface VisionStats {
 export interface VisionOutcome {
   visualPeaks: TimeRange[];
   /** 画面时刻线(全场扫描档才有内容;快扫档为空数组)。 */
-  visualNotes: Array<{ t: number; energy: number; note: string }>;
+  visualNotes: Array<{ t: number; energy: number; note: string; visibleText?: string[] }>;
   stats: VisionStats;
 }
 
@@ -160,7 +170,7 @@ export function planFrameTimes(
 export function parseSheetVerdicts(
   content: string,
   cellCount: number
-): Array<{ i: number; energy: number; note: string }> | null {
+): Array<{ i: number; energy: number; note: string; visibleText?: string[] }> | null {
   const cleaned = stripThinkBlocks(content);
   const match = cleaned.match(/\{[\s\S]*\}/);
   if (!match) return null;
@@ -173,21 +183,40 @@ export function parseSheetVerdicts(
   const cells = (obj as { cells?: unknown }).cells;
   if (!Array.isArray(cells)) return null;
   const seen = new Set<number>();
-  const out: Array<{ i: number; energy: number; note: string }> = [];
+  const out: Array<{ i: number; energy: number; note: string; visibleText?: string[] }> = [];
   for (const c of cells) {
-    const rec = c as { i?: unknown; energy?: unknown; note?: unknown };
+    const rec = c as { i?: unknown; energy?: unknown; note?: unknown; visibleText?: unknown };
     const i = Number(rec.i);
     const energy = Number(rec.energy);
     if (!Number.isInteger(i) || i < 1 || i > cellCount || seen.has(i)) continue;
     if (!Number.isFinite(energy)) continue;
     seen.add(i);
+    const visibleText = sanitizeVisibleText(rec.visibleText);
     out.push({
       i,
       energy: Math.max(0, Math.min(10, energy)),
       note: typeof rec.note === "string" ? rec.note.trim().slice(0, 40) : "",
+      ...(visibleText.length > 0 ? { visibleText } : {}),
     });
   }
   return out.length > 0 ? out : null;
+}
+
+/** VLM 不是逐像素 OCR:只保留少量、短、去重后的逐字结果;不确定时宁缺毋滥。 */
+export function sanitizeVisibleText(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const text = item.replace(/\s+/g, " ").trim().slice(0, 40);
+    const key = text.toLocaleLowerCase();
+    if (!text || /^(无|没有|无文字|看不清|none|no text|n\/a|unknown)$/i.test(text) || seen.has(key)) continue;
+    seen.add(key);
+    out.push(text);
+    if (out.length >= 5) break;
+  }
+  return out;
 }
 
 /** 高能帧 → 时段(±pad),按间隔并段,夹进 [0, duration]。纯函数。 */
@@ -223,7 +252,8 @@ export function visionSystemPrompt(cellCount: number): string {
     "从左到右、从上到下编号 1 起(每格左上角有白色序号;多余黑格忽略)。",
     "逐格打分 energy 0-10:夸张表情/激烈肢体动作/多人冲突或互动高潮/醒目道具或文字梗/场面炸裂给高分;",
     "静态口播、空镜、PPT、普通对坐聊天给低分(0-3)。",
-    `严格只输出 JSON:{"cells":[{"i":1,"energy":0-10,"note":"≤15字画面描述"}…]},共 ${cellCount} 项,不要输出其他内容。`,
+    "visibleText:只抄画面里清晰可逐字确认的标题/产品名/价格/比分/PPT要点;不确定、太小或只是根据语境猜到就给空数组,每格最多3条;",
+    `严格只输出 JSON:{"cells":[{"i":1,"energy":0-10,"note":"≤15字画面描述","visibleText":["原样文字"]}…]},共 ${cellCount} 项,不要输出其他内容。`,
   ].join("\n");
 }
 
@@ -302,7 +332,7 @@ export async function collectVisionSignal(opts: {
   if (times.length === 0) return null;
   const llm: LlmConfig = { baseUrl: config.baseUrl, apiKey: config.apiKey || "ollama", model: config.model };
   const deadline = Date.now() + budgetMs;
-  const scored: Array<{ t: number; energy: number; note: string }> = [];
+  const scored: Array<{ t: number; energy: number; note: string; visibleText?: string[] }> = [];
   for (const group of chunkCells(times)) {
     if (signal?.aborted) throw new Error("aborted");
     if (Date.now() > deadline) break; // 预算耗尽,带着已得结果收工
@@ -314,7 +344,12 @@ export async function collectVisionSignal(opts: {
       const content = await chat(llm, visionSystemPrompt(group.length), sheetUserPrompt(group), sheet, combined);
       const verdicts = parseSheetVerdicts(content, group.length);
       if (verdicts) {
-        for (const v of verdicts) scored.push({ t: group[v.i - 1], energy: v.energy, note: v.note });
+        for (const v of verdicts) scored.push({
+          t: group[v.i - 1],
+          energy: v.energy,
+          note: v.note,
+          ...(v.visibleText ? { visibleText: v.visibleText } : {}),
+        });
       }
     } catch (e) {
       if (signal?.aborted) throw e; // 上游主动取消要中断整个检测

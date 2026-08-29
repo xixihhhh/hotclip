@@ -222,6 +222,7 @@ async function main(): Promise<void> {
       reason: c.reason,
       recommended: c.recommended,
       reviewNote: c.reviewNote || undefined,
+      visualEvidence: c.visualEvidence,
     }));
     if (args.json) {
       process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`);

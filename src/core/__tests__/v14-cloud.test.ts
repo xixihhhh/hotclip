@@ -29,6 +29,11 @@ describe("coverPrompt / coverRequestBody(封面双档)", () => {
     const en = coverPrompt("Why cheap tissues fail", undefined, false);
     expect(en).toContain('"Why cheap tissues fail"');
   });
+  it("候选画面复核的真实场景优先于纯文本钩子", () => {
+    const prompt = coverPrompt("标题", "主播说产品很好", true, "主播手持蓝色耳机近景");
+    expect(prompt).toContain("主播手持蓝色耳机近景");
+    expect(prompt).not.toContain("主播说产品很好");
+  });
   it("走量档 Seedream 用 size 竖版;精品档 Nano Banana 用 aspect_ratio 3:4 jpeg", () => {
     const vol = coverRequestBody("volume", "p");
     expect(vol.model).toBe(COVER_MODELS.volume);

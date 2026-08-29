@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   planFrameTimes,
   parseSheetVerdicts,
+  sanitizeVisibleText,
   sheetUserPrompt,
   visualPeakRanges,
   collectVisionSignal,
@@ -70,6 +71,15 @@ describe("planFrameTimes", () => {
 });
 
 describe("parseSheetVerdicts", () => {
+  it("保留短而去重的高置信屏显文字,忽略垃圾并封顶", () => {
+    const content = JSON.stringify({
+      cells: [{ i: 1, energy: 7, note: "产品特写", visibleText: ["  HotClip  ", "hotclip", "无文字", 3, "¥19.9", "A", "B", "C", "D"] }],
+    });
+    expect(parseSheetVerdicts(content, 1)).toEqual([
+      { i: 1, energy: 7, note: "产品特写", visibleText: ["HotClip", "¥19.9", "A", "B", "C"] },
+    ]);
+    expect(sanitizeVisibleText("not-an-array")).toEqual([]);
+  });
   it("解析标准九宫格批量输出", () => {
     const content = '{"cells":[{"i":1,"energy":8,"note":"两人激烈争论"},{"i":2,"energy":3,"note":"静态口播"}]}';
     expect(parseSheetVerdicts(content, 9)).toEqual([

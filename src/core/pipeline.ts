@@ -195,7 +195,15 @@ export async function autoClip(videoPath: string, cfg: AutoClipConfig): Promise<
           : sliceWords(transcript, c.startSec, c.endSec)
         : undefined,
       keywords: c.keywords,
-      meta: { hook: c.hook, score: c.score, reason: c.reason, text: c.text, recommended: c.recommended, reviewNote: c.reviewNote },
+      meta: {
+        hook: c.hook,
+        score: c.score,
+        reason: c.reason,
+        text: c.text,
+        recommended: c.recommended,
+        reviewNote: c.reviewNote,
+        visualEvidence: c.visualEvidence,
+      },
     })),
     outDir,
     {

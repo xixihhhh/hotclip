@@ -19,7 +19,7 @@ import {
 
 export const TIER0_EVIDENCE_CAPABILITY = "tier0-signals-v3";
 const SHOT_EVIDENCE_VERSION = "transnetv2-v1";
-const VISION_EVIDENCE_VERSION = "contact-sheet-v2";
+const VISION_EVIDENCE_VERSION = "contact-sheet-v3-visible-text";
 
 function finite(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
@@ -130,7 +130,8 @@ function validVisionOutcome(value: unknown): value is VisionOutcome {
   if (!value || typeof value !== "object") return false;
   const outcome = value as Partial<VisionOutcome>;
   if (!validRanges(outcome.visualPeaks) || !Array.isArray(outcome.visualNotes) || outcome.visualNotes.length > 64) return false;
-  if (!outcome.visualNotes.every((note) => note && typeof note === "object" && finite(note.t) && note.t >= 0 && finite(note.energy) && typeof note.note === "string" && note.note.length <= 80)) return false;
+  if (!outcome.visualNotes.every((note) => note && typeof note === "object" && finite(note.t) && note.t >= 0 && finite(note.energy) && typeof note.note === "string" && note.note.length <= 80 &&
+    (note.visibleText === undefined || (Array.isArray(note.visibleText) && note.visibleText.length <= 5 && note.visibleText.every((text) => typeof text === "string" && text.length <= 40))))) return false;
   const stats = outcome.stats as Partial<VisionOutcome["stats"]> | undefined;
   return !!stats && finite(stats.framesTotal) && finite(stats.framesScored) && finite(stats.peakCount);
 }

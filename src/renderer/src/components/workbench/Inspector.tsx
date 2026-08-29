@@ -8,6 +8,7 @@ import { useState } from "react";
 import {
   LuChevronLeft,
   LuChevronRight,
+  LuEye,
   LuPencil,
   LuPlay,
   LuQuote,
@@ -149,6 +150,32 @@ function DetailTab({
               {c.teaser}
             </p>
           )}
+        </div>
+      )}
+
+      {/* 视觉证据结构化展示:匹配状态有文字标签,不只靠颜色表达。 */}
+      {c.visualEvidence && (
+        <div className="flex flex-col gap-1.5">
+          <SectionLabel>{t("fieldVisualEvidence")}</SectionLabel>
+          <div className="rounded-lg border border-line/70 bg-white/[0.025] px-2.5 py-2 text-[11px] leading-relaxed">
+            <div className="flex items-start gap-1.5 text-fg/85">
+              <LuEye className="mt-0.5 h-3 w-3 shrink-0 text-ember/80" aria-hidden="true" />
+              <span className="min-w-0 flex-1">{c.visualEvidence.scene || t("visualSceneUnknown")}</span>
+              <span className="shrink-0 font-mono text-[10px] text-mut">{c.visualEvidence.score}/10</span>
+            </div>
+            <p className={`mt-1.5 text-[10.5px] ${c.visualEvidence.match ? "text-emerald-400" : "text-amber-400"}`}>
+              {c.visualEvidence.match ? t("visualMatch") : t("visualMismatch")}
+            </p>
+            {c.visualEvidence.visibleText?.length ? (
+              <div className="mt-1.5 flex flex-wrap gap-1" aria-label={t("visibleTextLabel")}>
+                {c.visualEvidence.visibleText.map((text) => (
+                  <span key={text} className="max-w-full truncate rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-fg/70" title={text}>
+                    {text}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </div>
       )}
 

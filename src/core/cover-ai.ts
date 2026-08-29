@@ -41,9 +41,13 @@ function clipHeadline(text: string, maxUnits = 32): string {
  * (原样渲染,放引号里防改写)、高对比撞色、真实直播感画面而非 AI 塑料感。
  * 标题超长时截断进画面(封面大字要少而大,长句是设计事故)。
  */
-export function coverPrompt(title: string, hook: string | undefined, zh: boolean): string {
+export function coverPrompt(title: string, hook: string | undefined, zh: boolean, visualContext?: string): string {
   const headline = clipHeadline(title.trim());
-  const scene = hook?.trim() ? hook.trim().slice(0, 60) : title.trim().slice(0, 40);
+  const scene = visualContext?.trim()
+    ? visualContext.trim().slice(0, 60)
+    : hook?.trim()
+      ? hook.trim().slice(0, 60)
+      : title.trim().slice(0, 40);
   // 真机实测(2026-08,Seedream):提示词里的元描述名词(封面/海报/直播切片)
   // 会被当成文字渲染进画面,否定式「不要出现其他文字」压不住——必须(1)描述里
   // 不出现这类名词,(2)用正向约束「画面中唯一的文字是标题」。
@@ -87,6 +91,8 @@ export async function generateAiCover(opts: {
   tier: CoverTier;
   title: string;
   hook?: string;
+  /** Candidate vision review's observed scene, preferred over transcript-only hook context. */
+  visualContext?: string;
   zh: boolean;
   baseUrl: string;
   apiKey: string;
@@ -95,7 +101,7 @@ export async function generateAiCover(opts: {
 }): Promise<boolean> {
   const mediaBase = atlasMediaBase(opts.baseUrl);
   if (!mediaBase || !opts.apiKey) return false;
-  const url = await generateMedia("generateImage", coverRequestBody(opts.tier, coverPrompt(opts.title, opts.hook, opts.zh)), {
+  const url = await generateMedia("generateImage", coverRequestBody(opts.tier, coverPrompt(opts.title, opts.hook, opts.zh, opts.visualContext)), {
     mediaBase,
     apiKey: opts.apiKey,
     timeoutMs: COVER_TIMEOUT_MS,

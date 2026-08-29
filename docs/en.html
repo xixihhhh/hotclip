@@ -31,11 +31,11 @@
   "name": "HotClip",
   "operatingSystem": "Windows, macOS, Linux",
   "applicationCategory": "MultimediaApplication",
-  "softwareVersion": "0.22.0",
+  "softwareVersion": "0.23.0",
   "inLanguage": ["en", "zh-CN"],
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
   "description": "Free, open-source, local-first AI video clipper: turn long videos and livestream replays into 9:16 shorts with AI highlight detection, dynamic word-level captions and comfort-first per-shot auto-reframe. No credits or watermark.",
-  "featureList": "Nine-channel AI highlight detection with lightweight motion evidence, virality scores and reasoning, reusable local multimodal evidence shared by desktop/CLI/MCP/automation, motion timeline, live-chat heat evidence, comfort-first 9:16 composition with single/group shot locks and lost-subject recovery, optional clip-local adaptive picture finish, frozen-frame and subject-crop render QA, dynamic word-level captions, word-timing provenance and focused review, caption quality lint, filler removal, transcript-timed sensitive-term muting, multi-project workspace, reversible editing and professional shortcuts, restart-safe recovery, durable automation queue, bounded base-render cache, keyframe-safe H.264 copy, desktop health diagnostics, publishing feedback ledger, local A/B experiments, topic-series packs, per-platform publish packs, SRT and bilingual captions",
+  "featureList": "Nine-channel AI highlight detection with lightweight motion evidence, virality scores and reasoning, optional visual scans that extract high-confidence on-screen text and ground title/cover consistency, reusable local multimodal evidence shared by desktop/CLI/MCP/automation, motion timeline, live-chat heat evidence, comfort-first 9:16 composition with single/group shot locks and lost-subject recovery, optional clip-local adaptive picture finish, frozen-frame and subject-crop render QA, dynamic word-level captions, word-timing provenance and focused review, caption quality lint, filler removal, transcript-timed sensitive-term muting, multi-project workspace, reversible editing and professional shortcuts, restart-safe recovery, durable automation queue, bounded base-render cache, keyframe-safe H.264 copy, desktop health diagnostics, publishing feedback ledger, local A/B experiments, topic-series packs, per-platform publish packs, SRT and bilingual captions",
   "url": "https://xixihhhh.github.io/hotclip/en.html",
   "downloadUrl": "https://github.com/xixihhhh/hotclip/releases/latest",
   "screenshot": "https://xixihhhh.github.io/hotclip/screenshots/04-highlights.png",
@@ -136,7 +136,7 @@
   </div>
   <p class="note">No Python, no Docker, no account — a real desktop app you double-click</p>
   <div class="meta-badges">
-    <span>Latest <b id="gh-version">v0.22.0</b></span>
+    <span>Latest <b id="gh-version">v0.23.0</b></span>
     <span>GitHub <b id="gh-stars">★</b></span>
     <span>Windows · macOS · Linux</span>
   </div>
@@ -304,6 +304,7 @@
       </div>
     </div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-caption"/></svg></span><h3>Dynamic captions, auto-burned</h3><p>Word-level lighting and semantic line breaks; <b>SRT export</b> and bilingual captions one toggle away.</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg></span><h3>Words in the picture count as evidence</h3><p>The optional vision pass also captures clear product names, prices, scores and slide facts in the same call; <b>uncertainty stays blank</b>, so valuable static frames are not discarded as low-energy.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg></span><h3>See exactly where caption timing needs review</h3><p>Native, aligned, interpolated and edited timing stays visible; filter the transcript to review ranges, while final clips check <b>overlap, reading speed and flashes</b> in the receipt.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-reframe"/></svg></span><h3>9:16 auto-reframe</h3><p><b>Comfort-first composition</b>: safe shots truly hold until the next cut, follow only when needed, never pan through removed jump-cut time, and recover after sustained loss.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg></span><h3>Finish only what needs it</h3><p>Optional adaptive finishing measures retained frames and makes a <b>hard-capped subtle correction</b> only when clearly dark, flat or oversaturated; healthy footage stays untouched and monochrome is never force-coloured.</p></div>
