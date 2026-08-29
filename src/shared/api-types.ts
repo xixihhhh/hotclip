@@ -449,6 +449,8 @@ export interface ExportOptions {
   cutRetakes?: boolean;
   /** 自动运镜:竖屏成片叠一层缓慢推拉镜头,固定机位不再死板。 */
   autoZoom?: boolean;
+  /** 智能画面校正:按最终保留画面测量并克制修正明暗/反差/饱和度;默认关闭。 */
+  autoEnhance?: boolean;
   /** 音效打点:whoosh 卡拼接缝/ding 卡情绪峰/pop 卡开场钩子,每条 ≤3 个。 */
   sfx?: boolean;
   /** BGM 文件路径:循环铺满全片、对人声闪避混入;空/缺省 = 不加。 */

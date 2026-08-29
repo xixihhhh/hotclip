@@ -31,10 +31,11 @@ const USAGE = `HotClip CLI —— 本地 AI 切片,素材不出电脑
       --reference: 丢一条想对标的爆款切片,实测其节奏(时长/语速/镜头/钩子)
       生成画像,选段向对标节奏靠拢(偏好不是硬约束)
 
-  pnpm cli clip <视频路径> [--max-clips N] [--reference 对标视频] [--no-vertical] [--no-captions] [--out 目录] [--json]
+  pnpm cli clip <视频路径> [--max-clips N] [--reference 对标视频] [--no-vertical] [--no-captions] [--auto-enhance] [--out 目录] [--json]
       全托管一条龙:转写 → 找爆点 → 出片(竖屏/字幕/跳剪/响度默认全开)
       + 出片质检(黑屏/长静音/响度/时长/切点/平台违禁词复核),报告进 clips.json
       + 可自愈告警自动修复(首尾静音黑屏裁边/响度重归一,修复记录进 qa.repair)
+      --auto-enhance: 本地测量保留画面,仅在明显偏暗/灰/过饱和时克制校正(默认关闭)
 
   pnpm cli doctor [--download]
       环境自检:ffmpeg/模型安装状态/LLM 端点/磁盘/缓存,给出修复建议
@@ -59,6 +60,7 @@ export interface CliArgs {
   maxClips?: number;
   vertical: boolean;
   captions: boolean;
+  autoEnhance: boolean;
   outDir?: string;
   /** 对标爆款视频路径(参考画像驱动选段)。 */
   referencePath?: string;
@@ -72,11 +74,12 @@ export function parseCliArgs(argv: string[]): CliArgs {
   if (!command || command === "-h" || command === "--help") {
     throw new Error(USAGE);
   }
-  const args: CliArgs = { command, videoPath: "", vertical: true, captions: true, json: false, download: false };
+  const args: CliArgs = { command, videoPath: "", vertical: true, captions: true, autoEnhance: false, json: false, download: false };
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
     if (a === "--no-vertical") args.vertical = false;
     else if (a === "--no-captions") args.captions = false;
+    else if (a === "--auto-enhance") args.autoEnhance = true;
     else if (a === "--json") args.json = true;
     else if (a === "--download") args.download = true;
     else if (a === "--max-clips") {
@@ -243,6 +246,7 @@ async function main(): Promise<void> {
       maxClips: args.maxClips,
       vertical: args.vertical,
       captions: args.captions,
+      autoEnhance: args.autoEnhance,
       outDir: args.outDir,
       reference,
       reviewMemory: await loadReviewMemory(userDataDir()),

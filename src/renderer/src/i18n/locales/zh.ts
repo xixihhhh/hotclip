@@ -318,6 +318,8 @@ export const zh = {
     genreCustomHint: "写了就盖过内置判据。用大白话描述你要什么样的片段即可",
     optAutoZoom: "自动运镜",
     optAutoZoomHint: "固定机位的竖屏成片叠一层缓慢推拉,画面不再死板;幅度克制不裁构图,素材本身运动多的可以关掉",
+    optAutoEnhance: "智能画面校正",
+    optAutoEnhanceHint: "只测最终保留的画面，明显偏暗、发灰或过饱和时才克制修正；正常素材不改，不上传、不下载模型，默认关闭",
     optLoudness: "响度标准化",
     optLoudnessHint: "把音量统一到 -14 LUFS 社媒标准(抖音/TikTok/视频号 同款),整批切片音量一致、不再忽大忽小或太小声",
     optDenoise: "降噪",

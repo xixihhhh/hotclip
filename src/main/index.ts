@@ -1006,6 +1006,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       cleanFillers,
       cutRetakes,
       autoZoom: Boolean(opts.autoZoom),
+      autoEnhance: Boolean(opts.autoEnhance),
       // 音效/BGM/品类分档:声音设计层(见 core/sound-design.ts 与 genre.ts)
       sfx: Boolean(opts.sfx),
       bgmPath: typeof opts.bgmPath === "string" && opts.bgmPath.trim() ? opts.bgmPath : undefined,

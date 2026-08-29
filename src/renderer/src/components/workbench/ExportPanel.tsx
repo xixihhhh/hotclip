@@ -144,6 +144,12 @@ export function ExportPanel({
               disabled={!prefs.vertical}
               onToggle={() => setPref({ autoZoom: !prefs.autoZoom })}
             />
+            <SwitchRow
+              label={th("optAutoEnhance")}
+              hint={th("optAutoEnhanceHint")}
+              on={prefs.autoEnhance}
+              onToggle={() => setPref({ autoEnhance: !prefs.autoEnhance })}
+            />
             <button
               type="button"
               onClick={onOpenBrand}

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildCutArgs, buildJumpCutArgs, buildVideoFilters, escapeFilterPath, metadataArgs, parseFfmpegProgress, edgeFadeFilters, LOUDNORM_FILTER, LOUDNORM_OUT_RATE, DENOISE_FILTER, EDGE_FADE_SEC } from "../cut";
+import type { VisualEnhancePlan } from "../visual-enhance";
 
 describe("buildCutArgs", () => {
   it("accurate mode: fast seek before -i, re-encode, faststart", () => {
@@ -52,6 +53,49 @@ describe("buildCutArgs", () => {
     const vf = buildVideoFilters({ vertical: true, subtitlePath: "/tmp/a.ass" });
     expect(vf[vf.length - 1]).toBe("subtitles=filename='/tmp/a.ass'");
     expect(vf[0]).toContain("crop=");
+  });
+
+  it("adaptive picture finish runs after geometry and before subtitles", () => {
+    const visualEnhance: VisualEnhancePlan = {
+      applied: true,
+      sampleCount: 8,
+      measurements: { lumaLow: 20, lumaAvg: 55, lumaHigh: 105, saturation: 16 },
+      adjustments: { brightness: 0.012, contrast: 1.08, saturation: 1.08, gamma: 1.08 },
+      reasons: ["underexposed", "flat", "muted"],
+    };
+    const vf = buildVideoFilters({ vertical: true, visualEnhance, subtitlePath: "/tmp/a.ass" });
+    expect(vf.findIndex((filter) => filter.startsWith("eq="))).toBeGreaterThan(vf.findIndex((filter) => filter.startsWith("scale=")));
+    expect(vf.findIndex((filter) => filter.startsWith("eq="))).toBeLessThan(vf.findIndex((filter) => filter.startsWith("subtitles=")));
+  });
+
+  it("active finish disables copy while a neutral plan preserves it", () => {
+    const active: VisualEnhancePlan = {
+      applied: true,
+      sampleCount: 8,
+      measurements: { lumaLow: 20, lumaAvg: 55, lumaHigh: 105, saturation: 16 },
+      adjustments: { brightness: 0.012, contrast: 1.08, saturation: 1.08, gamma: 1.08 },
+      reasons: ["underexposed"],
+    };
+    const neutral: VisualEnhancePlan = { ...active, applied: false, adjustments: { brightness: 0, contrast: 1, saturation: 1, gamma: 1 }, reasons: [] };
+    expect(buildCutArgs("/i.mp4", "/o.mp4", 0, 5, { mode: "copy", visualEnhance: active })).toContain("libx264");
+    expect(buildCutArgs("/i.mp4", "/o.mp4", 0, 5, { mode: "copy", visualEnhance: neutral })).toContain("make_zero");
+  });
+
+  it("applies the same finish to the concatenated jump-cut picture", () => {
+    const visualEnhance: VisualEnhancePlan = {
+      applied: true,
+      sampleCount: 8,
+      measurements: { lumaLow: 20, lumaAvg: 55, lumaHigh: 105, saturation: 16 },
+      adjustments: { brightness: 0.012, contrast: 1.08, saturation: 1.08, gamma: 1.08 },
+      reasons: ["underexposed"],
+    };
+    const args = buildJumpCutArgs("/i.mp4", "/o.mp4", 0, [{ startSec: 0, endSec: 2 }, { startSec: 3, endSec: 5 }], {
+      visualEnhance,
+      subtitlePath: "/tmp/a.ass",
+    });
+    const graph = args[args.indexOf("-filter_complex") + 1];
+    expect(graph).toContain("[vc]eq=brightness=");
+    expect(graph.indexOf("eq=brightness=")).toBeLessThan(graph.indexOf("subtitles=filename="));
   });
 
   it("fontsDir: rides along as the subtitles filter's fontsdir", () => {

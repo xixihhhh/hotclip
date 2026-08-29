@@ -7,6 +7,11 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { resolveFfmpegPath } from "./binaries";
+import {
+  compactVisualSignalSamples,
+  parseVisualSignalSamples,
+  type VisualSignalSample,
+} from "./visual-enhance";
 
 const execFileAsync = promisify(execFile);
 
@@ -32,6 +37,8 @@ export interface MediaSignals {
   motionSamples?: MotionSample[];
   /** Strong, well-spaced source timestamps that can guide later visual sampling. */
   activityKeyframes?: MotionSample[];
+  /** Compact per-second luma/saturation evidence for opt-in adaptive finishing. */
+  visualSamples?: VisualSignalSample[];
   /**
    * ebur128 原始采样(t + momentary dB)。采集时顺手保留——工作台时间轴要画
    * 全场响度曲线,不留的话同一条 2 小时音轨得再解码一遍。仅主进程内使用,
@@ -254,7 +261,17 @@ export async function collectSignals(inputPath: string, signal?: AbortSignal): P
     run(["-hide_banner", "-i", inputPath, "-vn", "-filter_complex", "ebur128", "-f", "null", "-"]),
     run([
       "-hide_banner", "-i", inputPath, "-an",
-      "-vf", "fps=4,scale=160:-2,select='gte(scene,0)',metadata=print:key=lavfi.scene_score",
+      "-vf", [
+        "fps=4",
+        "scale=160:-2",
+        "select='gte(scene,0)'",
+        "signalstats",
+        "metadata=print:key=lavfi.scene_score",
+        "metadata=print:key=lavfi.signalstats.YLOW",
+        "metadata=print:key=lavfi.signalstats.YAVG",
+        "metadata=print:key=lavfi.signalstats.YHIGH",
+        "metadata=print:key=lavfi.signalstats.SATAVG",
+      ].join(","),
       "-f", "null", "-",
     ]),
   ]);
@@ -262,12 +279,14 @@ export async function collectSignals(inputPath: string, signal?: AbortSignal): P
   const loudSamples = parseEbur128(loudErr);
   const frameSamples = parseSceneScoreSamples(sceneErr);
   const compactMotion = compactMotionSamples(frameSamples);
+  const visualSamples = compactVisualSignalSamples(parseVisualSignalSamples(sceneErr));
   return {
     loudPeaks: loudnessPeaks(loudSamples).slice(0, MAX_RANGES),
     cutDense: cutDensity(frameSamples.filter((sample) => sample.score > 0.3).map((sample) => sample.t)).slice(0, MAX_RANGES),
     motionPeaks: motionPeakRanges(frameSamples, frameSamples.at(-1)?.t ?? 0),
     motionSamples: compactMotion,
     activityKeyframes: activityKeyframes(frameSamples),
+    visualSamples,
     loudnessSamples: loudSamples,
   };
 }

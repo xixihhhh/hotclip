@@ -9,8 +9,14 @@ describe("parseCliArgs (CLI 参数解析)", () => {
       videoPath: "/v/直播回放.mp4",
       vertical: true,
       captions: true,
+      autoEnhance: false,
       json: false,
     });
+  });
+
+  it("--auto-enhance is explicit and defaults off", () => {
+    expect(parseCliArgs(["clip", "/v/a.mp4"]).autoEnhance).toBe(false);
+    expect(parseCliArgs(["clip", "/v/a.mp4", "--auto-enhance"]).autoEnhance).toBe(true);
   });
 
   it("开关与带值选项:--no-vertical / --no-captions / --max-clips / --out / --json", () => {

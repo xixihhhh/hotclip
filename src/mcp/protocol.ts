@@ -39,6 +39,7 @@ export const MCP_TOOLS: McpToolDef[] = [
         maxClips: { type: "number", description: "最多导出几条(1-12,默认 6)" },
         vertical: { type: "boolean", description: "竖屏 9:16 输出(默认 true)" },
         captions: { type: "boolean", description: "烧录动态字幕(默认 true)" },
+        autoEnhance: { type: "boolean", description: "本地测量最终保留画面并克制修正明显偏暗/灰/过饱和素材(默认 false;不下载模型)" },
         outDir: { type: "string", description: "输出目录(默认源视频旁 <名>-hotclip/)" },
         referencePath: { type: "string", description: "对标爆款视频的本地路径(可选):实测其时长/语速/句长/镜头频率/钩子形态,选段向对标节奏靠拢(偏好不是硬约束);分析失败按无参考继续" },
       },

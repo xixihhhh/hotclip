@@ -29,6 +29,7 @@ export function buildRenderToggles(opts: {
     cleanFillers: prefs.cleanFillers,
     cutRetakes: prefs.cutRetakes,
     autoZoom: prefs.autoZoom,
+    autoEnhance: prefs.autoEnhance,
     sfx: prefs.sfx,
     bgmPath: prefs.bgmPath || undefined,
     genreId: prefs.genreId,

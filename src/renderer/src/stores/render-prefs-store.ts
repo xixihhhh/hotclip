@@ -23,6 +23,8 @@ export interface RenderPrefs {
   cleanFillers: boolean;
   cutRetakes: boolean;
   autoZoom: boolean;
+  /** 智能画面校正:仅在测量证据充分且明显偏暗/灰/过饱和时克制修正。 */
+  autoEnhance: boolean;
   /** 音效打点:whoosh 卡拼接缝/ding 卡情绪峰/pop 卡开场钩子。 */
   sfx: boolean;
   /** BGM 文件路径;空串 = 不加 BGM。 */
@@ -90,6 +92,7 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   cleanFillers: true,
   cutRetakes: false, // 剪掉的是完整一句话,误伤代价高——默认关,由用户按素材开
   autoZoom: false, // 运镜是风格化选择(素材本身有运动时会打架),默认关
+  autoEnhance: false, // 像素会变化且素材差异大,默认关由用户显式开启
   sfx: false, // 音效改变成片听感,默认关由用户选择(打点规则见 sound-design.ts)
   bgmPath: "", // BGM 是强风格选择且涉及用户自备素材,默认不加
   trimUi: true,

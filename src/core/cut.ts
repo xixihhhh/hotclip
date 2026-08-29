@@ -15,6 +15,7 @@ import { resolveFfmpegPath } from "./binaries";
 import { toFfmpegTime } from "./time";
 import { buildZoomFilter } from "./autozoom";
 import { videoEncoderArgs, type VideoEncoder } from "./video-encoder";
+import { visualEnhanceFilter, type VisualEnhancePlan } from "./visual-enhance";
 
 /**
  * Social loudness target (EBU R128): -14 LUFS integrated, -1.5 dBTP true-peak
@@ -93,6 +94,8 @@ export interface CutOptions {
    * zoompan 不传 fps 会把素材重采样到 25fps。字段齐全才生效。
    */
   autoZoom?: { durationSec: number; fps: number; emphasisAtSec?: number[] };
+  /** Conservative source-measured picture correction; neutral/skipped plans add no filter. */
+  visualEnhance?: VisualEnhancePlan | null;
   /** Burn an .ass karaoke subtitle file via libass. Requires re-encode. */
   subtitlePath?: string;
   /** Directory holding bundled fonts for libass (subtitles filter fontsdir). */
@@ -206,6 +209,7 @@ export function escapeFilterPath(p: string): string {
 /** Compose the -vf chain for reframing + caption burn-in. Empty = no filter. */
 export function buildVideoFilters(options: CutOptions): string[] {
   const filters: string[] = [];
+  const enhance = visualEnhanceFilter(options.visualEnhance);
   // 自动运镜:zoompan 顶替 scale 那一步(它自己出目标尺寸);返回 null 就照旧
   const zoom = options.autoZoom
     ? buildZoomFilter(options.autoZoom.durationSec, options.autoZoom.fps, 1080, 1920, {
@@ -217,6 +221,7 @@ export function buildVideoFilters(options: CutOptions): string[] {
     const p = options.trackPlan;
     filters.push(`crop=w=${p.cropW}:h=${p.cropH}:x='${p.cropXExpr}':y=${p.cropY}`);
     filters.push(...toVertical);
+    if (enhance) filters.push(enhance);
     if (options.subtitlePath) {
       const fonts = options.fontsDir ? `:fontsdir='${escapeFilterPath(options.fontsDir)}'` : "";
       filters.push(`subtitles=filename='${escapeFilterPath(options.subtitlePath)}'${fonts}`);
@@ -233,6 +238,7 @@ export function buildVideoFilters(options: CutOptions): string[] {
     // Center crop to exactly 9:16 (whichever axis binds), then normalize size.
     filters.push("crop=w='min(iw,ih*9/16)':h='min(ih,iw*16/9)'", ...toVertical);
   }
+  if (enhance) filters.push(enhance);
   if (options.subtitlePath) {
     const fonts = options.fontsDir ? `:fontsdir='${escapeFilterPath(options.fontsDir)}'` : "";
     filters.push(`subtitles=filename='${escapeFilterPath(options.subtitlePath)}'${fonts}`);

@@ -48,7 +48,7 @@ import {
 import { detectUiCrop, type UiCrop } from "./uicrop";
 import { generateCropPlan, renderCropXExpr, mapToOutputTime, remapCropKeyframes } from "./reframe";
 import { snapClipToShots, SNAP_MAX_OUT_SEC } from "./shots";
-import { detectShotBoundariesEvidence } from "./media-evidence";
+import { collectSignalsEvidence, detectShotBoundariesEvidence } from "./media-evidence";
 import { buildCaptionAss, VERTICAL_LAYOUT, HORIZONTAL_LAYOUT, type CaptionStyle } from "./subtitle";
 import { lintSubtitleTimeline } from "./subtitle-quality";
 import { buildOverlayPayload, isWebCaptionStyle, type OverlayRenderFn, type WebCaptionStyle } from "./caption-overlay/payload";
@@ -73,6 +73,7 @@ import {
   type FileFingerprint,
 } from "./render-cache";
 import { canCopyVideoStream, probeVideoKeyframes } from "./smart-render";
+import { planVisualEnhancement, type VisualEnhancePlan, type VisualSignalSample } from "./visual-enhance";
 
 export interface ExportClipSpec {
   id: number;
@@ -240,6 +241,8 @@ export interface ClipRenderOutcome {
   loudnessNormalized: boolean;
   /** True 表示走了基础降噪链(高通×2+afftdn)。 */
   denoised: boolean;
+  /** Clip-local measured picture correction; null when disabled. */
+  visualEnhance?: VisualEnhancePlan | null;
   /** Number of transcript-timed sensitive-language windows muted. */
   sensitiveMutes?: number;
   /** 高潮前置迷你片时长(秒);没开/钩子定位失败/被守卫跳过为 null。 */
@@ -319,6 +322,8 @@ export interface ExportRenderOptions {
   normalizeLoudness?: boolean;
   /** 基础降噪:压直播回放常见底噪/电流声(高通×2+afftdn,先于响度标准化)。 */
   denoise?: boolean;
+  /** Conservative clip-local exposure, contrast and saturation correction. */
+  autoEnhance?: boolean;
   /** User-controlled terms muted at transcript word timestamps. */
   muteTerms?: string[];
   /** 精华合集:导出的切片按时间序流复制拼成一支合集(≥2 条才生成)。 */
@@ -493,6 +498,19 @@ export async function exportClips(
   const renderCacheReady = Boolean(
     options.renderCacheDir && cacheSource && (!watermark || cacheWatermark)
   );
+  let visualSamples: VisualSignalSample[] = [];
+  if (options.autoEnhance && !audioOnly) {
+    const signals = await collectSignalsEvidence({
+      videoPath: inputPath,
+      evidenceDir: options.evidenceCacheDir,
+      signal,
+      source: cacheSource ?? undefined,
+    }).catch((error) => {
+      if (signal?.aborted) throw error;
+      return null;
+    });
+    visualSamples = signals?.visualSamples ?? [];
+  }
 
   // 多画幅:开「+横屏版」时进度总数翻倍(第二遍横屏在主循环后递归跑)。
   // 竖屏源裁不出可用的 16:9,原画幅本来就是竖的——直接跳过横屏版。
@@ -641,6 +659,10 @@ export async function exportClips(
       if (!plan && stitched) {
         plan = planFromPieces(pieces);
       }
+      const baseSegments = plan?.segments ?? [{ startSec: clip.startSec, endSec: clip.endSec }];
+      const visualEnhance = options.autoEnhance
+        ? planVisualEnhancement(visualSamples, baseSegments)
+        : null;
       const captionWords = plan ? plan.words : clip.words;
       const captionShift = plan ? 0 : clip.startSec;
 
@@ -780,11 +802,12 @@ export async function exportClips(
           ? mapSensitiveRanges(clip.words, options.muteTerms, plan?.segments ?? [{ startSec: clip.startSec, endSec: clip.endSec }])
           : undefined;
       const cutOptions: CutOptions = trackPlan
-        ? { trackPlan, autoZoom, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, muteRanges: sensitiveMuteRanges, watermark, metadata: aigcMeta, crf: options.crf, encoder: videoEncoder }
+        ? { trackPlan, autoZoom, visualEnhance, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, muteRanges: sensitiveMuteRanges, watermark, metadata: aigcMeta, crf: options.crf, encoder: videoEncoder }
         : {
             uiCrop,
             vertical: options.vertical,
             autoZoom,
+            visualEnhance,
             subtitlePath,
             fontsDir: subtitlePath ? options.fontsDir : undefined,
             normalizeLoudness: options.normalizeLoudness,
@@ -795,7 +818,6 @@ export async function exportClips(
             crf: options.crf,
             encoder: videoEncoder,
           };
-      const baseSegments = plan?.segments ?? [{ startSec: clip.startSec, endSec: clip.endSec }];
       const baseKind = audioOnly ? "audiogram" : baseSegments.length > 1 ? "jump-cut" : "cut";
       const cacheKey = renderCacheReady
         ? createRenderCacheKey({
@@ -807,6 +829,7 @@ export async function exportClips(
               uiCrop,
               vertical: options.vertical,
               autoZoom,
+              visualEnhance,
               trackPlan,
               subtitleSha256: subtitleHash,
               fontsDir: subtitlePath ? options.fontsDir : undefined,
@@ -996,9 +1019,12 @@ export async function exportClips(
                 miniTrack = { cropXExpr: renderCropXExpr(cp.keyframes), cropW: cp.cropW, cropH: cp.cropH, cropY: cp.cropY };
               }
             }
+            const miniVisualEnhance = options.autoEnhance
+              ? planVisualEnhancement(visualSamples, [{ startSec: coPlan.startSec, endSec: coPlan.endSec }])
+              : null;
             const miniCutOptions = miniTrack
-              ? { trackPlan: miniTrack, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, muteRanges: options.muteTerms && clip.words ? mapSensitiveRanges(clip.words, options.muteTerms, [{ startSec: coPlan.startSec, endSec: coPlan.endSec }]) : undefined, watermark, crf: options.crf, encoder: videoEncoder }
-              : { uiCrop, vertical: options.vertical, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, muteRanges: options.muteTerms && clip.words ? mapSensitiveRanges(clip.words, options.muteTerms, [{ startSec: coPlan.startSec, endSec: coPlan.endSec }]) : undefined, watermark, crf: options.crf, encoder: videoEncoder };
+              ? { trackPlan: miniTrack, visualEnhance: miniVisualEnhance, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, muteRanges: options.muteTerms && clip.words ? mapSensitiveRanges(clip.words, options.muteTerms, [{ startSec: coPlan.startSec, endSec: coPlan.endSec }]) : undefined, watermark, crf: options.crf, encoder: videoEncoder }
+              : { uiCrop, vertical: options.vertical, visualEnhance: miniVisualEnhance, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, muteRanges: options.muteTerms && clip.words ? mapSensitiveRanges(clip.words, options.muteTerms, [{ startSec: coPlan.startSec, endSec: coPlan.endSec }]) : undefined, watermark, crf: options.crf, encoder: videoEncoder };
             await rename(outPath, bodyPath);
             await cutClip(inputPath, miniPath, coPlan.startSec, coPlan.endSec, miniCutOptions, signal);
             // 硬切拼接(通行做法);AIGC 隐式标识补到最终容器上
@@ -1244,6 +1270,7 @@ export async function exportClips(
         stitchedPieces: stitched ? pieces.length : 0,
         loudnessNormalized: Boolean(options.normalizeLoudness),
         denoised: Boolean(options.denoise),
+        visualEnhance,
         sensitiveMutes: sensitiveMuteRanges?.length ?? 0,
         coldOpenSec,
         flashForward: flashForwardUsed,
@@ -1449,6 +1476,7 @@ export async function exportClips(
         openingHook: Boolean(options.openingHook),
         normalizeLoudness: Boolean(options.normalizeLoudness),
         denoise: Boolean(options.denoise),
+        autoEnhance: Boolean(options.autoEnhance),
         coldOpen: Boolean(options.coldOpen),
         flashForward: Boolean(options.flashForward),
         compilation: compilationFile,

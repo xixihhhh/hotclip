@@ -366,6 +366,8 @@ export const en = {
     genreCustomHint: "Overrides the built-in criteria. Plain language describing the clips you want",
     optAutoZoom: "Auto zoom",
     optAutoZoomHint: "Adds a slow push-in/pull-back to vertical clips so locked-off shots stop feeling static; the move is subtle and won't crop your framing — turn it off for already-moving footage",
+    optAutoEnhance: "Adaptive picture finish",
+    optAutoEnhanceHint: "Measures only retained frames and makes a restrained correction when footage is clearly dark, flat, or oversaturated. Healthy footage stays untouched; local, model-free, and off by default.",
     optLoudness: "Match loudness",
     optLoudnessHint: "Normalize audio to the -14 LUFS social target (TikTok/Reels/Shorts) so a batch of clips plays at one consistent, not-too-quiet volume",
     optDenoise: "Denoise",

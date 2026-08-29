@@ -110,6 +110,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
       maxClips: clampClips(args.maxClips),
       vertical: args.vertical !== false,
       captions: args.captions !== false,
+      autoEnhance: args.autoEnhance === true,
       outDir: typeof args.outDir === "string" && args.outDir.trim() ? args.outDir : undefined,
       fontsDir: join(process.cwd(), "resources", "fonts"),
       glossary: await loadGlossary(userDataDir()),

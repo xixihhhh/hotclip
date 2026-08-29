@@ -13,7 +13,7 @@ const STORAGE_KEY = "hotclip-schemes";
 
 /** 进方案快照的字段(白名单;新增开关默认不进,想进来显式加)。 */
 export const SCHEME_KEYS = [
-  "vertical", "alsoLandscape", "trimUi", "titleCard", "autoZoom",
+  "vertical", "alsoLandscape", "trimUi", "titleCard", "autoZoom", "autoEnhance",
   "jumpCut", "keepBreath", "cleanFillers", "cutRetakes", "preciseAlign",
   "openingHook", "coldOpen", "flashForward",
   "normalizeLoudness", "denoise", "muteSensitive", "sfx",

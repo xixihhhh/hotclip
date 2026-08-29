@@ -7,6 +7,7 @@ import {
   writeEvidence,
 } from "./evidence-index";
 import { collectSignals, type MediaSignals, type MotionSample, type TimeRange } from "./signals";
+import { MAX_VISUAL_SIGNAL_SAMPLES, type VisualSignalSample } from "./visual-enhance";
 import { detectShotBoundaries } from "./shots";
 import {
   collectVisionSignal,
@@ -16,7 +17,7 @@ import {
   type SheetComposer,
 } from "./highlight/vision";
 
-export const TIER0_EVIDENCE_CAPABILITY = "tier0-signals-v2";
+export const TIER0_EVIDENCE_CAPABILITY = "tier0-signals-v3";
 const SHOT_EVIDENCE_VERSION = "transnetv2-v1";
 const VISION_EVIDENCE_VERSION = "contact-sheet-v2";
 
@@ -48,6 +49,16 @@ function validLoudness(value: unknown): value is Array<{ t: number; m: number }>
   });
 }
 
+function validVisualSamples(value: unknown): value is VisualSignalSample[] {
+  return Array.isArray(value) && value.length <= MAX_VISUAL_SIGNAL_SAMPLES && value.every((sample) => {
+    if (!sample || typeof sample !== "object") return false;
+    const item = sample as Partial<VisualSignalSample>;
+    return finite(item.t) && item.t >= 0 && finite(item.yLow) && finite(item.yAvg) &&
+      finite(item.yHigh) && finite(item.satAvg) && item.yLow >= 0 && item.yHigh <= 255 &&
+      item.yLow <= item.yAvg && item.yAvg <= item.yHigh && item.satAvg >= 0 && item.satAvg <= 255;
+  });
+}
+
 export function validMediaSignals(value: unknown): value is MediaSignals {
   if (!value || typeof value !== "object") return false;
   const signals = value as Partial<MediaSignals>;
@@ -55,6 +66,7 @@ export function validMediaSignals(value: unknown): value is MediaSignals {
     (signals.motionPeaks === undefined || validRanges(signals.motionPeaks)) &&
     (signals.motionSamples === undefined || validMotion(signals.motionSamples, 50_000)) &&
     (signals.activityKeyframes === undefined || validMotion(signals.activityKeyframes, 128)) &&
+    (signals.visualSamples === undefined || validVisualSamples(signals.visualSamples)) &&
     (signals.loudnessSamples === undefined || validLoudness(signals.loudnessSamples));
 }
 
