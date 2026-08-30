@@ -52,7 +52,11 @@ export function canCopyVideoStream(
 }
 
 /** Probe a narrow window; failures are handled by callers as an encode fallback. */
-export async function probeVideoKeyframes(filePath: string, startSec: number): Promise<number[]> {
+export async function probeVideoKeyframes(
+  filePath: string,
+  startSec: number,
+  videoStreamIndex?: number
+): Promise<number[]> {
   if (startSec <= 0) return [0];
   const from = Math.max(0, startSec - 1);
   const duration = 2.5;
@@ -60,7 +64,9 @@ export async function probeVideoKeyframes(filePath: string, startSec: number): P
     resolveFfprobePath(),
     [
       "-v", "error",
-      "-select_streams", "v:0",
+      "-select_streams", Number.isInteger(videoStreamIndex) && (videoStreamIndex ?? -1) >= 0
+        ? String(videoStreamIndex)
+        : "v:0",
       "-skip_frame", "nokey",
       "-read_intervals", `${from}%+${duration}`,
       "-show_entries", "frame=best_effort_timestamp_time,pkt_pts_time,pts_time",

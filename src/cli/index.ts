@@ -272,6 +272,9 @@ async function main(): Promise<void> {
               file: basename(r.path),
               path: r.path,
               durationSec: Math.round(r.durationSec * 1000) / 1000,
+              colorConverted: Boolean(r.colorConverted),
+              colorConversionSkipped: Boolean(r.colorConversionSkipped),
+              colorInspectionFailed: Boolean(r.colorInspectionFailed),
               qa: r.qa ?? null,
             })),
           },
@@ -284,7 +287,14 @@ async function main(): Promise<void> {
     process.stdout.write(`已导出 ${outcome.exported.length} 条切片到 ${outcome.outDir}\n`);
     for (const r of outcome.exported) {
       const c = outcome.candidates.find((x) => x.id === r.id);
-      process.stdout.write(`- ${basename(r.path)} (${Math.round(r.durationSec)}s, 评分 ${c?.score ?? "?"}) ${c?.title ?? ""}\n`);
+      const colorNote = r.colorConverted
+        ? " · HDR→SDR"
+        : r.colorConversionSkipped
+          ? " · HDR 色彩路径不支持,未转换"
+          : r.colorInspectionFailed
+            ? " · 色彩信息检查失败"
+            : "";
+      process.stdout.write(`- ${basename(r.path)} (${Math.round(r.durationSec)}s, 评分 ${c?.score ?? "?"}${colorNote}) ${c?.title ?? ""}\n`);
       if (r.qa && r.qa.status === "warn") {
         process.stdout.write(`  ⚠ 质检:${r.qa.issues.join(";")}\n`);
       }

@@ -9,9 +9,11 @@ import { BrowserWindow, app } from "electron";
 import { spawn } from "child_process";
 import { join } from "path";
 import { resolveFfmpegPath } from "../core/binaries";
-import type { OverlayPayload } from "../core/caption-overlay/payload";
+import { colorOutputArgs } from "../core/color";
+import { ffmpegAudioStreamSpecifier, ffmpegVideoStreamSpecifier } from "../core/probe";
+import type { OverlayOutputOptions, OverlayPayload } from "../core/caption-overlay/payload";
 
-export interface OverlayRenderOptions {
+export interface OverlayRenderOptions extends OverlayOutputOptions {
   fps?: number;
   onProgress?: (fraction: number) => void;
   signal?: AbortSignal;
@@ -39,6 +41,7 @@ export async function renderCaptionOverlay(
 ): Promise<void> {
   const { fps = 30, onProgress, signal } = options;
   const { width, height } = payload;
+  const baseVideo = ffmpegVideoStreamSpecifier(options.videoStreamIndex);
 
   const win = new BrowserWindow({
     show: false,
@@ -81,11 +84,11 @@ export async function renderCaptionOverlay(
         "pipe:0",
         // Chromium hands back premultiplied alpha; overlay expects straight.
         "-filter_complex",
-        "[1:v]unpremultiply=inplace=1[ov];[0:v][ov]overlay=eof_action=pass[vout]",
+        `[1:v:0]unpremultiply=inplace=1[ov];[${baseVideo}][ov]overlay=eof_action=pass[vout]`,
         "-map",
         "[vout]",
         "-map",
-        "0:a?",
+        ffmpegAudioStreamSpecifier(options.audioStreamIndex, 0, true),
         "-c:a",
         "copy",
         "-c:v",
@@ -94,6 +97,8 @@ export async function renderCaptionOverlay(
         "19",
         "-preset",
         "medium",
+        ...(options.color?.action === "tonemap-bt709" ? ["-pix_fmt", "yuv420p"] : []),
+        ...colorOutputArgs(options.color),
         "-movflags",
         "+faststart",
         outPath,

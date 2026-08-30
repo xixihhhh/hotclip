@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { planRepair, buildRepairArgs, type RepairContext } from "../repair";
+import { planColorRender } from "../color";
 import type { ClipQaReport } from "../qa";
 
 /** 干净报告底座,各用例往上叠告警。 */
@@ -80,6 +81,24 @@ describe("planRepair (修复计划推导)", () => {
 });
 
 describe("buildRepairArgs (修复参数)", () => {
+  const hdrColor = planColorRender({
+    durationSec: 30,
+    hasVideo: true,
+    hasAudio: true,
+    width: 1920,
+    height: 1080,
+    fps: 30,
+    bitRate: 8_000_000,
+    videoCodec: "hevc",
+    audioCodec: "aac",
+    pixelFormat: "yuv420p10le",
+    bitDepth: 10,
+    colorPrimaries: "bt2020",
+    colorTransfer: "smpte2084",
+    colorSpace: "bt2020nc",
+    colorRange: "tv",
+  });
+
   it("仅响度:视频流复制 + loudnorm,秒级零画质损失", () => {
     const plan = { loudness: true, trimStartSec: 0, trimEndSec: null, trimmedSec: 0, actions: [] };
     const args = buildRepairArgs("in.mp4", "out.mp4", plan, 30);
@@ -87,6 +106,17 @@ describe("buildRepairArgs (修复参数)", () => {
     expect(args.join(" ")).toContain("loudnorm");
     expect(args).not.toContain("-ss");
     expect(args).not.toContain("libx264");
+    expect(args.slice(args.indexOf("-map"), args.indexOf("-map") + 4)).toEqual([
+      "-map", "0:v:0", "-map", "0:a:0?",
+    ]);
+  });
+
+  it("显式修复选流沿用全局 stream index", () => {
+    const plan = { loudness: true, trimStartSec: 0, trimEndSec: null, trimmedSec: 0, actions: [] };
+    const args = buildRepairArgs("in.mkv", "out.mp4", plan, 30, undefined, 3, 5);
+    expect(args.slice(args.indexOf("-map"), args.indexOf("-map") + 4)).toEqual([
+      "-map", "0:3", "-map", "0:5",
+    ]);
   });
 
   it("裁边:帧精确重编码 + 新边界 30ms 淡化", () => {
@@ -105,5 +135,30 @@ describe("buildRepairArgs (修复参数)", () => {
     const af = args[args.indexOf("-af") + 1];
     expect(af.indexOf("loudnorm")).toBeGreaterThanOrEqual(0);
     expect(af.indexOf("loudnorm")).toBeLessThan(af.indexOf("afade"));
+  });
+
+  it("HDR 成片二次修复仍显式保留 BT.709 标签", () => {
+    const loudnessOnly = buildRepairArgs(
+      "in.mp4",
+      "out.mp4",
+      { loudness: true, trimStartSec: 0, trimEndSec: null, trimmedSec: 0, actions: [] },
+      30,
+      hdrColor
+    );
+    const trimmed = buildRepairArgs(
+      "in.mp4",
+      "out.mp4",
+      { loudness: false, trimStartSec: 1, trimEndSec: 29, trimmedSec: 2, actions: [] },
+      30,
+      hdrColor
+    );
+    for (const args of [loudnessOnly, trimmed]) {
+      expect(args.slice(args.indexOf("-color_primaries"), args.indexOf("-color_primaries") + 8)).toEqual([
+        "-color_primaries", "bt709",
+        "-color_trc", "bt709",
+        "-colorspace", "bt709",
+        "-color_range", "tv",
+      ]);
+    }
   });
 });

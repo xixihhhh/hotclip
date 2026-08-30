@@ -1,6 +1,36 @@
 import { describe, it, expect } from "vitest";
 import { buildCutArgs, buildJumpCutArgs, buildVideoFilters, escapeFilterPath, metadataArgs, parseFfmpegProgress, edgeFadeFilters, LOUDNORM_FILTER, LOUDNORM_OUT_RATE, DENOISE_FILTER, EDGE_FADE_SEC } from "../cut";
+import type { ColorRenderPlan } from "../color";
 import type { VisualEnhancePlan } from "../visual-enhance";
+
+function colorPlan(detected: "pq" | "hlg" | "sdr"): ColorRenderPlan {
+  const hdr = detected !== "sdr";
+  return {
+    source: {
+      pixelFormat: hdr ? "yuv420p10le" : "yuv420p",
+      bitDepth: hdr ? 10 : 8,
+      primaries: hdr ? "bt2020" : "bt709",
+      transfer: detected === "pq" ? "smpte2084" : detected === "hlg" ? "arib-std-b67" : "bt709",
+      space: hdr ? "bt2020nc" : "bt709",
+      range: "tv",
+      peakNits: hdr ? 0 : 100,
+    },
+    detected,
+    action: hdr ? "tonemap-bt709" : "passthrough",
+    output: hdr
+      ? {
+          pixelFormat: "yuv420p",
+          bitDepth: 8,
+          primaries: "bt709",
+          transfer: "bt709",
+          space: "bt709",
+          range: "tv",
+          peakNits: 100,
+        }
+      : null,
+    reason: hdr ? `hdr-${detected}-tone-map-bt709` : "sdr-transfer-passthrough",
+  };
+}
 
 describe("buildCutArgs", () => {
   it("accurate mode: fast seek before -i, re-encode, faststart", () => {
@@ -15,6 +45,25 @@ describe("buildCutArgs", () => {
     expect(args).toContain("libx264");
     expect(args).toContain("+faststart");
     expect(args[args.length - 1]).toBe("/v/out.mp4");
+  });
+
+  it("maps the probed global video/audio streams in continuous and jump-cut paths", () => {
+    const selected = { videoStreamIndex: 1, audioStreamIndex: 2 };
+    const continuous = buildCutArgs("/v/in.mkv", "/v/out.mp4", 0, 5, selected);
+    expect(continuous.slice(continuous.indexOf("-map"), continuous.indexOf("-map") + 4)).toEqual([
+      "-map", "0:1", "-map", "0:2",
+    ]);
+
+    const jump = buildJumpCutArgs(
+      "/v/in.mkv",
+      "/v/out.mp4",
+      0,
+      [{ startSec: 0, endSec: 2 }, { startSec: 3, endSec: 5 }],
+      selected
+    );
+    const graph = jump[jump.indexOf("-filter_complex") + 1];
+    expect(graph).toContain("[0:1]trim=start=0.000:end=2.000");
+    expect(graph).toContain("[0:2]atrim=start=0.000:end=2.000");
   });
 
   it("copy mode: stream copy, no encoder flags", () => {
@@ -96,6 +145,82 @@ describe("buildCutArgs", () => {
     const graph = args[args.indexOf("-filter_complex") + 1];
     expect(graph).toContain("[vc]eq=brightness=");
     expect(graph.indexOf("eq=brightness=")).toBeLessThan(graph.indexOf("subtitles=filename="));
+  });
+
+  it("keeps undefined and explicit SDR color plans on the legacy argument path", () => {
+    const legacy = buildCutArgs("/i.mp4", "/o.mp4", 0, 5, { mode: "copy" });
+    const sdr = buildCutArgs("/i.mp4", "/o.mp4", 0, 5, { mode: "copy", color: colorPlan("sdr") });
+    expect(sdr).toEqual(legacy);
+    expect(buildVideoFilters({ color: colorPlan("sdr") })).toEqual([]);
+  });
+
+  it("tone-maps PQ before every geometry/finish/text stage, tags SDR, and disables both copy paths", () => {
+    const visualEnhance: VisualEnhancePlan = {
+      applied: true,
+      sampleCount: 8,
+      measurements: { lumaLow: 20, lumaAvg: 55, lumaHigh: 105, saturation: 16 },
+      adjustments: { brightness: 0.012, contrast: 1.08, saturation: 1.08, gamma: 1.08 },
+      reasons: ["underexposed"],
+    };
+    const options = {
+      mode: "copy" as const,
+      videoCopy: true,
+      color: colorPlan("pq"),
+      uiCrop: { topFrac: 0.05, bottomFrac: 0.03 },
+      vertical: true,
+      autoZoom: { durationSec: 5, fps: 30 },
+      visualEnhance,
+      subtitlePath: "/tmp/a.ass",
+    };
+    const filters = buildVideoFilters(options);
+    expect(filters[0]).toBe(
+      "zscale=pin=bt2020:tin=smpte2084:min=bt2020nc:rin=tv:t=linear:npl=100,format=gbrpf32le,tonemap=tonemap=mobius:desat=2,zscale=p=bt709:t=bt709:m=bt709:r=tv:dither=error_diffusion,format=yuv420p"
+    );
+    expect(filters.findIndex((filter) => filter.startsWith("crop="))).toBeGreaterThan(0);
+    expect(filters.findIndex((filter) => filter.startsWith("zoompan="))).toBeGreaterThan(0);
+    expect(filters.findIndex((filter) => filter.startsWith("eq="))).toBeGreaterThan(0);
+    expect(filters.findIndex((filter) => filter.startsWith("subtitles="))).toBeGreaterThan(0);
+
+    const args = buildCutArgs("/i.mp4", "/o.mp4", 0, 5, options);
+    expect(args).toContain("libx264");
+    expect(args.slice(args.indexOf("-c:v"), args.indexOf("-c:v") + 2)).not.toEqual(["-c:v", "copy"]);
+    expect(args.slice(args.indexOf("-color_primaries"), args.indexOf("-color_primaries") + 8)).toEqual([
+      "-color_primaries", "bt709",
+      "-color_trc", "bt709",
+      "-colorspace", "bt709",
+      "-color_range", "tv",
+    ]);
+  });
+
+  it("keeps HLG tone mapping first on tracked reframes", () => {
+    const filters = buildVideoFilters({
+      color: colorPlan("hlg"),
+      trackPlan: { cropXExpr: "100", cropW: 1080, cropH: 1920, cropY: 0 },
+      subtitlePath: "/tmp/a.ass",
+    });
+    expect(filters[0]).toContain("tonemap=tonemap=mobius");
+    expect(filters[1]).toBe("crop=w=1080:h=1920:x='100':y=0");
+    expect(filters.findIndex((filter) => filter.startsWith("subtitles="))).toBeGreaterThan(1);
+  });
+
+  it("applies the same HDR transform and BT.709 tags to jump cuts", () => {
+    const args = buildJumpCutArgs(
+      "/i.mp4",
+      "/o.mp4",
+      0,
+      [{ startSec: 0, endSec: 2 }, { startSec: 3, endSec: 5 }],
+      { color: colorPlan("hlg"), vertical: true, subtitlePath: "/tmp/a.ass" }
+    );
+    const graph = args[args.indexOf("-filter_complex") + 1];
+    expect(graph).toContain("[vc]zscale=pin=bt2020:tin=arib-std-b67");
+    expect(graph.indexOf("zscale=pin=bt2020")).toBeLessThan(graph.indexOf("crop=w='min(iw,ih*9/16)'"));
+    expect(graph.indexOf("crop=w='min(iw,ih*9/16)'")).toBeLessThan(graph.indexOf("subtitles=filename="));
+    expect(args.slice(args.indexOf("-color_primaries"), args.indexOf("-color_primaries") + 8)).toEqual([
+      "-color_primaries", "bt709",
+      "-color_trc", "bt709",
+      "-colorspace", "bt709",
+      "-color_range", "tv",
+    ]);
   });
 
   it("fontsDir: rides along as the subtitles filter's fontsdir", () => {

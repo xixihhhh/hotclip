@@ -7,6 +7,7 @@
 import { groupWordsIntoLines, mergeKeywordWords, CAPTION_HOLD_MAX_SEC, type AssLayout } from "../subtitle";
 import { isValidHex, lightenHex, DEFAULT_HIGHLIGHT_HEX } from "../brand";
 import type { TranscriptWord } from "../../shared/api-types";
+import type { ColorRenderPlan } from "../color";
 
 /** Caption styles rendered by the web overlay engine (name = template file). */
 export type WebCaptionStyle = "bubble";
@@ -25,8 +26,18 @@ export type OverlayRenderFn = (
   outPath: string,
   payload: OverlayPayload,
   durationSec: number,
-  template: string
+  template: string,
+  options?: OverlayOutputOptions
 ) => Promise<void>;
+
+/** Output-only render metadata needed after the base clip is already assembled. */
+export interface OverlayOutputOptions {
+  /** Restate BT.709 on overlay re-encodes of a tone-mapped base clip. */
+  color?: ColorRenderPlan;
+  /** Global stream indices selected from the already-rendered base clip. */
+  videoStreamIndex?: number;
+  audioStreamIndex?: number;
+}
 
 export interface OverlayWord {
   text: string;

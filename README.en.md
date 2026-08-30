@@ -35,7 +35,8 @@
 - **Real projects, not disposable tasks**: a project workspace manages multiple edits with offline/changed-source relinking; selections, copy, boundaries and transcript fixes all undo/redo, even after reopening
 - **Analyze once, reuse everywhere**: loudness, shots, motion and optional visual scans enter a source-fingerprinted local evidence index shared by desktop, CLI, MCP, folder watch and webhooks; model or detector changes invalidate only what must be rebuilt
 - **Long videos get faster on repeat**: identical base renders come straight from a bounded local cache; H.264 video is stream-copied only for keyframe-aligned, pixel-unchanged single cuts, while audio processing remains intact and every uncertain case falls back to accurate encoding
-- **Picture correction only when evidence calls for it**: optional adaptive finishing measures retained frames and makes a restrained correction only for clearly dark, flat or oversaturated footage; healthy sources stay untouched and monochrome is never force-coloured, with no upload or new model
+- **Picture correction only when evidence calls for it**: on non-HDR-detected sources, optional adaptive finishing measures retained frames and makes a restrained correction only for clearly dark, flat or oversaturated footage; any detected PQ/HLG bypasses this SDR-domain pass, while healthy sources stay untouched and monochrome is never force-coloured
+- **HDR in, predictable SDR out**: automatic conversion requires an explicit PQ/HLG transfer plus complete, supported primaries, colour matrix and range; qualifying sources are tone-mapped in linear light to tagged SDR BT.709, while SDR and unknown transfers stay on the existing path
 - **Publishing teaches the next cut**: every export gets a stable content ID; multi-version exports form local A/B groups and only receive a direction when platform, publish window and sample evidence are comparable
 - **Clips while you sleep**: a 24/7 watch folder turns finished recordings into clips; one-click health diagnostics catch missing tools/models first, while CLI / MCP make it a one-sentence agent deliverable
 
@@ -48,7 +49,7 @@
 
 1. **Import**: drop in a podcast, livestream replay, lecture or vlog (MP4 / MKV / MOV / FLV / TS, audio-only too), or paste a public Bilibili / YouTube-style video URL. The official resolver is downloaded and verified on first use; the source lands locally and enters the same on-device workflow
 2. **Pick highlights**: local word-level transcription → the AI reads the whole transcript and nominates quotables, conflicts and peak moments — each with a **virality score, an opening hook and its reasoning**, cut points accurate to the word; untick anything you don't like
-3. **Export**: one click produces vertical 9:16 clips — comfort-first reframe, dynamic word-synced captions, title cards, -14 LUFS loudness — plus a cover image and post copy, ready for **TikTok / Reels / Shorts / Douyin / Bilibili**
+3. **Export**: one click produces vertical 9:16 clips — comfort-first reframe, dynamic word-synced captions, title cards and -14 LUFS loudness. PQ/HLG becomes tagged SDR BT.709 only when its primaries, colour matrix and range are complete and supported; otherwise the video stays unconverted and the result says so — plus a cover image and post copy, ready for **TikTok / Reels / Shorts / Douyin / Bilibili**
 
 ## Screenshots
 
@@ -181,6 +182,7 @@ Comfort-first 9:16 reframing, silence jump cuts, filler-word removal, -14 LUFS l
 - **Comfort-first smart reframing**: each shot considers every visible face; if a single moving subject or a group fits safely, the virtual camera stays locked. It follows only when the subject truly exceeds the crop, holds through brief detector flicker, returns to centre after sustained loss, and falls back safely when detections are sparse
 - **Composition receipt**: `clips.json` records total, locked, group-locked, tracked, recovery and centered-fallback shots; locked framing now holds until the next shot, and jump cuts never pan through discarded source time
 - **Adaptive picture finish (optional, off by default)**: reuses local Tier-0 evidence to measure luma, contrast and saturation only across each clip's final retained ranges; hard-capped correction applies only with enough evidence and a clear dark/flat/overexposed/oversaturated signal. Healthy footage stays unchanged and monochrome is never force-coloured, while jump cuts, stitched pieces and cold opens use their real retained windows and log exact measurements/adjustments in `clips.json`
+- **HDR-safe colour pipeline**: automatic conversion requires PQ (SMPTE ST 2084) or HLG plus complete, FFmpeg-supported input primaries, colour matrix and range. MaxCLL or mastering-display peak metadata constrains highlights when available; otherwise FFmpeg keeps its safe automatic estimate. Qualifying sources are converted in linear light with a restrained Mobius tone map and tagged SDR BT.709 before crop, reframe, zoom or subtitles. If an HDR transfer is present but the remaining tags are incomplete or unsupported, HotClip keeps the existing render path, skips SDR-domain adaptive picture finishing and marks the result as unconverted. If colour inspection itself fails, finishing also stays off and the result says inspection failed; SDR and unknown transfers stay on their existing path. Jump cuts, stitched pieces, caption overlays, cold opens and safe QA repairs preserve the decision — with no model, download or upload
 - **Screen-recording UI removal**: status bars and letterboxing detected via temporal variance and cropped out
 - **Silence jump cuts**: pauses cut and spliced with caption timeline remapped; requires *no words AND acoustic silence*, so laughter and applause survive; optionally keep 0.25s breathing room — tight pacing without the suffocation
 - **Filler-word removal**: um/uh-class fillers and stutters cut (deliberately conservative), itemized in clips.json
@@ -285,12 +287,14 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 
   > Install HotClip as my local clipping skill: `git clone https://github.com/xixihhhh/hotclip.git && cd hotclip && pnpm install`, then copy `skills/hotclip/` into my agent skills directory (`~/.claude/skills/hotclip/` for Claude Code) and configure the LLM env vars per `skills/hotclip/SKILL.md`. Verify with `pnpm cli highlights` on a test video.
 
-- **clips.json processing receipt**: what the AI did to each clip (caption style, reframe mode, jump-cut ratio, alignment coverage, caption lint, fillers removed) — fully auditable, pipeline-ready
+- **clips.json processing receipt**: what the pipeline did to each clip (caption style, reframe mode, jump-cut ratio, alignment coverage, caption lint, fillers removed and source colour decision, including an unconverted-HDR flag) — fully auditable, pipeline-ready
 - **Golden quality evaluation**: `pnpm quality:eval [fixture.json]` reports CER/WER, median/P95 word-boundary error and highlight recall@3/@5 locally, so model and threshold changes can be compared on the same evidence
 - **Bring your own AI (or none)**: free local models by default; plug in [Atlas Cloud](https://www.atlascloud.ai), fal.ai or any OpenAI-compatible endpoint — or local Ollama for a fully offline pipeline
 </details>
 
 ## What's new
+
+**[v0.24.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.24.0)** (2026-08-30) "HDR in, predictable colour out": **strict metadata gate** (automatic conversion requires an explicit PQ/SMPTE ST 2084 or HLG/ARIB STD-B67 transfer plus complete, supported primaries, colour matrix and range; available MaxCLL/mastering peak metadata guides the highlight bound, while SDR and unknown transfers keep their existing pixel treatment); **safe ambiguity and failure handling** (incomplete/unsupported HDR stays unconverted, while a probe failure is labelled separately; both keep SDR-domain adaptive finishing off, and desktop/CLI/MCP plus `clips.json` agree on the state); **deterministic multi-track selection** (probe, peak metadata, render and cache bind the same selected picture; single-video SDR keeps its pixel treatment and stream-copy decision); **linear-light SDR delivery** (qualifying input is converted with explicit source tags and a bounded Mobius tone map to tagged BT.709/yuv420p before crop, reframe, zoom, subtitles or watermarks); **full render-path parity without new weight** (continuous cuts, silence jump cuts, multi-piece stitches, cold opens, Chromium caption overlays and retained QA repairs keep the same decision, with no new model, asset download, API call or footage upload).
 
 **[v0.23.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.23.0)** (2026-08-30) "What the picture says should count as evidence": **on-screen text evidence** (reuses the already-enabled full-stream scan and candidate review — no OCR install and no extra model call; keeps only text that can be transcribed confidently, such as product names, prices, scores, headings and slide facts, leaving uncertainty blank); **static content is no longer invisible** (low-energy price cards and slides with clear text receive reserved evidence slots, improving product, course and review clips); **structured visual review** (observed scene, visual score, title match and visible text flow through candidates, CLI/MCP output and `clips.json`, with a bilingual workbench receipt); **better-grounded covers** (AI covers prefer the scene actually observed by candidate review over a transcript-only guess). The existing optional vision switch remains the boundary: zero added cost when off and fail-open when unavailable.
 
@@ -343,7 +347,7 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 | v0.15.1 (hardware export · URL import · recovery · durable queue · publishing feedback · diagnostics · topic series) | ✅ Shipped |
 | v0.16 (project workspace · reversible editing · pro shortcuts · local A/B experiments) | ✅ Shipped |
 | v0.17 (bounded render cache · keyframe-safe copy · shared across entry points · scoped cleanup) | ✅ Shipped |
-| v0.18 – v0.22 (quality evaluation · caption quality gate · multimodal evidence reuse · comfort-first reframing · freeze/subject-crop QA · adaptive picture finish) | ✅ Shipped |
+| v0.18 – v0.24 (quality evaluation · caption quality gate · multimodal/on-screen-text evidence reuse · comfort-first reframing · freeze/subject-crop QA · adaptive picture finish · HDR-safe SDR export) | ✅ Shipped |
 | English ASR upgrade (Parakeet) · code signing · deeper unattended mode | 🗺️ [Planned](docs/PRODUCT-PLAN.md) |
 
 </details>
@@ -366,6 +370,9 @@ They're automatic — word-level timestamps drive dynamic captions burned into e
 
 **Can it remove filler words and silences?**
 Yes — silence jump cuts plus an um/uh filler pass, with caption timing remapped and every edit logged to clips.json.
+
+**How does HotClip handle HDR video?**
+PQ/HLG is tone-mapped to tagged SDR BT.709 only when primaries, colour matrix and range are complete and supported. Incomplete or unsupported HDR tags keep the existing render path, skip SDR-domain adaptive finishing and mark the result as unconverted instead of guessing; SDR and unknown transfers keep their existing path. No model, download or upload is added.
 
 **Can live-chat data help pick highlights?**
 Yes — and it's the strongest evidence there is. HotClip auto-discovers the chat file sitting next to a recording (BililiveRecorder .xml and Douyin-recorder .jsonl both work); chat density plus superchats, memberships, gifts, follows and like bursts feed straight into highlight detection, with per-sender spam caps and surge bonuses. No chat file? Loudness, shot cuts, motion, facial emotion, vocal tone and laughter signals cover for it.

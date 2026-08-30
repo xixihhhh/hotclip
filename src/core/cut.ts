@@ -14,6 +14,8 @@ import { writeFile, rm } from "fs/promises";
 import { resolveFfmpegPath } from "./binaries";
 import { toFfmpegTime } from "./time";
 import { buildZoomFilter } from "./autozoom";
+import { colorOutputArgs, hdrToneMapFilter, type ColorRenderPlan } from "./color";
+import { ffmpegAudioStreamSpecifier, ffmpegVideoStreamSpecifier } from "./probe";
 import { videoEncoderArgs, type VideoEncoder } from "./video-encoder";
 import { visualEnhanceFilter, type VisualEnhancePlan } from "./visual-enhance";
 
@@ -74,6 +76,10 @@ export interface CutOptions {
    * prove keyframe alignment first; any pixel-changing filter disables it.
    */
   videoCopy?: boolean;
+  /** ffprobe global stream index selected for the source picture. */
+  videoStreamIndex?: number;
+  /** ffprobe global stream index selected for source audio. */
+  audioStreamIndex?: number;
   /** x264 CRF for accurate mode (lower = better); default 18 (visually lossless-ish). */
   crf?: number;
   /** x264 preset for accurate mode; default "veryfast". */
@@ -96,6 +102,8 @@ export interface CutOptions {
   autoZoom?: { durationSec: number; fps: number; emphasisAtSec?: number[] };
   /** Conservative source-measured picture correction; neutral/skipped plans add no filter. */
   visualEnhance?: VisualEnhancePlan | null;
+  /** HDR sources are tone-mapped to a tagged SDR output before any geometric or finishing filters. */
+  color?: ColorRenderPlan;
   /** Burn an .ass karaoke subtitle file via libass. Requires re-encode. */
   subtitlePath?: string;
   /** Directory holding bundled fonts for libass (subtitles filter fontsdir). */
@@ -209,6 +217,11 @@ export function escapeFilterPath(p: string): string {
 /** Compose the -vf chain for reframing + caption burn-in. Empty = no filter. */
 export function buildVideoFilters(options: CutOptions): string[] {
   const filters: string[] = [];
+  const toneMap = options.color ? hdrToneMapFilter(options.color) : null;
+  // HDR transfer/primaries must be normalized while pixels still represent the
+  // untouched source. Geometry, zoom, picture finishing and text all operate on
+  // the resulting SDR signal, preventing overlays from being tone-mapped too.
+  if (toneMap) filters.push(toneMap);
   const enhance = visualEnhanceFilter(options.visualEnhance);
   // 自动运镜:zoompan 顶替 scale 那一步(它自己出目标尺寸);返回 null 就照旧
   const zoom = options.autoZoom
@@ -272,9 +285,13 @@ export function buildCutArgs(
   // seeking also resets PTS to ~0, which is exactly what the clip-relative
   // ASS karaoke timestamps assume.
   const common = ["-hide_banner", "-y", "-ss", toFfmpegTime(start), "-i", inputPath, "-t", toFfmpegTime(duration)];
+  const maps = [
+    "-map", ffmpegVideoStreamSpecifier(options.videoStreamIndex),
+    "-map", ffmpegAudioStreamSpecifier(options.audioStreamIndex, 0, true),
+  ];
 
   if (mode === "copy") {
-    return [...common, "-c", "copy", "-avoid_negative_ts", "make_zero", ...metadataArgs(options.metadata), outputPath];
+    return [...common, ...maps, "-c", "copy", "-avoid_negative_ts", "make_zero", ...metadataArgs(options.metadata), outputPath];
   }
 
   const crf = Number.isFinite(options.crf) ? String(options.crf) : "18";
@@ -290,10 +307,12 @@ export function buildCutArgs(
   ];
   return [
     ...common,
+    ...maps,
     ...(filters.length > 0 || options.watermark ? ["-vf", composeVideoFilter(filters, options.watermark)] : []),
     ...(copyVideo
       ? ["-c:v", "copy"]
       : [...videoEncoderArgs(options.encoder ?? "libx264", Number(crf), preset), "-pix_fmt", "yuv420p"]),
+    ...(options.color ? colorOutputArgs(options.color) : []),
     ...(audioChain.length > 0 ? ["-af", audioChain.join(",")] : []),
     ...(options.normalizeLoudness ? ["-ar", LOUDNORM_OUT_RATE] : []),
     "-c:a", "aac",
@@ -324,14 +343,16 @@ export function buildJumpCutArgs(
 
   const parts: string[] = [];
   const labels: string[] = [];
+  const videoInput = ffmpegVideoStreamSpecifier(options.videoStreamIndex);
+  const audioInput = ffmpegAudioStreamSpecifier(options.audioStreamIndex);
   segments.forEach((s, i) => {
     const a = Math.max(0, s.startSec - seek);
     const b = Math.max(a, s.endSec - seek);
-    parts.push(`[0:v]trim=start=${a.toFixed(3)}:end=${b.toFixed(3)},setpts=PTS-STARTPTS[v${i}]`);
+    parts.push(`[${videoInput}]trim=start=${a.toFixed(3)}:end=${b.toFixed(3)},setpts=PTS-STARTPTS[v${i}]`);
     // 每段两端 30ms 淡化:相邻段的淡出+淡入在拼缝处相接,消掉跳剪爆音
     const fades = edgeFadeFilters(b - a);
     const fadeSuffix = fades.length > 0 ? `,${fades.join(",")}` : "";
-    parts.push(`[0:a]atrim=start=${a.toFixed(3)}:end=${b.toFixed(3)},asetpts=PTS-STARTPTS${fadeSuffix}[a${i}]`);
+    parts.push(`[${audioInput}]atrim=start=${a.toFixed(3)}:end=${b.toFixed(3)},asetpts=PTS-STARTPTS${fadeSuffix}[a${i}]`);
     labels.push(`[v${i}][a${i}]`);
   });
   const post = buildVideoFilters(options);
@@ -370,6 +391,7 @@ export function buildJumpCutArgs(
     "-map", "[aout]",
     ...videoEncoderArgs(options.encoder ?? "libx264", Number(crf), preset),
     "-pix_fmt", "yuv420p",
+    ...(options.color ? colorOutputArgs(options.color) : []),
     ...(options.normalizeLoudness ? ["-ar", LOUDNORM_OUT_RATE] : []),
     "-c:a", "aac",
     "-b:a", "192k",

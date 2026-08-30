@@ -11,6 +11,7 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { resolveFfmpegPath } from "./binaries";
+import { ffmpegVideoStreamSpecifier } from "./probe";
 
 const execFileAsync = promisify(execFile);
 
@@ -73,7 +74,11 @@ export function detectStaticBands(frames: Uint8Array[], width = AW, height = AH)
 }
 
 /** Sample frames across the source and detect static top/bottom UI bands. */
-export async function detectUiCrop(inputPath: string, durationSec: number): Promise<UiCrop> {
+export async function detectUiCrop(
+  inputPath: string,
+  durationSec: number,
+  videoStreamIndex?: number
+): Promise<UiCrop> {
   const fps = SAMPLES / Math.max(1, durationSec);
   const { stdout } = await execFileAsync(
     resolveFfmpegPath(),
@@ -81,6 +86,7 @@ export async function detectUiCrop(inputPath: string, durationSec: number): Prom
       "-hide_banner", "-v", "error",
       "-i", inputPath,
       "-vf", `fps=${fps.toFixed(6)},scale=${AW}:${AH},format=gray`,
+      "-map", ffmpegVideoStreamSpecifier(videoStreamIndex),
       "-frames:v", String(SAMPLES),
       "-f", "rawvideo", "-",
     ],

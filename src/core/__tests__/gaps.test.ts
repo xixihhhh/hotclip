@@ -111,8 +111,8 @@ describe("buildJumpCutArgs", () => {
     const args = buildJumpCutArgs("/v/in.mp4", "/v/out.mp4", 10, segments);
     expect(args[args.indexOf("-ss") + 1]).toBe("00:00:10.000");
     const fc = args[args.indexOf("-filter_complex") + 1];
-    expect(fc).toContain("[0:v]trim=start=0.000:end=2.200");
-    expect(fc).toContain("[0:a]atrim=start=3.900:end=6.300");
+    expect(fc).toContain("[0:v:0]trim=start=0.000:end=2.200");
+    expect(fc).toContain("[0:a:0]atrim=start=3.900:end=6.300");
     expect(fc).toContain("concat=n=2:v=1:a=1");
     expect(args).toContain("[vout]");
     expect(args).toContain("[aout]");

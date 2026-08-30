@@ -74,6 +74,7 @@ import {
 } from "./render-cache";
 import { canCopyVideoStream, probeVideoKeyframes } from "./smart-render";
 import { planVisualEnhancement, type VisualEnhancePlan, type VisualSignalSample } from "./visual-enhance";
+import { isExecutableColorPlan, isHdrSource, planColorRender, type ColorRenderPlan } from "./color";
 
 export interface ExportClipSpec {
   id: number;
@@ -249,6 +250,8 @@ export interface ClipRenderOutcome {
   denoised: boolean;
   /** Clip-local measured picture correction; null when disabled. */
   visualEnhance?: VisualEnhancePlan | null;
+  /** Source color evidence and the exact HDR→SDR decision; absent on legacy exports. */
+  color?: ColorRenderPlan | null;
   /** Number of transcript-timed sensitive-language windows muted. */
   sensitiveMutes?: number;
   /** 高潮前置迷你片时长(秒);没开/钩子定位失败/被守卫跳过为 null。 */
@@ -400,6 +403,12 @@ export interface ExportedClip {
   coverPath?: string;
   sizeBytes: number;
   durationSec: number;
+  /** True when an explicit PQ/HLG source was safely tone-mapped to SDR BT.709. */
+  colorConverted?: boolean;
+  /** HDR was detected but its input colour path was incomplete or unsupported. */
+  colorConversionSkipped?: boolean;
+  /** Source probing failed, so HDR colour safety could not be evaluated. */
+  colorInspectionFailed?: boolean;
   /** 出片质检报告;质检关闭或检测失败为 null/undefined。 */
   qa?: ClipQaReport | null;
 }
@@ -488,7 +497,19 @@ export async function exportClips(
   // 纯音频源(播客/录音)走 audiogram:深色底+品牌色波形自动合成画面,
   // 视频专属阶段(去录屏UI/人脸取景/镜头吸附)整体跳过
   const srcInfo = await probeMedia(inputPath).catch(() => null);
+  const sourceStreams = {
+    videoStreamIndex: srcInfo?.videoStreamIndex,
+    audioStreamIndex: srcInfo?.audioStreamIndex,
+  };
+  const colorInspectionFailed = srcInfo === null;
   const audioOnly = srcInfo ? !srcInfo.hasVideo : false;
+  const color = srcInfo?.hasVideo ? planColorRender(srcInfo) : null;
+  const hdrDetected = isHdrSource(color);
+  const allowSdrVisualEnhance = !hdrDetected && !colorInspectionFailed;
+  // SDR/unknown sources keep their existing pixel treatment. Stream indices
+  // are still explicit so multi-track inputs cannot probe one picture and
+  // render another; the cache identity below isolates those selections.
+  const activeColor = isExecutableColorPlan(color) ? color : undefined;
   // One encoder probe per process/run. The cut layer retries libx264 if the
   // advertised hardware encoder is unusable because of a missing device/driver.
   const videoEncoder = audioOnly ? "libx264" as const : await resolveVideoEncoder();
@@ -505,7 +526,7 @@ export async function exportClips(
     options.renderCacheDir && cacheSource && (!watermark || cacheWatermark)
   );
   let visualSamples: VisualSignalSample[] = [];
-  if (options.autoEnhance && !audioOnly) {
+  if (options.autoEnhance && !audioOnly && allowSdrVisualEnhance) {
     const signals = await collectSignalsEvidence({
       videoPath: inputPath,
       evidenceDir: options.evidenceCacheDir,
@@ -529,7 +550,7 @@ export async function exportClips(
   let uiCrop: UiCrop | undefined;
   if (options.trimUi && clips.length > 0 && !audioOnly) {
     const spanEnd = Math.max(...clips.map((c) => c.endSec));
-    uiCrop = await detectUiCrop(inputPath, spanEnd).catch(() => undefined);
+    uiCrop = await detectUiCrop(inputPath, spanEnd, srcInfo?.videoStreamIndex).catch(() => undefined);
     if (uiCrop && uiCrop.topFrac === 0 && uiCrop.bottomFrac === 0) uiCrop = undefined;
   }
 
@@ -666,7 +687,10 @@ export async function exportClips(
         plan = planFromPieces(pieces);
       }
       const baseSegments = plan?.segments ?? [{ startSec: clip.startSec, endSec: clip.endSec }];
-      const visualEnhance = options.autoEnhance
+      // Tier-0 luma thresholds currently describe the encoded signal domain;
+      // they are not valid SDR measurements for a PQ/HLG source. Tone mapping
+      // therefore owns HDR color conversion and adaptive finishing stays off.
+      const visualEnhance = options.autoEnhance && allowSdrVisualEnhance
         ? planVisualEnhancement(visualSamples, baseSegments)
         : null;
       const captionWords = plan ? plan.words : clip.words;
@@ -808,12 +832,14 @@ export async function exportClips(
           ? mapSensitiveRanges(clip.words, options.muteTerms, plan?.segments ?? [{ startSec: clip.startSec, endSec: clip.endSec }])
           : undefined;
       const cutOptions: CutOptions = trackPlan
-        ? { trackPlan, autoZoom, visualEnhance, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, muteRanges: sensitiveMuteRanges, watermark, metadata: aigcMeta, crf: options.crf, encoder: videoEncoder }
+        ? { ...sourceStreams, trackPlan, autoZoom, visualEnhance, color: activeColor, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, muteRanges: sensitiveMuteRanges, watermark, metadata: aigcMeta, crf: options.crf, encoder: videoEncoder }
         : {
+            ...sourceStreams,
             uiCrop,
             vertical: options.vertical,
             autoZoom,
             visualEnhance,
+            color: activeColor,
             subtitlePath,
             fontsDir: subtitlePath ? options.fontsDir : undefined,
             normalizeLoudness: options.normalizeLoudness,
@@ -833,9 +859,11 @@ export async function exportClips(
             segments: baseSegments,
             options: {
               uiCrop,
+              ...sourceStreams,
               vertical: options.vertical,
               autoZoom,
               visualEnhance,
+              color: activeColor,
               trackPlan,
               subtitleSha256: subtitleHash,
               fontsDir: subtitlePath ? options.fontsDir : undefined,
@@ -902,7 +930,7 @@ export async function exportClips(
             ? canCopyVideoStream(srcInfo, range.startSec, cutOptions, [range.startSec])
             : false;
           const keyframes = copyCandidate
-            ? await probeVideoKeyframes(inputPath, range.startSec).catch(() => [] as number[])
+            ? await probeVideoKeyframes(inputPath, range.startSec, srcInfo?.videoStreamIndex).catch(() => [] as number[])
             : [];
           const videoCopy = copyCandidate && srcInfo
             ? canCopyVideoStream(srcInfo, range.startSec, cutOptions, keyframes)
@@ -951,7 +979,11 @@ export async function exportClips(
             forcedBreaks: plan?.breaks,
             highlightHex: options.brand?.highlightColor,
           });
-          await options.renderOverlay!(cutTarget, outPath, payload, clipDuration, webStyle);
+          await options.renderOverlay!(cutTarget, outPath, payload, clipDuration, webStyle, {
+            color: activeColor,
+            videoStreamIndex: info.videoStreamIndex,
+            audioStreamIndex: info.audioStreamIndex,
+          });
           await rm(cutTarget, { force: true });
         } catch (e) {
           // fail-open: ship the base clip (title card intact, no word captions)
@@ -1025,12 +1057,12 @@ export async function exportClips(
                 miniTrack = { cropXExpr: renderCropXExpr(cp.keyframes), cropW: cp.cropW, cropH: cp.cropH, cropY: cp.cropY };
               }
             }
-            const miniVisualEnhance = options.autoEnhance
+            const miniVisualEnhance = options.autoEnhance && allowSdrVisualEnhance
               ? planVisualEnhancement(visualSamples, [{ startSec: coPlan.startSec, endSec: coPlan.endSec }])
               : null;
             const miniCutOptions = miniTrack
-              ? { trackPlan: miniTrack, visualEnhance: miniVisualEnhance, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, muteRanges: options.muteTerms && clip.words ? mapSensitiveRanges(clip.words, options.muteTerms, [{ startSec: coPlan.startSec, endSec: coPlan.endSec }]) : undefined, watermark, crf: options.crf, encoder: videoEncoder }
-              : { uiCrop, vertical: options.vertical, visualEnhance: miniVisualEnhance, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, muteRanges: options.muteTerms && clip.words ? mapSensitiveRanges(clip.words, options.muteTerms, [{ startSec: coPlan.startSec, endSec: coPlan.endSec }]) : undefined, watermark, crf: options.crf, encoder: videoEncoder };
+              ? { ...sourceStreams, trackPlan: miniTrack, visualEnhance: miniVisualEnhance, color: activeColor, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, muteRanges: options.muteTerms && clip.words ? mapSensitiveRanges(clip.words, options.muteTerms, [{ startSec: coPlan.startSec, endSec: coPlan.endSec }]) : undefined, watermark, crf: options.crf, encoder: videoEncoder }
+              : { ...sourceStreams, uiCrop, vertical: options.vertical, visualEnhance: miniVisualEnhance, color: activeColor, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, muteRanges: options.muteTerms && clip.words ? mapSensitiveRanges(clip.words, options.muteTerms, [{ startSec: coPlan.startSec, endSec: coPlan.endSec }]) : undefined, watermark, crf: options.crf, encoder: videoEncoder };
             await rename(outPath, bodyPath);
             await cutClip(inputPath, miniPath, coPlan.startSec, coPlan.endSec, miniCutOptions, signal);
             // 硬切拼接(通行做法);AIGC 隐式标识补到最终容器上
@@ -1154,13 +1186,17 @@ export async function exportClips(
             headTrimmable: coldOpenSec === null,
           });
           if (repairPlan) {
+            const repairMedia = await probeMedia(outPath).catch(() => null);
             const outcome = await applyRepair(
               outPath,
               repairPlan,
               qaReport,
               (fixedPath) =>
                 runClipQa(fixedPath, { ...qaOptsBase, expectedDurationSec: expected - repairPlan.trimmedSec }),
-              signal
+              signal,
+              activeColor,
+              repairMedia?.videoStreamIndex,
+              repairMedia?.audioStreamIndex
             ).catch((e) => {
               if (signal?.aborted) throw e;
               return null;
@@ -1250,6 +1286,9 @@ export async function exportClips(
         coverPath: coverOk ? coverPath : undefined,
         sizeBytes: s.size,
         durationSec: finalDurationSec,
+        colorConverted: Boolean(activeColor),
+        colorConversionSkipped: Boolean(hdrDetected && !activeColor),
+        colorInspectionFailed,
         qa: qaReport,
       });
       if (fillerHits.length > 0) {
@@ -1277,6 +1316,7 @@ export async function exportClips(
         loudnessNormalized: Boolean(options.normalizeLoudness),
         denoised: Boolean(options.denoise),
         visualEnhance,
+        color,
         sensitiveMutes: sensitiveMuteRanges?.length ?? 0,
         coldOpenSec,
         flashForward: flashForwardUsed,
@@ -1324,6 +1364,9 @@ export async function exportClips(
           path: compPath,
           sizeBytes: cs?.size ?? 0,
           durationSec: totalSec,
+          colorConverted: Boolean(activeColor),
+          colorConversionSkipped: Boolean(hdrDetected && !activeColor),
+          colorInspectionFailed,
         });
       }
     }
@@ -1529,6 +1572,9 @@ export async function exportClips(
           aiCover: aiCoverByClip.has(r.id) ? basename(aiCoverByClip.get(r.id)!) : null,
           title: r.title,
           durationSec: Number(r.durationSec.toFixed(3)),
+          colorConverted: Boolean(r.colorConverted),
+          colorConversionSkipped: Boolean(r.colorConversionSkipped),
+          colorInspectionFailed: Boolean(r.colorInspectionFailed),
           sourceStartSec: range?.startSec ?? spec?.startSec ?? null,
           sourceEndSec: range?.endSec ?? spec?.endSec ?? null,
           // 多片段拼接的段清单(单段切片为 null)——矩阵管线核对成片由哪几处拼成

@@ -7,7 +7,7 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { resolveFfmpegPath } from "../binaries";
-import { probeMedia } from "../probe";
+import { ffmpegVideoStreamSpecifier, probeMedia } from "../probe";
 import { ensureModel, YUNET_MODEL } from "../models";
 import { parseShowinfoTimes } from "../signals";
 import { YunetDetector, YUNET_INPUT, pickMainFace, type FaceBox } from "./yunet";
@@ -76,6 +76,7 @@ export async function generateCropPlan(
       "-ss", String(clipStartSec), "-i", inputPath, "-t", String(dur),
       "-vf",
       `fps=${SAMPLE_FPS},scale=${YUNET_INPUT}:${YUNET_INPUT}:force_original_aspect_ratio=decrease,pad=${YUNET_INPUT}:${YUNET_INPUT}:(ow-iw)/2:(oh-ih)/2:black`,
+      "-map", ffmpegVideoStreamSpecifier(info.videoStreamIndex),
       "-f", "rawvideo", "-pix_fmt", "bgr24", "-",
     ],
     { encoding: "buffer", maxBuffer: 1024 * 1024 * 1024 }
@@ -111,6 +112,7 @@ export async function generateCropPlan(
       "-hide_banner",
       "-ss", String(clipStartSec), "-i", inputPath, "-t", String(dur), "-an",
       "-vf", "fps=6,scale=160:-2,select='gt(scene,0.3)',showinfo",
+      "-map", ffmpegVideoStreamSpecifier(info.videoStreamIndex),
       "-f", "null", "-",
     ],
     { maxBuffer: 64 * 1024 * 1024 }

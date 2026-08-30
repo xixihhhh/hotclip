@@ -19,7 +19,19 @@ export interface MediaInfo {
   fps: number;
   bitRate: number;
   videoCodec: string;
+  /** Global stream index selected for rendering; optional for legacy checkpoints/adapters. */
+  videoStreamIndex?: number;
   audioCodec: string;
+  /** Global stream index selected for audio; optional for legacy checkpoints/adapters. */
+  audioStreamIndex?: number;
+  /** Optional for backwards compatibility with persisted sessions and adapters. */
+  pixelFormat?: string;
+  bitDepth?: number;
+  colorPrimaries?: string;
+  colorTransfer?: string;
+  colorSpace?: string;
+  colorRange?: string;
+  hdrPeakNits?: number;
 }
 
 /** How a word's time range was obtained. Absent means a legacy transcript. */
@@ -658,6 +670,12 @@ export interface ExportedClip {
   coverPath?: string;
   sizeBytes: number;
   durationSec: number;
+  /** Explicit PQ/HLG source was converted to social-compatible SDR BT.709. */
+  colorConverted?: boolean;
+  /** HDR was detected but its input colour path was incomplete or unsupported. */
+  colorConversionSkipped?: boolean;
+  /** Source probing failed, so HDR colour safety could not be evaluated. */
+  colorInspectionFailed?: boolean;
 }
 
 /** 审阅台时间轴的波形数据:每块的峰值振幅(0..1)。 */

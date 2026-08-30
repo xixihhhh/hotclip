@@ -161,7 +161,24 @@ export function ExportView({
                   <LuFilm className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-semibold">{clip.title}</p>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <p className="min-w-0 truncate text-[14px] font-semibold">{clip.title}</p>
+                    {clip.colorConverted && (
+                      <span className="chip shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap text-cyan-300">
+                        {t("hdrConverted")}
+                      </span>
+                    )}
+                    {clip.colorConversionSkipped && (
+                      <span className="chip shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap text-amber-300">
+                        {t("hdrSkipped")}
+                      </span>
+                    )}
+                    {clip.colorInspectionFailed && (
+                      <span className="chip shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap text-amber-300">
+                        {t("colorInspectionFailed")}
+                      </span>
+                    )}
+                  </div>
                   <p className="mt-0.5 truncate text-[11px] text-mut">
                     {Math.round(clip.durationSec)}s · {formatSize(clip.sizeBytes)} · {clip.path}
                   </p>

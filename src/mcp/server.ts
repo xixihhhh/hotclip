@@ -129,7 +129,14 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
         const qaNote = r.qa && r.qa.status === "warn" ? `\n  ⚠ 质检:${r.qa.issues.join(";")}` : "";
         // 修复循环干过活也要说(裁边/响度重归一,机器改了什么必须可见)
         const fixNote = r.qa?.repair?.applied ? `\n  🔧 已自动修复:${r.qa.repair.actions.join("、")}` : "";
-        return `- ${basename(r.path)} (${Math.round(r.durationSec)}s, 评分 ${c?.score ?? "?"}) ${c?.title ?? ""}${qaNote}${fixNote}`;
+        const colorNote = r.colorConverted
+          ? " · HDR→SDR"
+          : r.colorConversionSkipped
+            ? " · HDR 色彩路径不支持,未转换"
+            : r.colorInspectionFailed
+              ? " · 色彩信息检查失败"
+              : "";
+        return `- ${basename(r.path)} (${Math.round(r.durationSec)}s, 评分 ${c?.score ?? "?"}${colorNote}) ${c?.title ?? ""}${qaNote}${fixNote}`;
       })
       .join("\n");
     const warned = outcome.exported.filter((r) => r.qa?.status === "warn").length;

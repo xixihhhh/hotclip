@@ -14,6 +14,8 @@
 import { rename, rm } from "fs/promises";
 import { toFfmpegTime } from "./time";
 import { runFfmpeg, edgeFadeFilters, LOUDNORM_FILTER, LOUDNORM_OUT_RATE } from "./cut";
+import { colorOutputArgs, type ColorRenderPlan } from "./color";
+import { ffmpegAudioStreamSpecifier, ffmpegVideoStreamSpecifier } from "./probe";
 import type { ClipQaReport, QaRepairRecord } from "./qa";
 
 /** 静音/黑屏区间「贴着」片头/片尾的判定余量(秒)。 */
@@ -115,18 +117,32 @@ export function planRepair(report: ClipQaReport, ctx: RepairContext): RepairPlan
  * 修复的 ffmpeg 参数(纯函数)。裁剪需要重编码(帧精确);只修响度时
  * 视频流复制,秒级完成零画质损失。
  */
-export function buildRepairArgs(inPath: string, outPath: string, plan: RepairPlan, durationSec: number): string[] {
+export function buildRepairArgs(
+  inPath: string,
+  outPath: string,
+  plan: RepairPlan,
+  durationSec: number,
+  color?: ColorRenderPlan,
+  videoStreamIndex?: number,
+  audioStreamIndex?: number
+): string[] {
   const trims = plan.trimStartSec > 0 || plan.trimEndSec !== null;
+  const maps = [
+    "-map", ffmpegVideoStreamSpecifier(videoStreamIndex),
+    "-map", ffmpegAudioStreamSpecifier(audioStreamIndex, 0, true),
+  ];
   if (!trims) {
     // 仅响度:-c:v copy,只重编音频
     return [
       "-hide_banner", "-y",
       "-i", inPath,
+      ...maps,
       "-c:v", "copy",
       "-af", LOUDNORM_FILTER,
       "-ar", LOUDNORM_OUT_RATE,
       "-c:a", "aac",
       "-b:a", "192k",
+      ...colorOutputArgs(color),
       "-movflags", "+faststart",
       outPath,
     ];
@@ -140,10 +156,12 @@ export function buildRepairArgs(inPath: string, outPath: string, plan: RepairPla
     "-ss", toFfmpegTime(start),
     "-i", inPath,
     "-t", toFfmpegTime(newDur),
+    ...maps,
     "-c:v", "libx264",
     "-preset", "veryfast",
     "-crf", "18",
     "-pix_fmt", "yuv420p",
+    ...colorOutputArgs(color),
     ...(audioChain.length > 0 ? ["-af", audioChain.join(",")] : []),
     ...(plan.loudness ? ["-ar", LOUDNORM_OUT_RATE] : []),
     "-c:a", "aac",
@@ -170,7 +188,10 @@ export async function applyRepair(
   plan: RepairPlan,
   before: ClipQaReport,
   reQa: (fixedPath: string) => Promise<ClipQaReport>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  color?: ColorRenderPlan,
+  videoStreamIndex?: number,
+  audioStreamIndex?: number
 ): Promise<RepairOutcome> {
   const fixPath = path.replace(/\.mp4$/, ".fix.mp4");
   const record = (applied: boolean): QaRepairRecord => ({
@@ -179,7 +200,10 @@ export async function applyRepair(
     applied,
   });
   try {
-    await runFfmpeg(buildRepairArgs(path, fixPath, plan, before.durationSec), { signal });
+    await runFfmpeg(
+      buildRepairArgs(path, fixPath, plan, before.durationSec, color, videoStreamIndex, audioStreamIndex),
+      { signal }
+    );
     const fixed = await reQa(fixPath);
     if (fixed.issues.length < before.issues.length) {
       await rename(fixPath, path);
