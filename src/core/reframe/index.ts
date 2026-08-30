@@ -8,6 +8,8 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { resolveFfmpegPath } from "../binaries";
 import { ffmpegVideoStreamSpecifier, probeMedia } from "../probe";
+import { planColorRender } from "../color";
+import { analysisVideoFilter, type AnalysisVideoOptions } from "../analysis-video";
 import { ensureModel, YUNET_MODEL } from "../models";
 import { parseShowinfoTimes } from "../signals";
 import { YunetDetector, YUNET_INPUT, pickMainFace, type FaceBox } from "./yunet";
@@ -44,10 +46,15 @@ export async function generateCropPlan(
   clipStartSec: number,
   clipEndSec: number,
   modelsRoot: string,
-  uiCrop?: { topFrac: number; bottomFrac: number }
+  uiCrop?: { topFrac: number; bottomFrac: number },
+  providedAnalysis?: AnalysisVideoOptions
 ): Promise<CropPlan | null> {
   const info = await probeMedia(inputPath);
   if (!info.hasVideo || info.width <= 0 || info.height <= 0) return null;
+  const analysis = providedAnalysis ?? {
+    videoStreamIndex: info.videoStreamIndex,
+    color: planColorRender(info),
+  };
 
   const top = uiCrop?.topFrac ?? 0;
   const bottom = uiCrop?.bottomFrac ?? 0;
@@ -75,8 +82,11 @@ export async function generateCropPlan(
       "-hide_banner", "-v", "error",
       "-ss", String(clipStartSec), "-i", inputPath, "-t", String(dur),
       "-vf",
-      `fps=${SAMPLE_FPS},scale=${YUNET_INPUT}:${YUNET_INPUT}:force_original_aspect_ratio=decrease,pad=${YUNET_INPUT}:${YUNET_INPUT}:(ow-iw)/2:(oh-ih)/2:black`,
-      "-map", ffmpegVideoStreamSpecifier(info.videoStreamIndex),
+      analysisVideoFilter(
+        `fps=${SAMPLE_FPS},scale=${YUNET_INPUT}:${YUNET_INPUT}:force_original_aspect_ratio=decrease,pad=${YUNET_INPUT}:${YUNET_INPUT}:(ow-iw)/2:(oh-ih)/2:black`,
+        analysis.color
+      ),
+      "-map", ffmpegVideoStreamSpecifier(analysis.videoStreamIndex),
       "-f", "rawvideo", "-pix_fmt", "bgr24", "-",
     ],
     { encoding: "buffer", maxBuffer: 1024 * 1024 * 1024 }
@@ -111,8 +121,8 @@ export async function generateCropPlan(
     [
       "-hide_banner",
       "-ss", String(clipStartSec), "-i", inputPath, "-t", String(dur), "-an",
-      "-vf", "fps=6,scale=160:-2,select='gt(scene,0.3)',showinfo",
-      "-map", ffmpegVideoStreamSpecifier(info.videoStreamIndex),
+      "-vf", analysisVideoFilter("fps=6,scale=160:-2,select='gt(scene,0.3)',showinfo", analysis.color),
+      "-map", ffmpegVideoStreamSpecifier(analysis.videoStreamIndex),
       "-f", "null", "-",
     ],
     { maxBuffer: 64 * 1024 * 1024 }

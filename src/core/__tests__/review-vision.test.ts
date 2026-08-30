@@ -140,6 +140,22 @@ describe("reviewCandidatesVision(执行层,注入桩)", () => {
     expect(result).toBeNull();
   });
 
+  it("候选复核接触表沿用最终渲染选择的视频轨", async () => {
+    const seen: unknown[] = [];
+    await reviewCandidatesVision({
+      videoPath: "/v.mkv",
+      candidates: [cand({ id: 1 })],
+      config: { baseUrl: "http://x/v1", model: "m" },
+      analysis: { videoStreamIndex: 2 },
+      composeSheet: async (_path, _times, analysis) => {
+        seen.push(analysis);
+        return "sheet";
+      },
+      chat: async () => '{"visual":8,"scene":"subject","match":true}',
+    });
+    expect(seen).toEqual([{ videoStreamIndex: 2 }]);
+  });
+
   it("用户提示词带上标题/钩子/摘录(match 判定的依据)", () => {
     const p = reviewUserPrompt(cand({ title: "T", hook: "H", text: "X".repeat(300) }));
     expect(p).toContain("T");

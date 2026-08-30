@@ -1,8 +1,7 @@
 /**
  * 候选帧接触表(contact sheet):把若干抽帧时刻拼成一张 3×N 九宫格 JPEG,
  * 每格左上角烧上大号序号——VLM 一次看九帧批量打分,调用次数比逐帧降一个
- * 量级;同一张图也能落盘给人快速扫片。借鉴 claude-real-video 的接触表与
- * video-use「决策点才给图」的两层阅读思路。
+ * 量级;同一张图也能落盘给人快速扫片。
  *
  * 参数构建/分组是纯函数(可单测);composeContactSheetJpeg 才真正跑 ffmpeg:
  * 单次调用多路输入——每个时刻一路 -ss 快速定位,各取一帧 scale+drawtext
@@ -12,6 +11,8 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { resolveFfmpegPath } from "./binaries";
 import { escapeFilterPath } from "./cut";
+import { analysisVideoFilter, type AnalysisVideoOptions } from "./analysis-video";
+import { ffmpegVideoStreamSpecifier } from "./probe";
 
 const execFileAsync = promisify(execFile);
 
@@ -29,7 +30,7 @@ export function chunkCells<T>(items: T[], size = SHEET_CELLS): T[][] {
   return out;
 }
 
-export interface SheetOptions {
+export interface SheetOptions extends AnalysisVideoOptions {
   /** 序号标注字体(缺省不烧序号——VLM 只能按位置数格,能烧尽量烧)。 */
   fontFile?: string;
   cellWidth?: number;
@@ -54,9 +55,14 @@ export function buildSheetArgs(
       ? `,drawtext=fontfile='${escapeFilterPath(opts.fontFile)}':text='${i + 1}':x=10:y=6:fontsize=${Math.round(w * 0.16)}:fontcolor=white:borderw=5:bordercolor=black`
       : "";
   // 每路输入只取第一帧(trim 到 1 帧即 EOF,concat 才不会等整条流)
-  const cells = times.map(
-    (_t, i) => `[${i}:v]trim=end_frame=1,setpts=PTS-STARTPTS,scale=${w}:-2${label(i)}[f${i}]`
-  );
+  const cells = times.map((_t, i) => {
+    const source = ffmpegVideoStreamSpecifier(opts.videoStreamIndex, i);
+    const filters = analysisVideoFilter(
+      [`trim=end_frame=1`, "setpts=PTS-STARTPTS", `scale=${w}:-2${label(i)}`],
+      opts.color
+    );
+    return `[${source}]${filters}[f${i}]`;
+  });
   const labels = times.map((_t, i) => `[f${i}]`).join("");
   const cols = Math.min(SHEET_COLS, n);
   const rows = Math.ceil(n / cols);

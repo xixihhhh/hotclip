@@ -25,6 +25,7 @@ import { buildDraftContent, buildDraftMetaInfo } from "./jianying";
 import { generateAiCover, type CoverTier } from "./cover-ai";
 import { runAudiogram, audiogramSpec } from "./audiogram";
 import { pickCoverTime } from "./cover";
+import { proposeCoverTimes, selectQualityCoverTime, type CoverSelectionReceipt } from "./cover-quality";
 import { findFillerWords, dropFillerWords, fillerCutSpans, type FillerHit } from "./fillers";
 import { findRetakes, dropRetakeWords, retakeCutSpans, type RetakeHit } from "./retakes";
 import {
@@ -47,6 +48,7 @@ import {
 } from "./sound-design";
 import { detectUiCrop, type UiCrop } from "./uicrop";
 import { generateCropPlan, renderCropXExpr, mapToOutputTime, remapCropKeyframes } from "./reframe";
+import type { AnalysisVideoOptions } from "./analysis-video";
 import { snapClipToShots, SNAP_MAX_OUT_SEC } from "./shots";
 import { collectSignalsEvidence, detectShotBoundariesEvidence } from "./media-evidence";
 import { buildCaptionAss, VERTICAL_LAYOUT, HORIZONTAL_LAYOUT, type CaptionStyle } from "./subtitle";
@@ -153,11 +155,12 @@ async function cropPlanOverPieces(
   pieces: ClipPiece[],
   clipStartSec: number,
   modelsRoot: string,
-  uiCrop?: UiCrop
+  uiCrop?: UiCrop,
+  analysis?: AnalysisVideoOptions
 ): Promise<Awaited<ReturnType<typeof generateCropPlan>>> {
   let merged: Awaited<ReturnType<typeof generateCropPlan>> = null;
   for (const p of pieces) {
-    const cp = await generateCropPlan(inputPath, p.startSec, p.endSec, modelsRoot, uiCrop).catch(() => null);
+    const cp = await generateCropPlan(inputPath, p.startSec, p.endSec, modelsRoot, uiCrop, analysis).catch(() => null);
     if (!cp) continue;
     const shift = p.startSec - clipStartSec;
     const kfs = cp.keyframes.map((k) => ({ ...k, t: k.t + shift }));
@@ -278,6 +281,8 @@ export interface ClipRenderOutcome {
   renderCache?: "hit" | "miss" | "disabled";
   /** How the base video became available; cached keeps the receipt truthful when no encoder ran. */
   videoMode?: "copy" | "encode" | "cached";
+  /** Final-render cover-frame selection evidence; absent on legacy exports. */
+  coverSelection?: CoverSelectionReceipt;
 }
 
 export interface ExportRenderOptions {
@@ -510,6 +515,10 @@ export async function exportClips(
   // are still explicit so multi-track inputs cannot probe one picture and
   // render another; the cache identity below isolates those selections.
   const activeColor = isExecutableColorPlan(color) ? color : undefined;
+  const sourceAnalysis: AnalysisVideoOptions = {
+    videoStreamIndex: srcInfo?.videoStreamIndex,
+    color,
+  };
   // One encoder probe per process/run. The cut layer retries libx264 if the
   // advertised hardware encoder is unusable because of a missing device/driver.
   const videoEncoder = audioOnly ? "libx264" as const : await resolveVideoEncoder();
@@ -532,6 +541,7 @@ export async function exportClips(
       evidenceDir: options.evidenceCacheDir,
       signal,
       source: cacheSource ?? undefined,
+      analysis: sourceAnalysis,
     }).catch((error) => {
       if (signal?.aborted) throw error;
       return null;
@@ -550,7 +560,7 @@ export async function exportClips(
   let uiCrop: UiCrop | undefined;
   if (options.trimUi && clips.length > 0 && !audioOnly) {
     const spanEnd = Math.max(...clips.map((c) => c.endSec));
-    uiCrop = await detectUiCrop(inputPath, spanEnd, srcInfo?.videoStreamIndex).catch(() => undefined);
+    uiCrop = await detectUiCrop(inputPath, spanEnd, srcInfo?.videoStreamIndex, color).catch(() => undefined);
     if (uiCrop && uiCrop.topFrac === 0 && uiCrop.bottomFrac === 0) uiCrop = undefined;
   }
 
@@ -618,6 +628,7 @@ export async function exportClips(
           evidenceDir: options.evidenceCacheDir,
           signal,
           source: cacheSource ?? undefined,
+          analysis: sourceAnalysis,
         }).catch((error) => {
           if (signal?.aborted) throw error;
           return [] as number[];
@@ -751,9 +762,9 @@ export async function exportClips(
         // 拼接片逐段各算一版:整段跨度可能有几十分钟,人脸检测按跨度跑纯属白烧。
         // 每段的关键帧相对本段起点,统一平移到「相对切片起点」再走同一条重映射。
         const cp = stitched
-          ? await cropPlanOverPieces(inputPath, pieces, clip.startSec, options.modelsRoot, uiCrop)
+          ? await cropPlanOverPieces(inputPath, pieces, clip.startSec, options.modelsRoot, uiCrop, sourceAnalysis)
           : await generateCropPlan(
-              inputPath, clip.startSec, clip.endSec, options.modelsRoot, uiCrop
+              inputPath, clip.startSec, clip.endSec, options.modelsRoot, uiCrop, sourceAnalysis
             ).catch(() => null);
         if (cp) {
           let kfs = cp.keyframes;
@@ -1228,7 +1239,36 @@ export async function exportClips(
           clipDuration,
           clip.coverRank ?? 0 // 变体封面抓下一个响度峰,和原版错开帧
         ) + (coldOpenSec ?? 0) - headTrimSec;
-      const coverAt = Math.min(Math.max(0.2, coverAtRaw), Math.max(0.2, finalDurationSec - 0.2));
+      const clampCoverAt = (at: number): number =>
+        Math.min(Math.max(0.2, at), Math.max(0.2, finalDurationSec - 0.2));
+      const fallbackCoverAt = clampCoverAt(coverAtRaw);
+      const coverCandidates = proposeCoverTimes(
+        clipPeaks,
+        plan ? plan.segments : [{ startSec: clip.startSec, endSec: clip.endSec }],
+        clipDuration
+      ).map((candidate) => ({
+        ...candidate,
+        atSec: clampCoverAt(candidate.atSec + (coldOpenSec ?? 0) - headTrimSec),
+      })).filter((candidate, index, all) =>
+        all.findIndex((item) => Math.abs(item.atSec - candidate.atSec) < 0.05) === index
+      );
+      const coverSelection = await selectQualityCoverTime({
+        videoPath: outPath,
+        candidates: coverCandidates,
+        fallbackSec: fallbackCoverAt,
+        rank: clip.coverRank ?? 0,
+        signal,
+      }).catch((error) => {
+        if (signal?.aborted) throw error;
+        return {
+          selectedSec: Number(fallbackCoverAt.toFixed(3)),
+          fallbackSec: Number(fallbackCoverAt.toFixed(3)),
+          mode: "fallback" as const,
+          candidatesEvaluated: 0,
+          candidatesRejected: 0,
+        };
+      });
+      const coverAt = coverSelection.selectedSec;
       const coverOk = await execFileAsync(
         resolveFfmpegPath(),
         ["-hide_banner", "-v", "error", "-ss", coverAt.toFixed(2), "-i", outPath, "-frames:v", "1", "-q:v", "2", "-y", coverPath],
@@ -1330,6 +1370,7 @@ export async function exportClips(
         bgmMixed,
         renderCache,
         videoMode,
+        coverSelection,
       });
       onProgress?.({ current: i + 1, total: totalUnits, clipId: clip.id, stage: "done" });
     }

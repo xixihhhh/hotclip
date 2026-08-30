@@ -9,6 +9,8 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { join } from "path";
 import { resolveFfmpegPath } from "./binaries";
+import { analysisVideoFilter, type AnalysisVideoOptions } from "./analysis-video";
+import { ffmpegVideoStreamSpecifier } from "./probe";
 import { ensureModel, modelDir, TRANSNETV2_MODEL } from "./models";
 import type { TranscriptWord } from "../shared/api-types";
 
@@ -216,7 +218,8 @@ export async function detectShotBoundaries(
   startSec: number,
   endSec: number,
   modelsRoot: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  analysis: AnalysisVideoOptions = {}
 ): Promise<number[]> {
   signal?.throwIfAborted();
   const base = Math.max(0, startSec);
@@ -228,7 +231,8 @@ export async function detectShotBoundaries(
     [
       "-hide_banner", "-v", "error",
       "-ss", String(base), "-i", inputPath, "-t", String(dur),
-      "-vf", `fps=${TRANSNET_FPS},scale=${FRAME_W}:${FRAME_H}`,
+      "-vf", analysisVideoFilter(`fps=${TRANSNET_FPS},scale=${FRAME_W}:${FRAME_H}`, analysis.color),
+      "-map", ffmpegVideoStreamSpecifier(analysis.videoStreamIndex),
       "-f", "rawvideo", "-pix_fmt", "rgb24", "-",
     ],
     // 512MB ≈ 2.3 小时帧数据上限——单片窗口远在其下,只是兜底

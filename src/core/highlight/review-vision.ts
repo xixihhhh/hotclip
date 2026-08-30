@@ -14,6 +14,7 @@
  */
 import type { HighlightCandidate, LlmConfig } from "../../shared/api-types";
 import { composeContactSheetJpeg } from "../contact-sheet";
+import type { AnalysisVideoOptions } from "../analysis-video";
 import { stripThinkBlocks } from "./prefilter";
 import { sanitizeVisibleText, visionChatComplete, VISION_CALL_TIMEOUT_MS, type VisionChatFn, type VisionConfig, type SheetComposer } from "./vision";
 
@@ -194,10 +195,11 @@ export async function reviewCandidatesVision(opts: {
   chat?: VisionChatFn;
   budgetMs?: number;
   maxCandidates?: number;
+  analysis?: AnalysisVideoOptions;
 }): Promise<{ candidates: HighlightCandidate[]; stats: ReviewVisionStats } | null> {
   const {
     videoPath, candidates, config, signal,
-    composeSheet = (v, ts) => composeContactSheetJpeg(v, ts, { fontFile: opts.fontFile }),
+    composeSheet = (v, ts, analysis) => composeContactSheetJpeg(v, ts, { fontFile: opts.fontFile, ...analysis }),
     chat = visionChatComplete,
     budgetMs = REVIEW_BUDGET_MS,
     maxCandidates = REVIEW_MAX_CANDIDATES,
@@ -212,7 +214,7 @@ export async function reviewCandidatesVision(opts: {
     if (Date.now() > deadline) break;
     const times = planCandidateFrames(c);
     if (times.length === 0) continue;
-    const sheet = await composeSheet(videoPath, times);
+    const sheet = await composeSheet(videoPath, times, opts.analysis);
     if (!sheet) continue;
     try {
       const timeout = AbortSignal.timeout(Math.max(1, Math.min(VISION_CALL_TIMEOUT_MS, deadline - Date.now())));

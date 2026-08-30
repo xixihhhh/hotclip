@@ -12,6 +12,8 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { resolveFfmpegPath } from "./binaries";
 import { ffmpegVideoStreamSpecifier } from "./probe";
+import { analysisVideoFilter } from "./analysis-video";
+import type { ColorRenderPlan } from "./color";
 
 const execFileAsync = promisify(execFile);
 
@@ -77,7 +79,8 @@ export function detectStaticBands(frames: Uint8Array[], width = AW, height = AH)
 export async function detectUiCrop(
   inputPath: string,
   durationSec: number,
-  videoStreamIndex?: number
+  videoStreamIndex?: number,
+  color?: ColorRenderPlan | null
 ): Promise<UiCrop> {
   const fps = SAMPLES / Math.max(1, durationSec);
   const { stdout } = await execFileAsync(
@@ -85,7 +88,7 @@ export async function detectUiCrop(
     [
       "-hide_banner", "-v", "error",
       "-i", inputPath,
-      "-vf", `fps=${fps.toFixed(6)},scale=${AW}:${AH},format=gray`,
+      "-vf", analysisVideoFilter(`fps=${fps.toFixed(6)},scale=${AW}:${AH},format=gray`, color),
       "-map", ffmpegVideoStreamSpecifier(videoStreamIndex),
       "-frames:v", String(SAMPLES),
       "-f", "rawvideo", "-",

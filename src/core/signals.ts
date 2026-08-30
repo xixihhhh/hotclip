@@ -7,6 +7,8 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { resolveFfmpegPath } from "./binaries";
+import { analysisVideoFilter, type AnalysisVideoOptions } from "./analysis-video";
+import { ffmpegVideoStreamSpecifier } from "./probe";
 import {
   compactVisualSignalSamples,
   parseVisualSignalSamples,
@@ -246,7 +248,11 @@ export function planSignalGuidedTimes(
  * Fail-open: any probe error yields empty signals — detection must not die
  * because a source has no audio/video stream or ffmpeg hiccupped.
  */
-export async function collectSignals(inputPath: string, signal?: AbortSignal): Promise<MediaSignals> {
+export async function collectSignals(
+  inputPath: string,
+  signal?: AbortSignal,
+  analysis: AnalysisVideoOptions = {}
+): Promise<MediaSignals> {
   const ffmpeg = resolveFfmpegPath();
   const run = (args: string[]): Promise<string> =>
     execFileAsync(ffmpeg, args, { maxBuffer: 128 * 1024 * 1024, signal }).then(
@@ -261,7 +267,7 @@ export async function collectSignals(inputPath: string, signal?: AbortSignal): P
     run(["-hide_banner", "-i", inputPath, "-vn", "-filter_complex", "ebur128", "-f", "null", "-"]),
     run([
       "-hide_banner", "-i", inputPath, "-an",
-      "-vf", [
+      "-vf", analysisVideoFilter([
         "fps=4",
         "scale=160:-2",
         "select='gte(scene,0)'",
@@ -271,7 +277,8 @@ export async function collectSignals(inputPath: string, signal?: AbortSignal): P
         "metadata=print:key=lavfi.signalstats.YAVG",
         "metadata=print:key=lavfi.signalstats.YHIGH",
         "metadata=print:key=lavfi.signalstats.SATAVG",
-      ].join(","),
+      ], analysis.color),
+      "-map", ffmpegVideoStreamSpecifier(analysis.videoStreamIndex),
       "-f", "null", "-",
     ]),
   ]);

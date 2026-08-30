@@ -16,6 +16,7 @@ import {
   type VisionChatFn,
   type SheetComposer,
 } from "./highlight/vision";
+import { analysisVideoIdentity, type AnalysisVideoOptions } from "./analysis-video";
 
 export const TIER0_EVIDENCE_CAPABILITY = "tier0-signals-v3";
 const SHOT_EVIDENCE_VERSION = "transnetv2-v1";
@@ -76,17 +77,19 @@ export async function collectSignalsEvidence(opts: {
   signal?: AbortSignal;
   source?: FileFingerprint;
   collect?: typeof collectSignals;
+  analysis?: AnalysisVideoOptions;
 }): Promise<MediaSignals> {
   opts.signal?.throwIfAborted();
   const collect = opts.collect ?? collectSignals;
-  if (!opts.evidenceDir) return collect(opts.videoPath, opts.signal);
+  if (!opts.evidenceDir) return collect(opts.videoPath, opts.signal, opts.analysis);
   const source = opts.source ?? await fingerprintEvidenceSource(opts.videoPath);
-  const cached = await readEvidence(opts.evidenceDir, source, TIER0_EVIDENCE_CAPABILITY, validMediaSignals);
+  const capability = `${TIER0_EVIDENCE_CAPABILITY}:${analysisVideoIdentity(opts.analysis)}`;
+  const cached = await readEvidence(opts.evidenceDir, source, capability, validMediaSignals);
   opts.signal?.throwIfAborted();
   if (cached) return cached;
-  const value = await collect(opts.videoPath, opts.signal);
+  const value = await collect(opts.videoPath, opts.signal, opts.analysis);
   opts.signal?.throwIfAborted();
-  await writeEvidence(opts.evidenceDir, source, TIER0_EVIDENCE_CAPABILITY, value).catch(() => false);
+  await writeEvidence(opts.evidenceDir, source, capability, value).catch(() => false);
   return value;
 }
 
@@ -103,27 +106,28 @@ export async function detectShotBoundariesEvidence(opts: {
   signal?: AbortSignal;
   source?: FileFingerprint;
   detect?: typeof detectShotBoundaries;
+  analysis?: AnalysisVideoOptions;
 }): Promise<number[]> {
   opts.signal?.throwIfAborted();
   const detect = opts.detect ?? detectShotBoundaries;
-  if (!opts.evidenceDir) return detect(opts.videoPath, opts.startSec, opts.endSec, opts.modelsRoot, opts.signal);
+  if (!opts.evidenceDir) return detect(opts.videoPath, opts.startSec, opts.endSec, opts.modelsRoot, opts.signal, opts.analysis);
   const source = opts.source ?? await fingerprintEvidenceSource(opts.videoPath);
   const range = `${Math.round(opts.startSec * 1000)}-${Math.round(opts.endSec * 1000)}`;
-  const capability = `shots:${SHOT_EVIDENCE_VERSION}:${range}`;
+  const capability = `shots:${SHOT_EVIDENCE_VERSION}:${analysisVideoIdentity(opts.analysis)}:${range}`;
   const cached = await readEvidence(opts.evidenceDir, source, capability, validBoundaries);
   opts.signal?.throwIfAborted();
   if (cached) return cached;
-  const value = await detect(opts.videoPath, opts.startSec, opts.endSec, opts.modelsRoot, opts.signal);
+  const value = await detect(opts.videoPath, opts.startSec, opts.endSec, opts.modelsRoot, opts.signal, opts.analysis);
   opts.signal?.throwIfAborted();
   await writeEvidence(opts.evidenceDir, source, capability, value).catch(() => false);
   return value;
 }
 
-function visionIdentity(config: VisionConfig, scan: boolean): string {
+function visionIdentity(config: VisionConfig, scan: boolean, analysis?: AnalysisVideoOptions): string {
   const endpoint = config.baseUrl.replace(/\/+$/, "").toLowerCase();
   const model = config.model.trim();
   const digest = createHash("sha256").update(`${endpoint}\n${model}`).digest("hex").slice(0, 20);
-  return `vision:${VISION_EVIDENCE_VERSION}:${scan ? "full" : "quick"}:${digest}`;
+  return `vision:${VISION_EVIDENCE_VERSION}:${analysisVideoIdentity(analysis)}:${scan ? "full" : "quick"}:${digest}`;
 }
 
 function validVisionOutcome(value: unknown): value is VisionOutcome {
@@ -149,11 +153,12 @@ export async function collectVisionEvidence(opts: {
   scan?: boolean;
   evidenceDir?: string;
   source?: FileFingerprint;
+  analysis?: AnalysisVideoOptions;
 }): Promise<VisionOutcome | null> {
   opts.signal?.throwIfAborted();
   if (!opts.evidenceDir) return collectVisionSignal(opts);
   const source = opts.source ?? await fingerprintEvidenceSource(opts.videoPath);
-  const capability = visionIdentity(opts.config, opts.scan === true);
+  const capability = visionIdentity(opts.config, opts.scan === true, opts.analysis);
   const cached = await readEvidence(opts.evidenceDir, source, capability, validVisionOutcome);
   opts.signal?.throwIfAborted();
   if (cached) return cached;

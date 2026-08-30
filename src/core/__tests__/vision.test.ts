@@ -179,6 +179,23 @@ describe("collectVisionSignal (接触表批量)", () => {
     expect(outcome!.stats.peakCount).toBe(outcome!.visualPeaks.length);
   });
 
+  it("把选中视频轨与颜色预览契约传给每张接触表", async () => {
+    const seen: unknown[] = [];
+    await collectVisionSignal({
+      videoPath: "/v.mkv",
+      durationSec: 30,
+      config,
+      analysis: { videoStreamIndex: 4 },
+      composeSheet: async (_path, _times, analysis) => {
+        seen.push(analysis);
+        return "jpeg";
+      },
+      chat: async () => cellsJson(8),
+    });
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((value) => (value as { videoStreamIndex?: number }).videoStreamIndex === 4)).toBe(true);
+  });
+
   it("端点全挂 → fail-open 返回 null", async () => {
     const chat: VisionChatFn = async () => {
       throw new Error("connect ECONNREFUSED");

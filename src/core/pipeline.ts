@@ -20,6 +20,9 @@ import { collectVoiceEmotionSignal } from "./voice-emotion";
 import { exportClips, sanitizeFilename, type ExportedClip } from "./export";
 import { sliceWords } from "./subtitle";
 import { wordsInPieces } from "../shared/pieces";
+import { probeMedia } from "./probe";
+import { planColorRender } from "./color";
+import type { AnalysisVideoOptions } from "./analysis-video";
 
 export interface AutoClipConfig {
   modelsRoot: string;
@@ -95,6 +98,10 @@ export async function analyzeReferenceVideo(
     transcript.durationSec > 0
       ? transcript.durationSec
       : transcript.segments[transcript.segments.length - 1]?.endSec ?? 0;
+  const media = await probeMedia(refPath).catch(() => null);
+  const analysis: AnalysisVideoOptions = media?.hasVideo
+    ? { videoStreamIndex: media.videoStreamIndex, color: planColorRender(media) }
+    : {};
   const boundaries = await detectShotBoundariesEvidence({
     videoPath: refPath,
     startSec: 0,
@@ -102,6 +109,7 @@ export async function analyzeReferenceVideo(
     modelsRoot: cfg.modelsRoot,
     evidenceDir: cfg.evidenceCacheDir,
     signal: cfg.signal,
+    analysis,
   }).catch(() => null);
   return buildReferenceProfile(transcript, boundaries);
 }
@@ -113,10 +121,15 @@ export async function detectForPipeline(
   cfg: Pick<AutoClipConfig, "modelsRoot" | "evidenceCacheDir" | "llm" | "maxClips" | "reference" | "reviewMemory" | "performanceMemory" | "signal">
 ): Promise<HighlightCandidate[]> {
   if (transcript.segments.length === 0) throw new Error("转写结果为空(可能是无人声素材)");
+  const media = await probeMedia(videoPath).catch(() => null);
+  const analysis: AnalysisVideoOptions = media?.hasVideo
+    ? { videoStreamIndex: media.videoStreamIndex, color: planColorRender(media) }
+    : {};
   const signals = await collectSignalsEvidence({
     videoPath,
     evidenceDir: cfg.evidenceCacheDir,
     signal: cfg.signal,
+    analysis,
   }).catch((error) => {
     if (cfg.signal?.aborted) throw error;
     return undefined;
@@ -133,6 +146,7 @@ export async function detectForPipeline(
     durationSec: transcript.durationSec,
     modelsRoot: cfg.modelsRoot,
     signals: guided,
+    analysis,
   }).catch(() => null);
   // 语音情绪/笑声掌声(零配置,复用已装的 SenseVoice 权重):文字稿看不见的那半条证据
   const voice = await collectVoiceEmotionSignal({

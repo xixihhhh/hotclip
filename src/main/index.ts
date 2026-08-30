@@ -15,6 +15,8 @@ import { createClipAligner } from "@core/align";
 import { resolveByteRange } from "@core/media-range";
 import { sanitizeBrand } from "@core/brand";
 import { probeMedia } from "@core/probe";
+import { planColorRender } from "@core/color";
+import { analysisVideoIdentity, type AnalysisVideoOptions } from "@core/analysis-video";
 import { SenseVoiceEngine } from "@core/transcribe/sensevoice";
 import { ParaformerEngine } from "@core/transcribe/paraformer";
 import { FireRedEngine } from "@core/transcribe/firered";
@@ -481,16 +483,20 @@ ipcMain.handle("hotclip:timeline-data", async (_event, filePath: unknown, durati
   if (typeof filePath !== "string" || !filePath.trim()) throw new Error("timeline-data requires a file path");
   const dur = typeof durationSec === "number" && Number.isFinite(durationSec) && durationSec > 0 ? durationSec : 0;
   if (dur <= 0) throw new Error("timeline-data requires a duration");
+  const media = await probeMedia(filePath).catch(() => null);
+  const analysis: AnalysisVideoOptions = media?.hasVideo
+    ? { videoStreamIndex: media.videoStreamIndex, color: planColorRender(media) }
+    : {};
   const sourceId = await fingerprintEvidenceSource(filePath).then(evidenceSourceId).catch(() => filePath);
-  const key = `${sourceId}|${Math.round(dur)}`;
+  const key = `${sourceId}|${analysisVideoIdentity(analysis)}|${Math.round(dur)}`;
   let p = timelineCache.get(key);
   if (!p) {
     p = (async () => {
       const bins = Math.min(720, Math.max(120, Math.round(dur / 5)));
       const [signals, items, thumbs] = await Promise.all([
-        warmSignals(filePath),
+        warmSignals(filePath, analysis),
         readDanmakuItems(filePath).catch(() => null),
-        extractFilmstrip(filePath, dur, 8).catch(() => [] as string[]),
+        extractFilmstrip(filePath, dur, 8, analysis).catch(() => [] as string[]),
       ]);
       return {
         loudness: signals?.loudnessSamples ? loudnessCurve(signals.loudnessSamples, dur, bins) : [],
@@ -524,7 +530,11 @@ ipcMain.handle("hotclip:contact-sheet", async (_event, filePath: unknown, startS
   const fontFile = app.isPackaged
     ? join(process.resourcesPath, "fonts", "SourceHanSansSC-Bold.otf")
     : join(app.getAppPath(), "resources", "fonts", "SourceHanSansSC-Bold.otf");
-  const b64 = await composeContactSheetJpeg(filePath, times, { fontFile }).catch(() => null);
+  const media = await probeMedia(filePath).catch(() => null);
+  const analysis: AnalysisVideoOptions = media?.hasVideo
+    ? { videoStreamIndex: media.videoStreamIndex, color: planColorRender(media) }
+    : {};
+  const b64 = await composeContactSheetJpeg(filePath, times, { fontFile, ...analysis }).catch(() => null);
   return b64 ? `data:image/jpeg;base64,${b64}` : "";
 });
 
@@ -603,12 +613,24 @@ let transcribing = false;
 // the user reaches highlight detection the evidence is already there.
 const signalsCache = new Map<string, Promise<import("@core/signals").MediaSignals | undefined>>();
 
-async function warmSignals(filePath: string): Promise<import("@core/signals").MediaSignals | undefined> {
+async function warmSignals(
+  filePath: string,
+  providedAnalysis?: AnalysisVideoOptions
+): Promise<import("@core/signals").MediaSignals | undefined> {
+  const media = providedAnalysis ? null : await probeMedia(filePath).catch(() => null);
+  const analysis = providedAnalysis ?? (media?.hasVideo
+    ? { videoStreamIndex: media.videoStreamIndex, color: planColorRender(media) }
+    : {});
   const source = await fingerprintEvidenceSource(filePath).catch(() => null);
-  const key = source ? evidenceSourceId(source) : filePath;
+  const key = `${source ? evidenceSourceId(source) : filePath}|${analysisVideoIdentity(analysis)}`;
   let p = signalsCache.get(key);
   if (!p) {
-    p = collectSignalsEvidence({ videoPath: filePath, evidenceDir: baseEvidenceCacheDir(), source: source ?? undefined }).catch(() => undefined);
+    p = collectSignalsEvidence({
+      videoPath: filePath,
+      evidenceDir: baseEvidenceCacheDir(),
+      source: source ?? undefined,
+      analysis,
+    }).catch(() => undefined);
     signalsCache.set(key, p);
     // bound the cache — sources are large strings but promises are cheap;
     // keep the last few files only
@@ -734,6 +756,7 @@ ipcMain.handle(
     let visionStats: VisionStats | undefined;
     // 候选段画面复核用的视觉端点(与信号通道同一配置;hasVideo 时才会被赋值)
     let reviewVisionCfg: { baseUrl: string; model: string; apiKey?: string } | null = null;
+    let reviewAnalysis: AnalysisVideoOptions | undefined;
     let emotionStats: EmotionStats | undefined;
     let danmakuStats: DanmakuStats | undefined;
     let voiceStats: VoiceTagStats | undefined;
@@ -760,6 +783,7 @@ ipcMain.handle(
         ]).catch(() => null);
       }
       if (media && media.hasVideo && media.durationSec > 1) {
+        reviewAnalysis = { videoStreamIndex: media.videoStreamIndex, color: planColorRender(media) };
         const vc = vision as { baseUrl?: unknown; model?: unknown; apiKey?: unknown } | null | undefined;
         const visionCfg =
           vc && typeof vc.baseUrl === "string" && vc.baseUrl.trim() && typeof vc.model === "string" && vc.model.trim()
@@ -768,7 +792,13 @@ ipcMain.handle(
         reviewVisionCfg = visionCfg;
         const [emotionOutcome, visionOutcome] = await Promise.all([
           Promise.race([
-            collectEmotionSignal({ videoPath: filePath, durationSec: media.durationSec, modelsRoot: modelsRoot(), signals }),
+            collectEmotionSignal({
+              videoPath: filePath,
+              durationSec: media.durationSec,
+              modelsRoot: modelsRoot(),
+              signals,
+              analysis: reviewAnalysis,
+            }),
             new Promise<null>((r) => setTimeout(() => r(null), 120_000)),
           ]).catch(() => null),
           visionCfg
@@ -784,6 +814,7 @@ ipcMain.handle(
                   ? join(process.resourcesPath, "fonts", "SourceHanSansSC-Bold.otf")
                   : join(app.getAppPath(), "resources", "fonts", "SourceHanSansSC-Bold.otf"),
                 evidenceDir: baseEvidenceCacheDir(),
+                analysis: reviewAnalysis,
               }).catch(() => null)
             : Promise.resolve(null),
         ]);
@@ -853,6 +884,7 @@ ipcMain.handle(
         fontFile: app.isPackaged
           ? join(process.resourcesPath, "fonts", "SourceHanSansSC-Bold.otf")
           : join(app.getAppPath(), "resources", "fonts", "SourceHanSansSC-Bold.otf"),
+        analysis: reviewAnalysis,
       }).catch(() => null);
       if (reviewed) {
         candidates = reviewed.candidates;

@@ -1,5 +1,30 @@
 import { describe, it, expect } from "vitest";
 import { chunkCells, buildSheetArgs, SHEET_CELLS } from "../contact-sheet";
+import type { ColorRenderPlan } from "../color";
+
+const pqPlan: ColorRenderPlan = {
+  source: {
+    pixelFormat: "yuv420p10le",
+    bitDepth: 10,
+    primaries: "bt2020",
+    transfer: "smpte2084",
+    space: "bt2020nc",
+    range: "tv",
+    peakNits: 1000,
+  },
+  detected: "pq",
+  action: "tonemap-bt709",
+  output: {
+    pixelFormat: "yuv420p",
+    bitDepth: 8,
+    primaries: "bt709",
+    transfer: "bt709",
+    space: "bt709",
+    range: "tv",
+    peakNits: 100,
+  },
+  reason: "hdr-pq-tone-map-bt709",
+};
 
 describe("chunkCells", () => {
   it("按满格容量分组,最后一组可不满", () => {
@@ -55,5 +80,16 @@ describe("buildSheetArgs", () => {
     const args = buildSheetArgs("/v.mp4", [-1]);
     expect(args[args.indexOf("-ss") + 1]).toBe("0.00");
     expect(() => buildSheetArgs("/v.mp4", [])).toThrow();
+  });
+
+  it("每路输入都取同一全局选中视频轨,HDR 预览先转 SDR 再缩放", () => {
+    const args = buildSheetArgs("/v.mkv", [1, 2], { videoStreamIndex: 3, color: pqPlan });
+    const graph = args[args.indexOf("-filter_complex") + 1];
+    expect(graph).toContain("[0:3]zscale=pin=bt2020");
+    expect(graph).toContain("[1:3]zscale=pin=bt2020");
+    expect(graph).toContain("trim=end_frame=1");
+    expect(graph).not.toContain("[0:v]");
+    expect(graph.indexOf("zscale=pin=bt2020")).toBeLessThan(graph.indexOf("scale=448:-2"));
+    expect(graph).toContain("tonemap=tonemap=mobius");
   });
 });

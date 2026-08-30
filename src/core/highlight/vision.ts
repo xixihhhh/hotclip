@@ -12,6 +12,7 @@
  */
 import type { LlmConfig } from "../../shared/api-types";
 import { chunkCells, composeContactSheetJpeg } from "../contact-sheet";
+import type { AnalysisVideoOptions } from "../analysis-video";
 import type { MediaSignals, TimeRange } from "../signals";
 import { stripThinkBlocks } from "./prefilter";
 
@@ -117,7 +118,11 @@ export type VisionChatFn = (
 ) => Promise<string>;
 
 /** 接触表拼图注入点(times → base64 jpeg;失败 null)。 */
-export type SheetComposer = (videoPath: string, times: number[]) => Promise<string | null>;
+export type SheetComposer = (
+  videoPath: string,
+  times: number[],
+  analysis?: AnalysisVideoOptions
+) => Promise<string | null>;
 
 /**
  * 规划抽帧时刻:先取信号窗口中点(按时间序),再用均匀网格补满额度;
@@ -318,11 +323,12 @@ export async function collectVisionSignal(opts: {
   budgetMs?: number;
   /** 全场扫描档(v0.13):~30 秒一帧扫完整场,并回流画面描述时刻线。 */
   scan?: boolean;
+  analysis?: AnalysisVideoOptions;
 }): Promise<VisionOutcome | null> {
   const scan = opts.scan === true;
   const {
     videoPath, durationSec, config, signals, signal,
-    composeSheet = (v, ts) => composeContactSheetJpeg(v, ts, { fontFile: opts.fontFile }),
+    composeSheet = (v, ts, analysis) => composeContactSheetJpeg(v, ts, { fontFile: opts.fontFile, ...analysis }),
     chat = visionChatComplete,
     budgetMs = scan ? SCAN_BUDGET_MS : VISION_BUDGET_MS,
   } = opts;
@@ -336,7 +342,7 @@ export async function collectVisionSignal(opts: {
   for (const group of chunkCells(times)) {
     if (signal?.aborted) throw new Error("aborted");
     if (Date.now() > deadline) break; // 预算耗尽,带着已得结果收工
-    const sheet = await composeSheet(videoPath, group);
+    const sheet = await composeSheet(videoPath, group, opts.analysis);
     if (!sheet) continue;
     try {
       const timeout = AbortSignal.timeout(Math.max(1, Math.min(VISION_CALL_TIMEOUT_MS, deadline - Date.now())));

@@ -87,6 +87,44 @@ describe("capability adapters", () => {
     expect(detect).toHaveBeenCalledTimes(2);
   });
 
+  it("isolates cached visual evidence by selected source picture", async () => {
+    const { dir, sourcePath } = await fresh();
+    const collect = vi.fn(async () => ({ loudPeaks: [], cutDense: [] }));
+    await collectSignalsEvidence({
+      videoPath: sourcePath,
+      evidenceDir: dir,
+      collect,
+      analysis: { videoStreamIndex: 0 },
+    });
+    await collectSignalsEvidence({
+      videoPath: sourcePath,
+      evidenceDir: dir,
+      collect,
+      analysis: { videoStreamIndex: 1 },
+    });
+    await collectSignalsEvidence({
+      videoPath: sourcePath,
+      evidenceDir: dir,
+      collect,
+      analysis: { videoStreamIndex: 1 },
+    });
+    expect(collect).toHaveBeenCalledTimes(2);
+
+    const detect = vi.fn(async () => [2]);
+    const common = {
+      videoPath: sourcePath,
+      startSec: 0,
+      endSec: 5,
+      modelsRoot: root,
+      evidenceDir: dir,
+      detect,
+    };
+    await detectShotBoundariesEvidence({ ...common, analysis: { videoStreamIndex: 0 } });
+    await detectShotBoundariesEvidence({ ...common, analysis: { videoStreamIndex: 1 } });
+    await detectShotBoundariesEvidence({ ...common, analysis: { videoStreamIndex: 1 } });
+    expect(detect).toHaveBeenCalledTimes(2);
+  });
+
   it("reuses visual outcomes across API-key changes but not model changes", async () => {
     const { dir, sourcePath } = await fresh();
     const chat = vi.fn(async (_llm, _system, _user, _image) => JSON.stringify({
@@ -107,5 +145,24 @@ describe("capability adapters", () => {
     expect(chat).toHaveBeenCalledTimes(calls);
     await collectVisionEvidence({ ...common, config: { ...common.config, model: "vision-b" } });
     expect(chat.mock.calls.length).toBeGreaterThan(calls);
+  });
+
+  it("does not reuse a vision verdict for a different selected video stream", async () => {
+    const { dir, sourcePath } = await fresh();
+    const chat = vi.fn(async () => JSON.stringify({
+      cells: Array.from({ length: 9 }, (_, index) => ({ i: index + 1, energy: 8, note: "frame" })),
+    }));
+    const common = {
+      videoPath: sourcePath,
+      durationSec: 300,
+      evidenceDir: dir,
+      composeSheet: async () => "jpeg",
+      chat,
+      config: { baseUrl: "http://localhost:11434/v1", model: "vision-a" },
+    };
+    await collectVisionEvidence({ ...common, analysis: { videoStreamIndex: 0 } });
+    const firstCalls = chat.mock.calls.length;
+    await collectVisionEvidence({ ...common, analysis: { videoStreamIndex: 1 } });
+    expect(chat.mock.calls.length).toBeGreaterThan(firstCalls);
   });
 });

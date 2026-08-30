@@ -13,6 +13,8 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { join } from "path";
 import { resolveFfmpegPath } from "./binaries";
+import { analysisVideoFilter, type AnalysisVideoOptions } from "./analysis-video";
+import { ffmpegVideoStreamSpecifier } from "./probe";
 import { modelDir, ensureModel, EMOTION_MODEL } from "./models";
 import { planSignalGuidedTimes, type MediaSignals, type TimeRange } from "./signals";
 import { YunetDetector, pickMainFace, YUNET_INPUT, type FaceBox } from "./reframe/yunet";
@@ -148,7 +150,11 @@ export class EmotionScorer {
 }
 
 /** 抽一帧 640×640 letterboxed BGR(与人脸追踪同款滤镜,保持宽高比)。 */
-export async function extractLetterboxedFrame(videoPath: string, tSec: number): Promise<Uint8Array | null> {
+export async function extractLetterboxedFrame(
+  videoPath: string,
+  tSec: number,
+  analysis: AnalysisVideoOptions = {}
+): Promise<Uint8Array | null> {
   try {
     const n = YUNET_INPUT;
     const { stdout } = await execFileAsync(
@@ -156,7 +162,11 @@ export async function extractLetterboxedFrame(videoPath: string, tSec: number): 
       [
         "-hide_banner", "-v", "error",
         "-ss", tSec.toFixed(2), "-i", videoPath, "-frames:v", "1",
-        "-vf", `scale=${n}:${n}:force_original_aspect_ratio=decrease,pad=${n}:${n}:(ow-iw)/2:(oh-ih)/2:black`,
+        "-vf", analysisVideoFilter(
+          `scale=${n}:${n}:force_original_aspect_ratio=decrease,pad=${n}:${n}:(ow-iw)/2:(oh-ih)/2:black`,
+          analysis.color
+        ),
+        "-map", ffmpegVideoStreamSpecifier(analysis.videoStreamIndex),
         "-f", "rawvideo", "-pix_fmt", "bgr24", "-",
       ],
       { encoding: "buffer", maxBuffer: 8 * 1024 * 1024 }
@@ -168,7 +178,7 @@ export async function extractLetterboxedFrame(videoPath: string, tSec: number): 
 }
 
 export interface EmotionDeps {
-  extractFrame: (videoPath: string, tSec: number) => Promise<Uint8Array | null>;
+  extractFrame: (videoPath: string, tSec: number, analysis?: AnalysisVideoOptions) => Promise<Uint8Array | null>;
   detectFaces: (bgr: Uint8Array) => Promise<FaceBox[]>;
   scoreEmotion: (gray64: Float32Array) => Promise<number[]>;
 }
@@ -203,6 +213,7 @@ export async function collectEmotionSignal(opts: {
   signals?: MediaSignals;
   deps?: EmotionDeps;
   budgetMs?: number;
+  analysis?: AnalysisVideoOptions;
 }): Promise<EmotionOutcome | null> {
   const { videoPath, durationSec, modelsRoot, signals, budgetMs = EMOTION_BUDGET_MS } = opts;
   const times = planEmotionFrameTimes(durationSec, signals);
@@ -219,7 +230,7 @@ export async function collectEmotionSignal(opts: {
   let facesScored = 0;
   for (const t of times) {
     if (Date.now() > deadline) break; // 预算耗尽,带着已得结果收工
-    const bgr = await deps.extractFrame(videoPath, t);
+    const bgr = await deps.extractFrame(videoPath, t, opts.analysis);
     if (!bgr) continue;
     try {
       const faces = await deps.detectFaces(bgr);
