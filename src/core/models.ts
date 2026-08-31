@@ -181,6 +181,22 @@ export const SILERO_VAD_MODEL: ModelAsset = {
   sha256: "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6",
 };
 
+/**
+ * DPDFNet2 high-resolution speech enhancement (Apache-2.0, 48 kHz).
+ * Unlike the tiny GTCRN export, this model keeps a full-band 48 kHz output,
+ * so it is suitable for an explicit publish-audio enhancement pass rather
+ * than only ASR preprocessing. Runs through the bundled sherpa-onnx runtime.
+ */
+export const DPDFNET_SPEECH_ENHANCEMENT_MODEL: ModelAsset = {
+  id: "dpdfnet2-48khz-hr",
+  url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/speech-enhancement-models/dpdfnet2_48khz_hr.onnx",
+  mirrors: ["https://ghfast.top/", "https://gh-proxy.com/"],
+  extractedDir: "dpdfnet2-48khz-hr",
+  approxBytes: 10_596_848,
+  singleFile: "model.onnx",
+  sha256: "0b399f8a58dc4d70d8cd97541f5c39869406145193b957d00a03b66070944928",
+};
+
 export interface DownloadProgress {
   downloadedBytes: number;
   totalBytes: number;

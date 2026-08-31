@@ -7,7 +7,7 @@ import { mkdtemp, mkdir, writeFile, readFile, readdir, rm } from "fs/promises";
 import { tmpdir } from "os";
 import * as nodePath from "path";
 import { join } from "path";
-import { dirSize, isInside, moveModelsDir } from "../models-inventory";
+import { dirSize, isInside, MODEL_CATALOG, moveModelsDir } from "../models-inventory";
 import { defaultModelsRoot, readAppSettings, resolveModelsRoot, writeAppSettings } from "../app-settings";
 
 let base: string;
@@ -35,6 +35,21 @@ describe("dirSize", () => {
 
   it("目录不存在算 0,不抛异常(设置页不该因为路径没了整页报错)", async () => {
     expect(await dirSize(join(base, "nope"))).toBe(0);
+  });
+});
+
+describe("MODEL_CATALOG", () => {
+  it("lists speech safety and optional 48 kHz dialogue enhancement with verified assets", () => {
+    expect(MODEL_CATALOG.map((entry) => [entry.asset.id, entry.useKey])).toEqual(expect.arrayContaining([
+      ["silero-vad-v6", "useSpeechSafety"],
+      ["dpdfnet2-48khz-hr", "useSpeechEnhance"],
+    ]));
+    const speech = MODEL_CATALOG.find((entry) => entry.asset.id === "dpdfnet2-48khz-hr")?.asset;
+    expect(speech).toMatchObject({
+      approxBytes: 10_596_848,
+      singleFile: "model.onnx",
+      sha256: "0b399f8a58dc4d70d8cd97541f5c39869406145193b957d00a03b66070944928",
+    });
   });
 });
 

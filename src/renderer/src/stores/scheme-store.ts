@@ -16,7 +16,7 @@ export const SCHEME_KEYS = [
   "vertical", "alsoLandscape", "trimUi", "titleCard", "autoZoom", "autoEnhance",
   "jumpCut", "keepBreath", "cleanFillers", "cutRetakes", "preciseAlign",
   "openingHook", "coldOpen", "flashForward",
-  "normalizeLoudness", "denoise", "muteSensitive", "sfx",
+  "normalizeLoudness", "denoise", "denoiseMode", "muteSensitive", "sfx",
   "captionStyle", "speakerLabels", "translate", "subtitleFile",
   "publishCopy", "aiCover", "aigcLabel", "evidencePack", "publishPack", "packPlatforms", "seriesPack",
   "jianyingDraft", "timeline", "compilation",

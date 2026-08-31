@@ -1052,6 +1052,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
       // 修复:这四个开关此前从未传进导出层——UI 点了没效果,被 fail-open
       // 语义掩盖(降噪/合集/横屏版/高潮前置在桌面端一直是死开关)
       denoise: Boolean(opts.denoise),
+      denoiseMode: opts.denoiseMode === "smart" ? "smart" : "basic",
       muteTerms: muteTerms.length > 0 ? muteTerms : undefined,
       compilation: Boolean(opts.compilation),
       coldOpen: Boolean(opts.coldOpen),

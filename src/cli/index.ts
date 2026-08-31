@@ -31,11 +31,12 @@ const USAGE = `HotClip CLI —— 本地 AI 切片,素材不出电脑
       --reference: 丢一条想对标的爆款切片,实测其节奏(时长/语速/镜头/钩子)
       生成画像,选段向对标节奏靠拢(偏好不是硬约束)
 
-  pnpm cli clip <视频路径> [--max-clips N] [--reference 对标视频] [--no-vertical] [--no-captions] [--auto-enhance] [--out 目录] [--json]
+  pnpm cli clip <视频路径> [--max-clips N] [--reference 对标视频] [--no-vertical] [--no-captions] [--auto-enhance] [--denoise|--smart-denoise] [--out 目录] [--json]
       全托管一条龙:转写 → 找爆点 → 出片(竖屏/字幕/跳剪/响度默认全开)
       + 出片质检(黑屏/长静音/响度/时长/切点/平台违禁词复核),报告进 clips.json
       + 可自愈告警自动修复(首尾静音黑屏裁边/响度重归一,修复记录进 qa.repair)
       --auto-enhance: 本地测量保留画面,仅在明显偏暗/灰/过饱和时克制校正(默认关闭)
+      --denoise: 基础固定滤镜降噪;--smart-denoise: 48kHz 本地模型增强人声,失败回退基础档
 
   pnpm cli doctor [--download]
       环境自检:ffmpeg/模型安装状态/LLM 端点/磁盘/缓存,给出修复建议
@@ -61,6 +62,7 @@ export interface CliArgs {
   vertical: boolean;
   captions: boolean;
   autoEnhance: boolean;
+  denoiseMode?: "basic" | "smart";
   outDir?: string;
   /** 对标爆款视频路径(参考画像驱动选段)。 */
   referencePath?: string;
@@ -80,6 +82,8 @@ export function parseCliArgs(argv: string[]): CliArgs {
     if (a === "--no-vertical") args.vertical = false;
     else if (a === "--no-captions") args.captions = false;
     else if (a === "--auto-enhance") args.autoEnhance = true;
+    else if (a === "--denoise") args.denoiseMode = "basic";
+    else if (a === "--smart-denoise") args.denoiseMode = "smart";
     else if (a === "--json") args.json = true;
     else if (a === "--download") args.download = true;
     else if (a === "--max-clips") {
@@ -248,6 +252,7 @@ async function main(): Promise<void> {
       vertical: args.vertical,
       captions: args.captions,
       autoEnhance: args.autoEnhance,
+      denoiseMode: args.denoiseMode,
       outDir: args.outDir,
       reference,
       reviewMemory: await loadReviewMemory(userDataDir()),
@@ -275,6 +280,7 @@ async function main(): Promise<void> {
               colorConverted: Boolean(r.colorConverted),
               colorConversionSkipped: Boolean(r.colorConversionSkipped),
               colorInspectionFailed: Boolean(r.colorInspectionFailed),
+              audioEnhancement: r.audioEnhancement ?? null,
               qa: r.qa ?? null,
             })),
           },
@@ -294,7 +300,8 @@ async function main(): Promise<void> {
           : r.colorInspectionFailed
             ? " · 色彩信息检查失败"
             : "";
-      process.stdout.write(`- ${basename(r.path)} (${Math.round(r.durationSec)}s, 评分 ${c?.score ?? "?"}${colorNote}) ${c?.title ?? ""}\n`);
+      const audioNote = r.audioEnhancement ? ` · 音频:${r.audioEnhancement}` : "";
+      process.stdout.write(`- ${basename(r.path)} (${Math.round(r.durationSec)}s, 评分 ${c?.score ?? "?"}${colorNote}${audioNote}) ${c?.title ?? ""}\n`);
       if (r.qa && r.qa.status === "warn") {
         process.stdout.write(`  ⚠ 质检:${r.qa.issues.join(";")}\n`);
       }

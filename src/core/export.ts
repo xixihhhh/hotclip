@@ -84,6 +84,12 @@ import {
 import { canCopyVideoStream, probeVideoKeyframes } from "./smart-render";
 import { planVisualEnhancement, type VisualEnhancePlan, type VisualSignalSample } from "./visual-enhance";
 import { isExecutableColorPlan, isHdrSource, planColorRender, type ColorRenderPlan } from "./color";
+import {
+  applySmartDenoiseWithFallback,
+  type AudioEnhancementReceipt,
+  type DenoiseMode,
+} from "./speech-enhancement";
+import { DPDFNET_SPEECH_ENHANCEMENT_MODEL } from "./models";
 
 export interface ExportClipSpec {
   id: number;
@@ -256,8 +262,10 @@ export interface ClipRenderOutcome {
   stitchedPieces: number;
   /** True when audio was matched to the -14 LUFS social loudness target. */
   loudnessNormalized: boolean;
-  /** True 表示走了基础降噪链(高通×2+afftdn)。 */
+  /** True when basic or learned audio cleanup was requested. */
   denoised: boolean;
+  /** Requested/applied audio cleanup tier; absent on legacy exports. */
+  audioEnhancement?: AudioEnhancementReceipt;
   /** Clip-local measured picture correction; null when disabled. */
   visualEnhance?: VisualEnhancePlan | null;
   /** Source color evidence and the exact HDR→SDR decision; absent on legacy exports. */
@@ -352,6 +360,8 @@ export interface ExportRenderOptions {
   normalizeLoudness?: boolean;
   /** 基础降噪:压直播回放常见底噪/电流声(高通×2+afftdn,先于响度标准化)。 */
   denoise?: boolean;
+  /** `smart` uses the optional 48 kHz local speech model and falls back to `basic`. */
+  denoiseMode?: DenoiseMode;
   /** Conservative clip-local exposure, contrast and saturation correction. */
   autoEnhance?: boolean;
   /** User-controlled terms muted at transcript word timestamps. */
@@ -430,6 +440,8 @@ export interface ExportedClip {
   colorConversionSkipped?: boolean;
   /** Source probing failed, so HDR colour safety could not be evaluated. */
   colorInspectionFailed?: boolean;
+  /** Effective audio cleanup tier for completion/headless status. */
+  audioEnhancement?: AudioEnhancementReceipt["applied"];
   /** 出片质检报告;质检关闭或检测失败为 null/undefined。 */
   qa?: ClipQaReport | null;
 }
@@ -929,8 +941,14 @@ export async function exportClips(
         options.muteTerms && clip.words
           ? mapSensitiveRanges(clip.words, options.muteTerms, plan?.segments ?? [{ startSec: clip.startSec, endSec: clip.endSec }])
           : undefined;
+      // Smart cleanup runs once over the fully assembled clip, immediately
+      // before SFX/BGM. Defer both denoise and loudness to that post-pass so
+      // inference sees the final edit and loudness is measured after it.
+      const smartDenoise = Boolean(options.denoise && options.denoiseMode === "smart");
+      const baseDenoise = smartDenoise ? false : options.denoise;
+      const baseNormalizeLoudness = smartDenoise ? false : options.normalizeLoudness;
       const cutOptions: CutOptions = trackPlan
-        ? { ...sourceStreams, trackPlan, autoZoom, visualEnhance, color: activeColor, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, muteRanges: sensitiveMuteRanges, watermark, metadata: aigcMeta, crf: options.crf, encoder: videoEncoder }
+        ? { ...sourceStreams, trackPlan, autoZoom, visualEnhance, color: activeColor, subtitlePath, fontsDir: subtitlePath ? options.fontsDir : undefined, normalizeLoudness: baseNormalizeLoudness, denoise: baseDenoise, muteRanges: sensitiveMuteRanges, watermark, metadata: aigcMeta, crf: options.crf, encoder: videoEncoder }
         : {
             ...sourceStreams,
             uiCrop,
@@ -940,8 +958,8 @@ export async function exportClips(
             color: activeColor,
             subtitlePath,
             fontsDir: subtitlePath ? options.fontsDir : undefined,
-            normalizeLoudness: options.normalizeLoudness,
-            denoise: options.denoise,
+            normalizeLoudness: baseNormalizeLoudness,
+            denoise: baseDenoise,
             muteRanges: sensitiveMuteRanges,
             watermark,
             metadata: aigcMeta,
@@ -965,8 +983,11 @@ export async function exportClips(
               trackPlan,
               subtitleSha256: subtitleHash,
               fontsDir: subtitlePath ? options.fontsDir : undefined,
-              normalizeLoudness: options.normalizeLoudness,
-              denoise: options.denoise,
+              normalizeLoudness: baseNormalizeLoudness,
+              denoise: baseDenoise,
+              audioEnhancement: smartDenoise
+                ? { requested: "smart", modelId: DPDFNET_SPEECH_ENHANCEMENT_MODEL.id }
+                : undefined,
               muteRanges: sensitiveMuteRanges,
               watermark: watermark ? { ...watermark, file: cacheWatermark } : undefined,
               metadata: aigcMeta,
@@ -1006,8 +1027,8 @@ export async function exportClips(
               spec: audiogramSpec(Boolean(options.vertical), options.brand?.highlightColor),
               subtitlePath,
               fontsDir: subtitlePath ? options.fontsDir : undefined,
-              normalizeLoudness: options.normalizeLoudness,
-              denoise: options.denoise,
+              normalizeLoudness: baseNormalizeLoudness,
+              denoise: baseDenoise,
               muteRanges: sensitiveMuteRanges,
               watermark,
               metadata: aigcMeta,
@@ -1159,8 +1180,8 @@ export async function exportClips(
               ? planVisualEnhancement(visualSamples, [{ startSec: coPlan.startSec, endSec: coPlan.endSec }])
               : null;
             const miniCutOptions = miniTrack
-              ? { ...sourceStreams, trackPlan: miniTrack, visualEnhance: miniVisualEnhance, color: activeColor, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, muteRanges: options.muteTerms && clip.words ? mapSensitiveRanges(clip.words, options.muteTerms, [{ startSec: coPlan.startSec, endSec: coPlan.endSec }]) : undefined, watermark, crf: options.crf, encoder: videoEncoder }
-              : { ...sourceStreams, uiCrop, vertical: options.vertical, visualEnhance: miniVisualEnhance, color: activeColor, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: options.normalizeLoudness, denoise: options.denoise, muteRanges: options.muteTerms && clip.words ? mapSensitiveRanges(clip.words, options.muteTerms, [{ startSec: coPlan.startSec, endSec: coPlan.endSec }]) : undefined, watermark, crf: options.crf, encoder: videoEncoder };
+              ? { ...sourceStreams, trackPlan: miniTrack, visualEnhance: miniVisualEnhance, color: activeColor, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: baseNormalizeLoudness, denoise: baseDenoise, muteRanges: options.muteTerms && clip.words ? mapSensitiveRanges(clip.words, options.muteTerms, [{ startSec: coPlan.startSec, endSec: coPlan.endSec }]) : undefined, watermark, crf: options.crf, encoder: videoEncoder }
+              : { ...sourceStreams, uiCrop, vertical: options.vertical, visualEnhance: miniVisualEnhance, color: activeColor, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: baseNormalizeLoudness, denoise: baseDenoise, muteRanges: options.muteTerms && clip.words ? mapSensitiveRanges(clip.words, options.muteTerms, [{ startSec: coPlan.startSec, endSec: coPlan.endSec }]) : undefined, watermark, crf: options.crf, encoder: videoEncoder };
             await rename(outPath, bodyPath);
             await cutClip(inputPath, miniPath, coPlan.startSec, coPlan.endSec, miniCutOptions, signal);
             // 硬切拼接(通行做法);AIGC 隐式标识补到最终容器上
@@ -1177,6 +1198,18 @@ export async function exportClips(
           });
           if (ok) coldOpenSec = miniDur;
         }
+      }
+
+      let audioEnhancement: AudioEnhancementReceipt | undefined;
+      if (options.denoise) {
+        audioEnhancement = smartDenoise
+          ? await applySmartDenoiseWithFallback(
+              outPath,
+              options.modelsRoot,
+              Boolean(options.normalizeLoudness),
+              signal
+            )
+          : { requested: "basic", applied: "basic" };
       }
 
       // 声音设计(音效打点 + BGM 闪避):成片完全组装好之后做一遍音频后处理
@@ -1416,6 +1449,7 @@ export async function exportClips(
         colorConverted: Boolean(activeColor),
         colorConversionSkipped: Boolean(hdrDetected && !activeColor),
         colorInspectionFailed,
+        audioEnhancement: audioEnhancement?.applied,
         qa: qaReport,
       });
       if (fillerHits.length > 0) {
@@ -1442,6 +1476,7 @@ export async function exportClips(
         stitchedPieces: stitched ? pieces.length : 0,
         loudnessNormalized: Boolean(options.normalizeLoudness),
         denoised: Boolean(options.denoise),
+        audioEnhancement,
         visualEnhance,
         color,
         sensitiveMutes: sensitiveMuteRanges?.length ?? 0,
@@ -1655,6 +1690,7 @@ export async function exportClips(
         openingHook: Boolean(options.openingHook),
         normalizeLoudness: Boolean(options.normalizeLoudness),
         denoise: Boolean(options.denoise),
+        denoiseMode: options.denoise ? options.denoiseMode ?? "basic" : null,
         autoEnhance: Boolean(options.autoEnhance),
         coldOpen: Boolean(options.coldOpen),
         flashForward: Boolean(options.flashForward),

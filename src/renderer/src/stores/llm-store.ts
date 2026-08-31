@@ -24,11 +24,11 @@ export const PREFILTER_DEFAULTS: PrefilterSettings = {
   model: "qwen3:4b",
 };
 
-/** 视觉爆点信号的端侧 VL 端点设置(默认 Ollama + qwen3-vl:4b,默认关)。 */
+/** 视觉爆点信号的端侧 VL 端点设置(默认 Ollama + qwen3.5:4b,默认关)。 */
 export const VISION_DEFAULTS: PrefilterSettings = {
   enabled: false,
   baseUrl: "http://localhost:11434/v1",
-  model: "qwen3-vl:4b",
+  model: "qwen3.5:4b",
 };
 
 function loadLocalEndpoint(key: string, defaults: PrefilterSettings): PrefilterSettings {

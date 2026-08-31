@@ -30,6 +30,7 @@
 - **Your footage never leaves your machine**: transcription, captions, cutting and export all run locally — unreleased footage and client material stay yours
 - **Every cut comes with receipts**: virality score + opening hook + reasoning + four-dimension review, plus visible caption-timing provenance and review ranges — the AI never guesses timestamps or fabricates confidence
 - **Automatic cuts listen for speech first**: a sub-1MB local detector independently checks the word timeline; word gaps that still contain speech stay intact, edge movement is strictly capped, and uncertain evidence preserves the original cut exactly
+- **Denoise only when needed, at the tier you choose**: Basic keeps the conservative fixed filter; Smart downloads an optional ~10MB 48kHz local dialogue model, processes the fully assembled edit before SFX/BGM, and truthfully falls back to Basic when unavailable
 - **Live chat feeds highlight detection**: the chat log next to your recording is auto-discovered (BililiveRecorder .xml and Douyin-recorder .jsonl both work), gifts and superchats weighted, spam-proof — the audience voting second by second, evidence most tools never even look at
 - **Ready to post, not just cut**: vertical clips + dynamic captions + covers + post copy + per-platform publish packs, all in one run
 - **Interrupted work picks up safely**: source, transcript, candidates, selections and hand-tuned cuts recover after restart; folder watch and webhooks share a durable queue with retry and cancel
@@ -141,7 +142,7 @@ The LLM only picks *which part* and must quote the transcript; timestamps come f
 - **Signal resonance & focused compute**: a moment is trusted when multiple signals fire together — loudness alone might be BGM, chat alone might be spam; loudness + chat + laughter lighting up at once is the real thing. Motion peaks guide frame sampling while an explicit uniform reserve still covers the whole source, so early spectacle cannot hide a later quiet-but-important scene
 - **Reusable local multimodal evidence**: Tier-0 signals, TransNetV2 boundaries and optional vision-scan outcomes are atomically indexed by source fingerprint, capability version and model. Desktop, CLI, MCP, folder watch and webhooks reuse the same results; the 64MB LRU index rebuilds corrupt/stale entries automatically and never persists a vision API key
 - **Facial-emotion peaks (zero-config)**: YuNet + FER+ (MIT-licensed, a few MB) find laughter/surprise/excitement peaks — visual evidence without installing anything
-- **Visual peak signal (optional)**: a local Ollama vision model samples frames for spectacle transcripts can't see; contact-sheet scoring drops VLM calls 20→3
+- **Visual peak signal (optional)**: fresh installs prefill local Ollama `qwen3.5:4b`, using one multimodal model for text plus nine-frame contact sheets to find visual moments the transcript cannot see; an unavailable endpoint is skipped without blocking transcript-only detection
 - **AI visual review (optional)**: after detection, top candidates get a contact-sheet look-over by a vision model — striking visuals boost the score, lifeless visuals demote signal-driven candidates, title/visual mismatches get flagged, and the scene note lands in the reasoning; free with local Ollama, or drop an API key into vision settings for a cloud model
 - **Reference-clip driven detection**: hand in a viral clip to model after — its pacing is measured locally and steers selection (CLI `--reference`)
 - **Review feedback loop**: kept/rejected candidates land in a local preference file steering the next run — it learns your taste, and the data never leaves your machine
@@ -188,7 +189,7 @@ Comfort-first 9:16 reframing, silence jump cuts, filler-word removal, -14 LUFS l
 - **Speech-aware silence jump cuts**: pauses are removed only when the span has *no words, low acoustic peaks and no locally detected speech*; missed quiet words, phoneme tails, laughter and applause survive. Optional 0.25s breathing room keeps pacing tight without suffocation; manual/stitched outer bounds stay fixed and questionable evidence falls back exactly
 - **Filler-word removal**: um/uh-class fillers and stutters cut (deliberately conservative), itemized in clips.json
 - **Loudness normalization**: -14 LUFS (EBU R128) per clip, measured on the spliced audio after jump cuts
-- **One-click denoise**: double highpass + spectral subtraction; measured -7.9dB noise floor with speech moved just 0.2dB — honest basic denoising, not AI audio repair
+- **Two explicit dialogue-cleanup tiers**: Basic retains the double-highpass + conservative spectral subtraction chain. Smart 48k downloads a SHA-256-verified ~10MB DPDFNet2 model on demand, enhances mono/stereo channels in bounded chunks for clips up to 180 seconds and stream-copies video. Model, download, decode or inference failure falls back to Basic; the completion view and `clips.json` distinguish learned / fallback / skipped without changing captions or transcript text
 - **SFX cues**: a whoosh on stitch/cold-open hard cuts, a ding on the clip's emotional peak, a soft pop as the opening hook lands — rule-based placement, at most 3 per clip; effects are synthesized locally (zero assets, zero licensing), drop in your own same-named wav files to replace them
 - **Background music (with ducking)**: pick any local audio file — it loops to fit the clip, sits well under the voice, ducks automatically while speech plays and fades out at the end; mixed in a separate pass with the video stream copied untouched
 - **Render QA + self-repair**: black frames, long silences, frozen video, subject crop coverage, loudness, duration and mid-word cuts land in `clips.json`; semantic framing warnings ask for review, while only safe fixable faults are repaired and retained after a better re-check
@@ -254,13 +255,13 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 - **Durable task center**: folder watch and webhooks share one single-concurrency queue with persisted stages, history and attempt counts; tasks can be cancelled or explicitly retried, in-flight work becomes "interrupted" after restart, and credentials are never stored in history
 - **Long-video performance layer**: repeat exports with the same source, cuts and base effects restore an exact local base render; H.264 video is copied only for a continuous cut whose start is proven keyframe-aligned and whose pixels are unchanged. Audio still receives fades, denoise, loudness and sensitive-term muting, and any failure transparently falls back to accurate encoding. LRU storage is capped at 1GB and can be inspected or cleared separately
 - **Recording watch folder (24/7)**: point it at your OBS/recorder output dir; recordings are transcribed, mined and exported the moment they finish writing ("two rounds of stable size" — half-written files are never cut)
-- **Desktop health diagnostics**: one click checks FFmpeg/FFprobe, downloader integrity, ten model roles, LLM connectivity/auth/routing, disk, transcript cache, render cache and the multimodal evidence index; missing core models can be prepared with cancel/resume, while the 1GB render cache and 64MB evidence index clear independently
+- **Desktop health diagnostics**: one click checks FFmpeg/FFprobe, downloader integrity, eleven model roles, LLM connectivity/auth/routing, disk, transcript cache, render cache and the multimodal evidence index; missing core models can be prepared with cancel/resume, while the 1GB render cache and 64MB evidence index clear independently
 - **Headless CLI** (same outputs as the desktop app):
 
   ```bash
   pnpm cli transcribe vod.mp4                  # on-device word-level ASR (cached)
   pnpm cli highlights vod.mp4 --json           # AI highlight candidates, review first
-  pnpm cli clip vod.mp4 --max-clips 10         # fully managed export + QA report
+  pnpm cli clip vod.mp4 --max-clips 10 --smart-denoise  # managed export + smart 48k dialogue
   pnpm cli feedback bilibili.csv               # import real view/engagement outcomes
   pnpm cli feedback-report                     # inspect learned winners/laggards
   pnpm cli doctor --download                   # environment self-check + model pre-fetch
@@ -290,10 +291,13 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 
 - **clips.json processing receipt**: what the pipeline did to each clip (caption style, reframe mode, jump-cut ratio, speech-evidence coverage/protected gaps, alignment coverage, caption lint, cover-selection mode/score, fillers removed and source colour decision, including an unconverted-HDR flag) — fully auditable, pipeline-ready
 - **Golden quality evaluation**: `pnpm quality:eval [fixture.json]` reports CER/WER, median/P95 word-boundary error and highlight recall@3/@5 locally, so model and threshold changes can be compared on the same evidence
+- **Local vision-model comparison**: `HOTCLIP_VISION_MODELS=qwen3-vl:4b,qwen3.5:4b pnpm quality:eval:vision` runs the same demo clips through HotClip's exact contact sheets and structured parser, reporting success rate, latency and visual evidence. Ollama manages the models; HotClip does not bundle multi-gigabyte weights
 - **Bring your own AI (or none)**: free local models by default; plug in [Atlas Cloud](https://www.atlascloud.ai), fal.ai or any OpenAI-compatible endpoint — or local Ollama for a fully offline pipeline
 </details>
 
 ## What's new
+
+**[v0.27.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.27.0)** (2026-08-31) "Make the voice clear before adding the polish": **48kHz smart dialogue enhancement** (an explicit Smart tier downloads a SHA-256-verified ~10MB DPDFNet2 model on demand, processes channels in bounded chunks and stream-copies finished video); **correct publish-audio order** (runs after stitched/cold-open assembly but before SFX/BGM, with loudness measured after enhancement); **availability-first fallback** (model, download, decode or inference failure transparently reuses the exact Basic chain, while Off/Basic behavior stays unchanged and the completion view plus `clips.json` reports learned/fallback/skipped truthfully); **updated local multimodal preset** (fresh installs default the optional Ollama vision endpoint to `qwen3.5:4b`, sharing one model across text and contact sheets, with a reproducible VLM comparison command). Desktop, CLI and MCP share the same tier semantics; the official 48k model runtime smoke and FFmpeg integration regressions pass.
 
 **[v0.26.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.26.0)** (2026-08-31) "Tighter cuts, without gambling on a single phoneme": **local speech-activity evidence** (reuses the bundled sherpa-onnx native runtime with one SHA-256-verified 629KB model — no Python or audio upload); **safe automatic edges** (only corroborated VAD/word evidence may protect outer speech within a hard 0.6s movement cap and constrain later shot snapping; manual and stitched outer bounds never move); **three-gate jump cuts** (a span is removed only when word-free, peak-quiet and VAD-negative, retaining quiet words missed by ASR); **selected-audio parity** (speech and peak evidence explicitly map the same audio track as final render); **auditable exact fallback** (`clips.json` records coverage, edge deltas and protected gaps, while long windows, low coverage, model or decode failure preserve prior behavior). Verified with a real synthesized-speech runtime smoke and multi-track FFmpeg regression.
 
@@ -352,7 +356,7 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 | v0.15.1 (hardware export · URL import · recovery · durable queue · publishing feedback · diagnostics · topic series) | ✅ Shipped |
 | v0.16 (project workspace · reversible editing · pro shortcuts · local A/B experiments) | ✅ Shipped |
 | v0.17 (bounded render cache · keyframe-safe copy · shared across entry points · scoped cleanup) | ✅ Shipped |
-| v0.18 – v0.26 (quality evaluation · caption quality gate · multimodal/on-screen-text evidence reuse · comfort-first reframing · render QA · adaptive picture finish · HDR-safe SDR export · selected-stream parity · quality covers · speech-safe cuts) | ✅ Shipped |
+| v0.18 – v0.27 (quality evaluation · caption quality gate · multimodal/on-screen-text evidence reuse · comfort-first reframing · render QA · adaptive picture finish · HDR-safe SDR export · selected-stream parity · quality covers · speech-safe cuts · smart 48k dialogue enhancement) | ✅ Shipped |
 | English ASR upgrade (Parakeet) · code signing · deeper unattended mode | 🗺️ [Planned](docs/PRODUCT-PLAN.md) |
 
 </details>

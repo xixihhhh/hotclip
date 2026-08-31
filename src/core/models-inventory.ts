@@ -21,6 +21,8 @@ import {
   SEGMENTATION_MODEL,
   SPEAKER_EMBEDDING_MODEL,
   TRANSNETV2_MODEL,
+  SILERO_VAD_MODEL,
+  DPDFNET_SPEECH_ENHANCEMENT_MODEL,
   type ModelAsset,
 } from "./models";
 
@@ -35,6 +37,8 @@ export const MODEL_CATALOG: Array<{ asset: ModelAsset; useKey: string }> = [
   { asset: YUNET_MODEL, useKey: "useFace" },
   { asset: EMOTION_MODEL, useKey: "useEmotion" },
   { asset: TRANSNETV2_MODEL, useKey: "useShots" },
+  { asset: SILERO_VAD_MODEL, useKey: "useSpeechSafety" },
+  { asset: DPDFNET_SPEECH_ENHANCEMENT_MODEL, useKey: "useSpeechEnhance" },
 ];
 
 export interface ModelEntry {

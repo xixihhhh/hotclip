@@ -25,6 +25,7 @@ import {
   SEGMENTATION_MODEL,
   SPEAKER_EMBEDDING_MODEL,
   SILERO_VAD_MODEL,
+  DPDFNET_SPEECH_ENHANCEMENT_MODEL,
 } from "./models";
 
 const execFileAsync = promisify(execFile);
@@ -58,6 +59,7 @@ const MODEL_ROWS: Array<{ asset: ModelAsset; label: { zh: string; en: string }; 
   { asset: PUNCT_MODEL, label: { zh: "标点恢复(更准档转写需要)", en: "Punctuation restoration" }, core: false },
   { asset: SEGMENTATION_MODEL, label: { zh: "说话人分离·分段", en: "Speaker diarization segmentation" }, core: false },
   { asset: SPEAKER_EMBEDDING_MODEL, label: { zh: "说话人分离·声纹", en: "Speaker diarization embeddings" }, core: false },
+  { asset: DPDFNET_SPEECH_ENHANCEMENT_MODEL, label: { zh: "智能人声增强 DPDFNet(48kHz)", en: "DPDFNet smart dialogue enhancement (48kHz)" }, core: false },
 ];
 
 const MB = 1024 * 1024;

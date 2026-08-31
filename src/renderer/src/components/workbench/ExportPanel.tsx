@@ -181,6 +181,20 @@ export function ExportPanel({
           <Group title={t("groupAudio")}>
             <SwitchRow label={th("optLoudness")} hint={th("optLoudnessHint")} on={prefs.normalizeLoudness} onToggle={() => setPref({ normalizeLoudness: !prefs.normalizeLoudness })} />
             <SwitchRow label={th("optDenoise")} hint={th("optDenoiseHint")} on={prefs.denoise} onToggle={() => setPref({ denoise: !prefs.denoise })} />
+            {prefs.denoise && (
+              <div className="flex min-h-7.5 items-center gap-2.5 pl-2" title={th("denoiseModeHint")}>
+                <span className="min-w-0 flex-1 truncate text-[12.5px] text-fg/90">{t("denoiseModeLabel")}</span>
+                <Segmented<"basic" | "smart">
+                  value={prefs.denoiseMode}
+                  ariaLabel={t("denoiseModeLabel")}
+                  options={[
+                    { value: "basic", label: t("denoiseBasic") },
+                    { value: "smart", label: t("denoiseSmart") },
+                  ]}
+                  onChange={(value) => setPref({ denoiseMode: value })}
+                />
+              </div>
+            )}
             <SwitchRow label={th("optMuteSensitive")} hint={th("optMuteSensitiveHint")} on={prefs.muteSensitive} onToggle={() => setPref({ muteSensitive: !prefs.muteSensitive })} />
             {prefs.muteSensitive && (
               <label className="mb-1 flex items-center gap-2 pl-2 text-[11px] text-mut">

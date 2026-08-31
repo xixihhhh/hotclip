@@ -40,6 +40,7 @@ export const MCP_TOOLS: McpToolDef[] = [
         vertical: { type: "boolean", description: "竖屏 9:16 输出(默认 true)" },
         captions: { type: "boolean", description: "烧录动态字幕(默认 true)" },
         autoEnhance: { type: "boolean", description: "本地测量最终保留画面并克制修正明显偏暗/灰/过饱和素材(默认 false;不下载模型)" },
+        denoiseMode: { type: "string", enum: ["basic", "smart"], description: "可选音频清理:basic 固定滤镜;smart 48kHz 本地人声模型(失败自动回退 basic)" },
         outDir: { type: "string", description: "输出目录(默认源视频旁 <名>-hotclip/)" },
         referencePath: { type: "string", description: "对标爆款视频的本地路径(可选):实测其时长/语速/句长/镜头频率/钩子形态,选段向对标节奏靠拢(偏好不是硬约束);分析失败按无参考继续" },
       },
@@ -76,7 +77,7 @@ export const MCP_TOOLS: McpToolDef[] = [
 
 /** 参数校验:必填与类型(浅校验够用——工具实现里还有业务检查)。 */
 export function validateToolArgs(tool: McpToolDef, args: Record<string, unknown>): string | null {
-  const schema = tool.inputSchema as { properties?: Record<string, { type?: string }>; required?: string[] };
+  const schema = tool.inputSchema as { properties?: Record<string, { type?: string; enum?: unknown[] }>; required?: string[] };
   for (const key of schema.required ?? []) {
     if (args[key] === undefined || args[key] === null || args[key] === "") return `缺少必填参数 ${key}`;
   }
@@ -87,6 +88,7 @@ export function validateToolArgs(tool: McpToolDef, args: Record<string, unknown>
     if (spec.type === "number" && actual !== "number") return `参数 ${key} 应为 number`;
     if (spec.type === "string" && actual !== "string") return `参数 ${key} 应为 string`;
     if (spec.type === "boolean" && actual !== "boolean") return `参数 ${key} 应为 boolean`;
+    if (spec.enum && !spec.enum.includes(value)) return `参数 ${key} 应为 ${spec.enum.join("|")}`;
   }
   return null;
 }

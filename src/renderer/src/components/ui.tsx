@@ -57,19 +57,26 @@ export function Segmented<T extends string | number>({
   options,
   onChange,
   disabled,
+  ariaLabel,
 }: {
   value: T;
   options: Array<{ value: T; label: string; title?: string }>;
   onChange: (v: T) => void;
   disabled?: boolean;
+  ariaLabel?: string;
 }): React.JSX.Element {
   return (
-    <div className={`flex max-w-full shrink-0 flex-wrap overflow-hidden rounded-lg border border-line ${disabled ? "opacity-40" : ""}`}>
+    <div
+      role="group"
+      aria-label={ariaLabel}
+      className={`flex max-w-full shrink-0 flex-wrap overflow-hidden rounded-lg border border-line ${disabled ? "opacity-40" : ""}`}
+    >
       {options.map((o) => (
         <button
           key={String(o.value)}
           type="button"
           title={o.title}
+          aria-pressed={o.value === value}
           disabled={disabled}
           onClick={() => onChange(o.value)}
           className={`px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors ${

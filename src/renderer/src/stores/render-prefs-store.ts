@@ -34,6 +34,8 @@ export interface RenderPrefs {
   openingHook: boolean;
   normalizeLoudness: boolean;
   denoise: boolean;
+  /** Basic fixed filter or optional learned 48 kHz dialogue enhancement. */
+  denoiseMode: "basic" | "smart";
   muteSensitive: boolean;
   sensitiveWords: string[];
   compilation: boolean;
@@ -100,6 +102,7 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   openingHook: true,
   normalizeLoudness: true,
   denoise: false, // 素材千差万别,降噪宁保守默认关
+  denoiseMode: "basic", // 升级不改变旧开关行为;智能档需用户显式选择
   muteSensitive: false,
   sensitiveWords: DEFAULT_SENSITIVE_WORDS,
   compilation: false, // 合集是额外产物,默认关
@@ -167,6 +170,7 @@ function load(): RenderPrefs {
       if (!["high", "standard", "compact"].includes(out.quality)) out.quality = "high";
       if (!["keyword", "pop", "minimal", "hormozi", "bubble", "karaoke", "none"].includes(out.captionStyle)) out.captionStyle = "keyword";
       if (!["off", "volume", "premium"].includes(out.aiCover)) out.aiCover = "off";
+      if (!["basic", "smart"].includes(out.denoiseMode)) out.denoiseMode = "basic";
       return out;
     }
   } catch {

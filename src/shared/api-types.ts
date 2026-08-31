@@ -489,6 +489,8 @@ export interface ExportOptions {
   normalizeLoudness?: boolean;
   /** 基础降噪:压直播回放常见底噪/电流声(高通×2+afftdn,先于响度标准化)。 */
   denoise?: boolean;
+  /** `smart` runs the optional 48 kHz local speech enhancer; legacy callers default to `basic`. */
+  denoiseMode?: "basic" | "smart";
   /** Mute transcript-timed occurrences of these user-controlled terms. */
   muteTerms?: string[];
   /** 精华合集:切片按时间序流复制拼成一支合集,附章节时间戳文本。 */
@@ -676,6 +678,8 @@ export interface ExportedClip {
   colorConversionSkipped?: boolean;
   /** Source probing failed, so HDR colour safety could not be evaluated. */
   colorInspectionFailed?: boolean;
+  /** Effective audio cleanup tier; absent when disabled or from legacy adapters. */
+  audioEnhancement?: "basic" | "learned" | "fallback" | "skipped";
 }
 
 /** 审阅台时间轴的波形数据:每块的峰值振幅(0..1)。 */

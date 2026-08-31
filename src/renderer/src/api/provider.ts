@@ -555,6 +555,8 @@ const browserMock: HotClipApi = {
       ["yunet-face", "useFace", true, 227_000, 236_544],
       ["emotion-ferplus", "useEmotion", false, 0, 35_651_584],
       ["transnetv2-onnx", "useShots", true, 31_250_929, 31_250_929],
+      ["silero-vad-v6", "useSpeechSafety", true, 643_854, 643_854],
+      ["dpdfnet2-48khz-hr", "useSpeechEnhance", false, 0, 10_596_848],
     ] as const;
     const entries = demo.map(([id, useKey, installed, bytes, approxBytes]) => ({ id, useKey, installed, bytes, approxBytes }));
     return { root, defaultRoot: root, totalBytes: entries.reduce((a, e) => a + e.bytes, 0), entries };

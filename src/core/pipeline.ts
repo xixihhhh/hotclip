@@ -43,6 +43,8 @@ export interface AutoClipConfig {
   captions?: boolean;
   /** Opt-in local signalstats-based picture correction; neutral footage is untouched. */
   autoEnhance?: boolean;
+  /** Optional audio cleanup for unattended/headless exports; omitted means unchanged/off. */
+  denoiseMode?: "basic" | "smart";
   /** 参考爆款画像(analyzeReferenceVideo 的产物);选段向它的节奏靠拢。 */
   reference?: ReferenceProfile;
   /** 本机审阅记忆(桌面审阅台积累的采用/否决样例);选段向用户口味靠拢。 */
@@ -228,6 +230,8 @@ export async function autoClip(videoPath: string, cfg: AutoClipConfig): Promise<
       titleCard: true,
       normalizeLoudness: true,
       autoEnhance: Boolean(cfg.autoEnhance),
+      denoise: Boolean(cfg.denoiseMode),
+      denoiseMode: cfg.denoiseMode,
       faceTrack: vertical,
       snapToShots: true,
       modelsRoot: cfg.modelsRoot,

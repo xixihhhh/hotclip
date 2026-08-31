@@ -17,6 +17,8 @@ describe("parseCliArgs (CLI 参数解析)", () => {
   it("--auto-enhance is explicit and defaults off", () => {
     expect(parseCliArgs(["clip", "/v/a.mp4"]).autoEnhance).toBe(false);
     expect(parseCliArgs(["clip", "/v/a.mp4", "--auto-enhance"]).autoEnhance).toBe(true);
+    expect(parseCliArgs(["clip", "/v/a.mp4", "--denoise"]).denoiseMode).toBe("basic");
+    expect(parseCliArgs(["clip", "/v/a.mp4", "--smart-denoise"]).denoiseMode).toBe("smart");
   });
 
   it("开关与带值选项:--no-vertical / --no-captions / --max-clips / --out / --json", () => {

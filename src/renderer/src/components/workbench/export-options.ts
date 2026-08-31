@@ -42,6 +42,7 @@ export function buildRenderToggles(opts: {
     alsoLandscape: prefs.alsoLandscape,
     normalizeLoudness: prefs.normalizeLoudness,
     denoise: prefs.denoise,
+    denoiseMode: prefs.denoiseMode,
     muteTerms: prefs.muteSensitive && prefs.sensitiveWords.length > 0 ? prefs.sensitiveWords : undefined,
     compilation: prefs.compilation,
     brand: activeBrandStyle(brandState),

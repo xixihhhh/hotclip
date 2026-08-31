@@ -86,6 +86,8 @@ describe("validateToolArgs", () => {
   it("合法参数通过", () => {
     expect(validateToolArgs(tool, { videoPath: "/v.mp4", maxClips: 8, vertical: false, autoEnhance: true })).toBeNull();
     expect(validateToolArgs(tool, { videoPath: "/v.mp4", autoEnhance: "yes" })).toContain("autoEnhance");
+    expect(validateToolArgs(tool, { videoPath: "/v.mp4", denoiseMode: "smart" })).toBeNull();
+    expect(validateToolArgs(tool, { videoPath: "/v.mp4", denoiseMode: "magic" })).toContain("basic|smart");
   });
 
   it("referencePath 两个切片工具都声明为可选 string", () => {

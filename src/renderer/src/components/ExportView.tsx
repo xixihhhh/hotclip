@@ -178,6 +178,21 @@ export function ExportView({
                         {t("colorInspectionFailed")}
                       </span>
                     )}
+                    {clip.audioEnhancement === "learned" && (
+                      <span className="chip shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap text-emerald-300">
+                        {t("audioLearned")}
+                      </span>
+                    )}
+                    {clip.audioEnhancement === "fallback" && (
+                      <span className="chip shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap text-amber-300">
+                        {t("audioFallback")}
+                      </span>
+                    )}
+                    {clip.audioEnhancement === "skipped" && (
+                      <span className="chip shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap text-red-300">
+                        {t("audioSkipped")}
+                      </span>
+                    )}
                   </div>
                   <p className="mt-0.5 truncate text-[11px] text-mut">
                     {Math.round(clip.durationSec)}s · {formatSize(clip.sizeBytes)} · {clip.path}

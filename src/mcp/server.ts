@@ -112,6 +112,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
       vertical: args.vertical !== false,
       captions: args.captions !== false,
       autoEnhance: args.autoEnhance === true,
+      denoiseMode: args.denoiseMode === "smart" ? "smart" : args.denoiseMode === "basic" ? "basic" : undefined,
       outDir: typeof args.outDir === "string" && args.outDir.trim() ? args.outDir : undefined,
       fontsDir: join(process.cwd(), "resources", "fonts"),
       glossary: await loadGlossary(userDataDir()),
@@ -136,7 +137,8 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
             : r.colorInspectionFailed
               ? " · 色彩信息检查失败"
               : "";
-        return `- ${basename(r.path)} (${Math.round(r.durationSec)}s, 评分 ${c?.score ?? "?"}${colorNote}) ${c?.title ?? ""}${qaNote}${fixNote}`;
+        const audioNote = r.audioEnhancement ? ` · 音频:${r.audioEnhancement}` : "";
+        return `- ${basename(r.path)} (${Math.round(r.durationSec)}s, 评分 ${c?.score ?? "?"}${colorNote}${audioNote}) ${c?.title ?? ""}${qaNote}${fixNote}`;
       })
       .join("\n");
     const warned = outcome.exported.filter((r) => r.qa?.status === "warn").length;
