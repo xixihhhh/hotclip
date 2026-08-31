@@ -469,7 +469,8 @@ ipcMain.handle("hotclip:audio-peaks", async (_event, filePath: unknown, startSec
   const to = typeof endSec === "number" && Number.isFinite(endSec) ? endSec : 0;
   if (to <= from) throw new Error("audio-peaks requires a valid range");
   // 窗口封顶 10 分钟,防误传超大区间把内存打爆
-  const track = await extractPeaks(filePath, from, Math.min(to, from + 600));
+  const info = await probeMedia(filePath).catch(() => null);
+  const track = await extractPeaks(filePath, from, Math.min(to, from + 600), info?.audioStreamIndex);
   return { values: Array.from(track.values), startSec: track.startSec, hopSec: track.hopSec };
 });
 

@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { mkdtemp, readFile, rm, stat, writeFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
+import { createHash } from "crypto";
 import { parseContentRange, candidateUrls, ensureModel, extractTarBz2, type ModelAsset } from "../models";
 
 describe("parseContentRange", () => {
@@ -90,6 +91,26 @@ async function freshRoot(): Promise<string> {
 }
 
 describe("ensureModel 断点续传", () => {
+  it("校验 raw 模型的发布方 SHA-256 后才安装", async () => {
+    const modelsRoot = await freshRoot();
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(fullBody(FULL), { status: 200, headers: { "content-length": String(FULL.length) } })
+    ));
+    const a = asset({ sha256: createHash("sha256").update(FULL).digest("hex") });
+    await ensureModel(modelsRoot, a);
+    expect((await readFile(join(modelsRoot, a.extractedDir, "model.onnx"))).equals(FULL)).toBe(true);
+  });
+
+  it("拒绝 SHA-256 不匹配的 raw 模型且不留下已安装文件", async () => {
+    const modelsRoot = await freshRoot();
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(fullBody(FULL), { status: 200, headers: { "content-length": String(FULL.length) } })
+    ));
+    const a = asset({ sha256: "0".repeat(64) });
+    await expect(ensureModel(modelsRoot, a)).rejects.toThrow(/model download failed/);
+    await expect(stat(join(modelsRoot, a.extractedDir, "model.onnx"))).rejects.toThrow();
+  });
+
   it("断流后带 Range 续传,最终文件完整", async () => {
     const modelsRoot = await freshRoot();
     const cut = 8;

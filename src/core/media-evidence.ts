@@ -17,10 +17,12 @@ import {
   type SheetComposer,
 } from "./highlight/vision";
 import { analysisVideoIdentity, type AnalysisVideoOptions } from "./analysis-video";
+import { detectSpeechActivity, type SpeechActivitySpan } from "./speech-activity";
 
 export const TIER0_EVIDENCE_CAPABILITY = "tier0-signals-v3";
 const SHOT_EVIDENCE_VERSION = "transnetv2-v1";
 const VISION_EVIDENCE_VERSION = "contact-sheet-v3-visible-text";
+const SPEECH_EVIDENCE_VERSION = "local-vad-v1";
 
 function finite(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
@@ -95,6 +97,57 @@ export async function collectSignalsEvidence(opts: {
 
 function validBoundaries(value: unknown): value is number[] {
   return Array.isArray(value) && value.length <= 250_000 && value.every((time) => finite(time) && time >= 0);
+}
+
+function validSpeechSpans(value: unknown): value is SpeechActivitySpan[] {
+  return Array.isArray(value) && value.length <= 20_000 && value.every((span) => {
+    if (!span || typeof span !== "object") return false;
+    const item = span as Partial<SpeechActivitySpan>;
+    return finite(item.startSec) && finite(item.endSec) && item.startSec >= 0 && item.endSec > item.startSec;
+  });
+}
+
+/** Source-fingerprinted, range/audio-track scoped local speech evidence. */
+export async function detectSpeechActivityEvidence(opts: {
+  mediaPath: string;
+  startSec: number;
+  endSec: number;
+  modelsRoot: string;
+  audioStreamIndex?: number;
+  evidenceDir?: string;
+  signal?: AbortSignal;
+  source?: FileFingerprint;
+  detect?: typeof detectSpeechActivity;
+}): Promise<SpeechActivitySpan[]> {
+  opts.signal?.throwIfAborted();
+  const detect = opts.detect ?? detectSpeechActivity;
+  if (!opts.evidenceDir) {
+    return detect(opts.mediaPath, opts.startSec, opts.endSec, opts.modelsRoot, opts.signal, opts.audioStreamIndex);
+  }
+  const source = opts.source ?? await fingerprintEvidenceSource(opts.mediaPath);
+  const range = `${Math.round(opts.startSec * 1000)}-${Math.round(opts.endSec * 1000)}`;
+  const audio = Number.isInteger(opts.audioStreamIndex) && (opts.audioStreamIndex ?? -1) >= 0
+    ? String(opts.audioStreamIndex)
+    : "default";
+  const capability = `speech:${SPEECH_EVIDENCE_VERSION}:a${audio}:${range}`;
+  const validForRange = (value: unknown): value is SpeechActivitySpan[] =>
+    validSpeechSpans(value) && value.every((span) =>
+      span.startSec >= Math.max(0, opts.startSec) - 0.1 && span.endSec <= opts.endSec + 0.1
+    );
+  const cached = await readEvidence(opts.evidenceDir, source, capability, validForRange);
+  opts.signal?.throwIfAborted();
+  if (cached) return cached;
+  const value = await detect(
+    opts.mediaPath,
+    opts.startSec,
+    opts.endSec,
+    opts.modelsRoot,
+    opts.signal,
+    opts.audioStreamIndex
+  );
+  opts.signal?.throwIfAborted();
+  await writeEvidence(opts.evidenceDir, source, capability, value).catch(() => false);
+  return value;
 }
 
 export async function detectShotBoundariesEvidence(opts: {

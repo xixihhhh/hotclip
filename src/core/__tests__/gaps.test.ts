@@ -74,6 +74,34 @@ describe("computeJumpCut", () => {
     expect(plan.segments).toHaveLength(1);
     expect(plan.removedSec).toBeLessThan(0.5);
   });
+
+  it("VAD gate protects speech that ASR missed inside a quiet word gap", () => {
+    const plan = computeJumpCut(words, 10, 16.5, {
+      peaks: trackWithBurst(),
+      speechSpans: [
+        { startSec: 9.9, endSec: 12.1 },
+        { startSec: 12.7, endSec: 13.3 },
+        { startSec: 13.9, endSec: 16.1 },
+      ],
+    });
+    expect(plan.segments).toHaveLength(1);
+    expect(plan.speechProtectedGaps).toBe(1);
+  });
+
+  it("omitting VAD preserves the legacy result shape and cut", () => {
+    const legacy = computeJumpCut(words, 10, 16.5, { peaks: trackWithBurst() });
+    expect(legacy.segments).toHaveLength(2);
+    expect(legacy).not.toHaveProperty("speechProtectedGaps");
+  });
+
+  it("keeps VAD-confirmed phoneme tails outside coarse ASR word edges", () => {
+    const edgeWords = [w("开", 10.2, 10.6), w("尾", 11.5, 11.8)];
+    const plan = computeJumpCut(edgeWords, 9.5, 12.5, {
+      speechSpans: [{ startSec: 9.9, endSec: 10.65 }, { startSec: 11.45, endSec: 12.2 }],
+    });
+    expect(plan.segments[0].startSec).toBeCloseTo(9.82, 5);
+    expect(plan.segments.at(-1)?.endSec).toBeCloseTo(12.32, 5);
+  });
 });
 
 describe("mergeShortCuts", () => {

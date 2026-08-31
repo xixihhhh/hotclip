@@ -8,6 +8,7 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { resolveFfmpegPath } from "./binaries";
+import { ffmpegAudioStreamSpecifier } from "./probe";
 
 const execFileAsync = promisify(execFile);
 
@@ -116,7 +117,8 @@ export function findPeakEvents(
 export async function extractPeaks(
   filePath: string,
   startSec: number,
-  endSec: number
+  endSec: number,
+  audioStreamIndex?: number
 ): Promise<PeakTrack> {
   const args = [
     "-hide_banner",
@@ -126,6 +128,8 @@ export async function extractPeaks(
     String(endSec),
     "-i",
     filePath,
+    "-map",
+    ffmpegAudioStreamSpecifier(audioStreamIndex),
     "-vn",
     "-ac",
     "1",

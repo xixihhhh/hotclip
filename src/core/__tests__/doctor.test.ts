@@ -40,12 +40,13 @@ describe("runDoctor", () => {
     const { modelsRoot, cacheDir } = await freshRoot();
     const report = await runDoctor({ modelsRoot, cacheDir, llm: null, resolveBinaries: fakeBins, probeBinaryVersion: fakeProbe });
 
-    // 默认管线四个核心模型都缺
+    // 默认管线五个核心模型都缺
     expect(report.missingCoreModels.map((a) => a.id)).toEqual([
       "sensevoice-2024-07-17",
       "yunet-2023mar",
       "emotion-ferplus-8",
       "transnetv2-onnx",
+      "silero-vad-v6",
     ]);
     const sv = report.checks.find((c) => c.name.includes("SenseVoice"));
     expect(sv?.status).toBe("warn");

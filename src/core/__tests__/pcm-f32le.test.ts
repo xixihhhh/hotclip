@@ -64,4 +64,24 @@ describe("extractPcmF32le16k", () => {
     expect(peak).toBeGreaterThan(0.1);
     expect(peak).toBeLessThanOrEqual(0.15);
   });
+
+  it("多音轨素材显式读取 HotClip 选择的音轨", async () => {
+    const ffmpeg = resolveFfmpegPath();
+    const src = join(base, "two-audio.mka");
+    await execFileAsync(ffmpeg, [
+      "-hide_banner", "-y",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=1:sample_rate=16000",
+      "-f", "lavfi", "-i", "anullsrc=r=16000:cl=mono:d=1",
+      "-map", "0:a:0", "-map", "1:a:0", "-c:a", "pcm_s16le", src,
+    ]);
+
+    const tonePath = join(base, "tone-track.f32le");
+    const silencePath = join(base, "silence-track.f32le");
+    await extractPcmF32le16k(ffmpeg, src, tonePath, undefined, 0);
+    await extractPcmF32le16k(ffmpeg, src, silencePath, undefined, 1);
+    const tone = await readF32leSamples(tonePath);
+    const silence = await readF32leSamples(silencePath);
+    expect(Math.max(...tone)).toBeGreaterThan(0.1);
+    expect(Math.max(...silence.map(Math.abs))).toBe(0);
+  });
 });

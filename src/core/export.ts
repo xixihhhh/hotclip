@@ -50,7 +50,14 @@ import { detectUiCrop, type UiCrop } from "./uicrop";
 import { generateCropPlan, renderCropXExpr, mapToOutputTime, remapCropKeyframes } from "./reframe";
 import type { AnalysisVideoOptions } from "./analysis-video";
 import { snapClipToShots, SNAP_MAX_OUT_SEC } from "./shots";
-import { collectSignalsEvidence, detectShotBoundariesEvidence } from "./media-evidence";
+import { collectSignalsEvidence, detectShotBoundariesEvidence, detectSpeechActivityEvidence } from "./media-evidence";
+import {
+  assessSpeechActivity,
+  normalizeSpeechSpans,
+  refineSpeechBoundaries,
+  speechActivityRangeSupported,
+  type SpeechActivitySpan,
+} from "./speech-activity";
 import { buildCaptionAss, VERTICAL_LAYOUT, HORIZONTAL_LAYOUT, type CaptionStyle } from "./subtitle";
 import { lintSubtitleTimeline } from "./subtitle-quality";
 import { buildOverlayPayload, isWebCaptionStyle, type OverlayRenderFn, type WebCaptionStyle } from "./caption-overlay/payload";
@@ -267,6 +274,15 @@ export interface ClipRenderOutcome {
   translatedLines: number;
   /** 切点吸附到镜头边界的实际位移(秒);没吸附(或检测失败)为 null。 */
   shotSnap: { startDeltaSec: number; endDeltaSec: number } | null;
+  /** Local speech evidence used by automatic edges/jump cuts; absent on legacy exports. */
+  speechActivity?: {
+    mode: "vad" | "fallback";
+    wordCoverage: number;
+    spans: number;
+    startDeltaSec: number;
+    endDeltaSec: number;
+    protectedGaps: number;
+  };
   /** True 表示词表经 Paraformer 二遍对齐修正过(精准切点)。 */
   preciseAligned: boolean;
   /** Detailed final-candidate alignment receipt; absent on legacy exports, null when alignment did not run or failed open. */
@@ -614,6 +630,71 @@ export async function exportClips(
         }
       }
 
+      // Speech-aware safety layer: the tiny local VAD corroborates ASR before
+      // it may refine automatic outer edges or protect a nominally silent gap.
+      // Any model/decode/cache failure, suspicious word coverage, long range,
+      // manual outer bound, or stitched outer bound preserves historical cuts.
+      let speechSpans: SpeechActivitySpan[] | undefined;
+      let speechAnchorStart: number | undefined;
+      let speechAnchorEnd: number | undefined;
+      let speechActivity: ClipRenderOutcome["speechActivity"];
+      if (options.jumpCut && options.modelsRoot && clip.words && clip.words.length > 0 && srcInfo?.hasAudio !== false) {
+        const speechRanges = stitched
+          ? pieces.map((piece) => ({ startSec: piece.startSec, endSec: piece.endSec }))
+          : [{ startSec: Math.max(0, clip.startSec - 0.8), endSec: clip.endSec + 0.8 }];
+        let detected: SpeechActivitySpan[] | null = null;
+        if (speechRanges.length > 0 && speechRanges.every((range) => speechActivityRangeSupported(range.startSec, range.endSec))) {
+          detected = [];
+          for (const range of speechRanges) {
+            const batch = await detectSpeechActivityEvidence({
+              mediaPath: inputPath,
+              startSec: range.startSec,
+              endSec: range.endSec,
+              modelsRoot: options.modelsRoot,
+              audioStreamIndex: srcInfo?.audioStreamIndex,
+              evidenceDir: options.evidenceCacheDir,
+              signal,
+              source: cacheSource ?? undefined,
+            }).catch((error) => {
+              if (signal?.aborted) throw error;
+              return null;
+            });
+            if (batch === null) {
+              detected = null;
+              break;
+            }
+            detected.push(...batch);
+          }
+        }
+        const normalized = detected ? normalizeSpeechSpans(detected) : [];
+        const assessedWords = stitched
+          ? clip.words.filter((word) => pieces.some((piece) => word.endSec > piece.startSec && word.startSec < piece.endSec))
+          : clip.words;
+        const assessment = assessSpeechActivity(normalized, assessedWords);
+        speechActivity = {
+          mode: assessment.usable ? "vad" : "fallback",
+          wordCoverage: Number(assessment.wordCoverage.toFixed(3)),
+          spans: normalized.length,
+          startDeltaSec: 0,
+          endDeltaSec: 0,
+          protectedGaps: 0,
+        };
+        if (assessment.usable) {
+          speechSpans = normalized;
+          if (!clip.manualBounds && !stitched) {
+            const refined = refineSpeechBoundaries(clip.startSec, clip.endSec, clip.words, normalized, clip.snapContext);
+            speechAnchorStart = refined.anchorStartSec;
+            speechAnchorEnd = refined.anchorEndSec;
+            speechActivity.startDeltaSec = Number(refined.startDeltaSec.toFixed(3));
+            speechActivity.endDeltaSec = Number(refined.endDeltaSec.toFixed(3));
+            if (refined.startSec !== clip.startSec || refined.endSec !== clip.endSec) {
+              clip = { ...clip, startSec: refined.startSec, endSec: refined.endSec };
+              snappedRange.set(clip.id, { startSec: refined.startSec, endSec: refined.endSec });
+            }
+          }
+        }
+      }
+
       // 切点吸附:起止点吸到最近的镜头边界(词边界守卫,检测失败回退不吸附)。
       // 必须在跳剪/字幕/取景之前调整——下游全部消费 clip.startSec/endSec。
       // 拼接片跳过:内部切点是「意思」定的,吸到镜头边界会把对照关系吸歪。
@@ -635,8 +716,12 @@ export async function exportClips(
         });
         const w = clip.words;
         const snap = snapClipToShots(clip.startSec, clip.endSec, boundaries, {
-          firstWordStartSec: w?.[0]?.startSec,
-          lastWordEndSec: w && w.length > 0 ? w[w.length - 1].endSec : undefined,
+          firstWordStartSec: speechAnchorStart === undefined
+            ? w?.[0]?.startSec
+            : Math.min(w?.[0]?.startSec ?? speechAnchorStart, speechAnchorStart),
+          lastWordEndSec: speechAnchorEnd === undefined
+            ? (w && w.length > 0 ? w[w.length - 1].endSec : undefined)
+            : Math.max(w && w.length > 0 ? w[w.length - 1].endSec : speechAnchorEnd, speechAnchorEnd),
           prevWordEndSec: clip.snapContext?.prevWordEndSec,
           nextWordStartSec: clip.snapContext?.nextWordStartSec,
         });
@@ -670,7 +755,7 @@ export async function exportClips(
         retakeHits = options.cutRetakes ? findRetakes(deFilled) : [];
         const planWords = dropRetakeWords(deFilled, retakeHits);
         const peaks = options.jumpCut && !peakSpanTooLong(clip)
-          ? await extractPeaks(inputPath, clip.startSec, clip.endSec).catch(() => undefined)
+          ? await extractPeaks(inputPath, clip.startSec, clip.endSec, srcInfo?.audioStreamIndex).catch(() => undefined)
           : undefined;
         clipPeaks = peaks;
         // filler/retake-only mode with nothing found → leave the clip untouched
@@ -690,7 +775,9 @@ export async function exportClips(
             protectedSpans,
             // 保留呼吸口:每个剪口在句尾多留一口气,不是无缝贴死
             breathPadSec: options.keepBreath ? BREATH_PAD_SEC : 0,
+            speechSpans,
           });
+          if (speechActivity && speechSpans) speechActivity.protectedGaps = plan.speechProtectedGaps ?? 0;
         }
       }
       // 拼接片但没有词表(不烧字幕也不跳剪):段清单本身就是成片计划
@@ -813,7 +900,7 @@ export async function exportClips(
       // 高点,与智能封面同一声学代理;跳剪时映射到压缩时间轴。提取失败/
       // 拼接跨度超限按「无事件」fail-open。
       if ((options.autoZoom || options.sfx || options.flashForward || clip.flashForward) && !clipPeaks && !peakSpanTooLong(clip)) {
-        clipPeaks = await extractPeaks(inputPath, clip.startSec, clip.endSec).catch(() => undefined);
+        clipPeaks = await extractPeaks(inputPath, clip.startSec, clip.endSec, srcInfo?.audioStreamIndex).catch(() => undefined);
       }
       // (源时间, 输出时间) 成对保留:运镜强调/音效打点吃输出时间,
       // 爆点闪现要回源片切那一刀、吃源时间
@@ -1228,7 +1315,7 @@ export async function exportClips(
       // 智能封面:切片内响度最高的一帧(峰值≈情绪最高点);没跳剪时补提一次
       // 峰值轨,失败回退固定 0.8s 帧
       if (!clipPeaks && !peakSpanTooLong(clip)) {
-        clipPeaks = await extractPeaks(inputPath, clip.startSec, clip.endSec).catch(() => undefined);
+        clipPeaks = await extractPeaks(inputPath, clip.startSec, clip.endSec, srcInfo?.audioStreamIndex).catch(() => undefined);
       }
       // cold-open 让输出时间轴整体后移一个迷你片时长,封面时刻同步平移;
       // qa 修复裁头则整体前移,并钳进修复后的实际时长
@@ -1363,6 +1450,7 @@ export async function exportClips(
         openingHookBurned: Boolean(openingHook),
         translatedLines: transLines.length,
         shotSnap,
+        speechActivity,
         preciseAligned,
         alignment,
         subtitleQuality,

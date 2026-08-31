@@ -12,8 +12,10 @@ import { pipeline } from "stream/promises";
 import { join, dirname } from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { createHash } from "crypto";
 import { x as tarExtract } from "tar";
 import unbzip2 from "unbzip2-stream";
+import { ffmpegAudioStreamSpecifier } from "./probe";
 
 const execFileAsync = promisify(execFile);
 
@@ -32,6 +34,8 @@ export interface ModelAsset {
    * `<modelsRoot>/<extractedDir>/<singleFile>`.
    */
   singleFile?: string;
+  /** Exact lowercase SHA-256 for raw single-file assets when published upstream. */
+  sha256?: string;
   /**
    * 完整替代 URL(整条换 host 的镜像,如 hf-mirror.com)——`mirrors` 只能做
    * 前缀代理,对 HuggingFace 这类换域名镜像不适用;altUrls 排在主 URL 之前
@@ -163,6 +167,20 @@ export const TRANSNETV2_MODEL: ModelAsset = {
   singleFile: "model.onnx",
 };
 
+/**
+ * Silero VAD v6 ONNX (MIT, <1MB) — speech/non-speech evidence for safe clip
+ * edges and jump cuts. Runs through the already bundled sherpa-onnx runtime.
+ */
+export const SILERO_VAD_MODEL: ModelAsset = {
+  id: "silero-vad-v6",
+  url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
+  mirrors: ["https://ghfast.top/", "https://gh-proxy.com/"],
+  extractedDir: "silero-vad-v6",
+  approxBytes: 643_854,
+  singleFile: "model.onnx",
+  sha256: "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6",
+};
+
 export interface DownloadProgress {
   downloadedBytes: number;
   totalBytes: number;
@@ -188,8 +206,14 @@ export function modelDir(modelsRoot: string, asset: ModelAsset): string {
 export async function isModelInstalled(modelsRoot: string, asset: ModelAsset): Promise<boolean> {
   try {
     if (asset.singleFile) {
-      const s = await stat(join(modelDir(modelsRoot, asset), asset.singleFile));
-      return s.isFile() && s.size > 0;
+      const path = join(modelDir(modelsRoot, asset), asset.singleFile);
+      const s = await stat(path);
+      if (!s.isFile() || s.size <= 0) return false;
+      if (asset.sha256) {
+        const actual = createHash("sha256").update(await readFile(path)).digest("hex");
+        return actual === asset.sha256.toLowerCase();
+      }
+      return true;
     }
     const s = await stat(modelDir(modelsRoot, asset));
     return s.isDirectory();
@@ -360,9 +384,15 @@ export async function ensureModel(
         if (dl.size < asset.approxBytes * 0.5) {
           throw new Error(`downloaded file too small (${dl.size}B) — likely an LFS pointer`);
         }
+        if (asset.sha256) {
+          const actual = createHash("sha256").update(await readFile(archivePath)).digest("hex");
+          if (actual !== asset.sha256.toLowerCase()) throw new Error(`checksum mismatch for ${asset.id}`);
+        }
         // raw file: move into place atomically
         await mkdir(target, { recursive: true });
-        await rename(archivePath, join(target, asset.singleFile));
+        const installedPath = join(target, asset.singleFile);
+        await rm(installedPath, { force: true });
+        await rename(archivePath, installedPath);
       } else {
         // 解压进 staging 目录再原子 rename:进程被杀/解压失败都不会留下
         // 会被 isModelInstalled 误判为「已安装」的残缺模型目录。
@@ -408,7 +438,9 @@ export async function extractPcmF32le16k(
   ffmpegPath: string,
   inputPath: string,
   outputPath: string,
-  range?: { startSec: number; durationSec: number }
+  range?: { startSec: number; durationSec: number },
+  audioStreamIndex?: number,
+  signal?: AbortSignal
 ): Promise<void> {
   await mkdir(dirname(outputPath), { recursive: true });
   const tmp = `${outputPath}.tmp.f32le`;
@@ -420,9 +452,10 @@ export async function extractPcmF32le16k(
       ...(range ? ["-ss", String(Math.max(0, range.startSec))] : []),
       "-i", inputPath,
       ...(range ? ["-t", String(Math.max(0.1, range.durationSec))] : []),
+      "-map", ffmpegAudioStreamSpecifier(audioStreamIndex),
       "-vn", "-ac", "1", "-ar", "16000", "-f", "f32le", "-c:a", "pcm_f32le", tmp,
     ],
-    { maxBuffer: 32 * 1024 * 1024 }
+    { maxBuffer: 32 * 1024 * 1024, signal }
   );
   await rename(tmp, outputPath);
 }

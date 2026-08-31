@@ -9,6 +9,7 @@
  */
 import type { TranscriptWord } from "../shared/api-types";
 import { peakInRange, type PeakTrack } from "./audio-peaks";
+import { hasSpeechInRange, speechAnchorBounds, type SpeechActivitySpan } from "./speech-activity";
 
 export interface KeptSegment {
   /** Absolute source time. */
@@ -46,6 +47,11 @@ export interface JumpCutOptions {
    * 的来源之一(真人剪辑会给呼吸留空)。0/缺省 = 历史紧凑节奏不变。
    */
   breathPadSec?: number;
+  /**
+   * Trusted VAD spans. A nominally word-free/quiet gap is retained when this
+   * independent local signal still detects speech (for example an ASR miss).
+   */
+  speechSpans?: SpeechActivitySpan[];
 }
 
 /** Subtract cut spans from kept segments (interval difference). Pure. */
@@ -85,6 +91,8 @@ export interface JumpCutPlan {
   removedSec: number;
   /** Output duration (sum of kept segments). */
   durationSec: number;
+  /** Gaps that would have been removed but trusted speech evidence retained. */
+  speechProtectedGaps?: number;
 }
 
 /** Word gaps longer than this get cut. */
@@ -123,17 +131,23 @@ export function computeJumpCut(
   clipEndSec: number,
   options: JumpCutOptions = {}
 ): JumpCutPlan {
-  const { peaks, silenceThreshold = SILENCE_PEAK_THRESHOLD, forceCutSpans = [], gapThresholdSec = GAP_THRESHOLD_SEC, protectedSpans = [], breathPadSec = 0 } = options;
+  const { peaks, silenceThreshold = SILENCE_PEAK_THRESHOLD, forceCutSpans = [], gapThresholdSec = GAP_THRESHOLD_SEC, protectedSpans = [], breathPadSec = 0, speechSpans } = options;
   // 呼吸口加在语音尾部:剪掉的区间相应缩短,句尾多留一口气
   const padAfter = PAD_AFTER_SEC + Math.max(0, breathPadSec);
   const inClip = words.filter((w) => w.endSec > clipStartSec && w.startSec < clipEndSec);
   if (inClip.length === 0) {
     const full = { startSec: clipStartSec, endSec: clipEndSec };
-    return { segments: [full], words: [], breaks: [], removedSec: 0, durationSec: clipEndSec - clipStartSec };
+    return {
+      segments: [full], words: [], breaks: [], removedSec: 0, durationSec: clipEndSec - clipStartSec,
+      ...(speechSpans !== undefined ? { speechProtectedGaps: 0 } : {}),
+    };
   }
 
   let segments: KeptSegment[] = [];
-  let segStart = Math.max(clipStartSec, inClip[0].startSec - LEAD_IN_SEC);
+  let speechProtectedGaps = 0;
+  const speechAnchors = speechSpans ? speechAnchorBounds(speechSpans, inClip) : {};
+  const speechStart = speechAnchors.startSec === undefined ? Infinity : speechAnchors.startSec - 0.08;
+  let segStart = Math.max(clipStartSec, Math.min(inClip[0].startSec - LEAD_IN_SEC, speechStart));
   let prevEnd = inClip[0].endSec;
   for (let i = 1; i < inClip.length; i++) {
     const w = inClip[i];
@@ -146,14 +160,17 @@ export function computeJumpCut(
         !peaks || removedTo <= removedFrom || peakInRange(peaks, removedFrom, removedTo) < silenceThreshold;
       // 情绪守卫:待删空隙撞上禁删区间(情绪事件 ±保护半径)就不剪
       const protectedGap = protectedSpans.some((p) => p.startSec < removedTo && p.endSec > removedFrom);
-      if (quiet && !protectedGap) {
+      const speechProtected = speechSpans !== undefined && hasSpeechInRange(speechSpans, removedFrom, removedTo);
+      if (quiet && !protectedGap && speechProtected) speechProtectedGaps++;
+      if (quiet && !protectedGap && !speechProtected) {
         segments.push({ startSec: segStart, endSec: Math.min(prevEnd + padAfter, clipEndSec) });
         segStart = Math.max(w.startSec - PAD_BEFORE_SEC, prevEnd + padAfter);
       }
     }
     prevEnd = Math.max(prevEnd, w.endSec);
   }
-  segments.push({ startSec: segStart, endSec: Math.min(prevEnd + TAIL_SEC, clipEndSec) });
+  const speechEnd = speechAnchors.endSec === undefined ? -Infinity : speechAnchors.endSec + 0.12;
+  segments.push({ startSec: segStart, endSec: Math.min(Math.max(prevEnd + TAIL_SEC, speechEnd), clipEndSec) });
   // merge first, subtract after — a forced cut (filler ≈0.15s) must never be
   // "filled back" by the short-cut smoothing pass
   segments = mergeShortCuts(segments);
@@ -183,5 +200,8 @@ export function computeJumpCut(
     }
     outOffset += seg.endSec - seg.startSec;
   }
-  return { segments, words: remapped, breaks, removedSec, durationSec };
+  return {
+    segments, words: remapped, breaks, removedSec, durationSec,
+    ...(speechSpans !== undefined ? { speechProtectedGaps } : {}),
+  };
 }

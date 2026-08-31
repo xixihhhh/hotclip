@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HotClip — Free Open-Source AI Video Clipper | Turn Long Videos into Viral Shorts, Locally, No Watermark</title>
-<meta name="description" content="HotClip is a free, open-source AI clipping tool for Windows, macOS and Linux. Turn long videos into 9:16 shorts with AI highlights, dynamic captions, comfort-first reframe, HDR-safe export and quality-ranked covers. Local-first, no credits or watermark.">
+<meta name="description" content="HotClip is a free, open-source AI clipping tool for Windows, macOS and Linux. Turn long videos into 9:16 shorts with AI highlights, local speech-aware safe cuts, dynamic captions, comfort-first reframe and HDR-safe export. Local-first, no credits or watermark.">
 <meta name="keywords" content="ai video clipper, ai clipping tool, free opus clip alternative, open source opus clip alternative, long video to shorts converter, podcast to shorts, dynamic word captions, hdr video tone mapping, pq hlg to bt709, auto captions no watermark, remove filler words, ai highlights generator">
 <link rel="canonical" href="https://xixihhhh.github.io/hotclip/en.html">
 <link rel="alternate" hreflang="zh-CN" href="https://xixihhhh.github.io/hotclip/">
@@ -17,12 +17,12 @@
 <meta property="og:site_name" content="HotClip">
 <meta property="og:locale" content="en_US">
 <meta property="og:title" content="HotClip — Free Open-Source AI Video Clipper, Runs Locally">
-<meta property="og:description" content="Long video → vertical shorts. AI highlights, dynamic captions, comfort-first 9:16 composition and metadata-gated HDR-to-SDR export. Local-first, with no credits or watermark.">
+<meta property="og:description" content="Long video → vertical shorts. AI highlights, local speech-aware safe cuts, dynamic captions and comfort-first 9:16 composition. Local-first, with no credits or watermark.">
 <meta property="og:image" content="https://xixihhhh.github.io/hotclip/social-preview.png">
 <meta property="og:url" content="https://xixihhhh.github.io/hotclip/en.html">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="HotClip — Free Open-Source AI Video Clipper, Runs Locally">
-<meta name="twitter:description" content="Long video → vertical shorts. AI highlights, dynamic captions, comfort-first 9:16 composition and metadata-gated HDR-to-SDR export. Local-first, with no credits or watermark.">
+<meta name="twitter:description" content="Long video → vertical shorts. AI highlights, local speech-aware safe cuts, dynamic captions and comfort-first 9:16 composition. Local-first, with no credits or watermark.">
 <meta name="twitter:image" content="https://xixihhhh.github.io/hotclip/social-preview.png">
 <script type="application/ld+json">
 {
@@ -31,11 +31,11 @@
   "name": "HotClip",
   "operatingSystem": "Windows, macOS, Linux",
   "applicationCategory": "MultimediaApplication",
-  "softwareVersion": "0.25.0",
+  "softwareVersion": "0.26.0",
   "inLanguage": ["en", "zh-CN"],
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
   "description": "Free, open-source, local-first AI video clipper: turn long videos and livestream replays into 9:16 shorts with AI highlight detection, dynamic word-level captions, comfort-first per-shot auto-reframe and metadata-gated HDR-to-SDR export. No credits or watermark.",
-  "featureList": "Nine-channel AI highlight detection with lightweight motion evidence, virality scores and reasoning, selected-video parity across motion/shots/facial emotion/contact sheets/timeline/reframe, safe SDR analysis previews for executable PQ/HLG paths, optional visual scans that extract high-confidence on-screen text and ground title/cover consistency, reusable local multimodal evidence shared by desktop/CLI/MCP/automation, quality-ranked final-render cover frames, motion timeline, live-chat heat evidence, comfort-first 9:16 composition with single/group shot locks and lost-subject recovery, PQ/HLG linear-light tone mapping to tagged SDR BT.709 only with complete supported primaries, colour matrix and range, separate unconverted and colour-inspection-failed results, SDR-domain adaptive finish bypass for ambiguous HDR, parity across continuous cuts, jump cuts, stitched pieces, caption overlays and repair, optional clip-local adaptive picture finish for non-HDR-detected inputs, frozen-frame and subject-crop render QA, dynamic word-level captions, word-timing provenance and focused review, caption quality lint, filler removal, transcript-timed sensitive-term muting, multi-project workspace, reversible editing and professional shortcuts, restart-safe recovery, durable automation queue, bounded base-render cache, keyframe-safe H.264 copy, desktop health diagnostics, publishing feedback ledger, local A/B experiments, topic-series packs, per-platform publish packs, SRT and bilingual captions",
+  "featureList": "Nine-channel AI highlight detection with lightweight motion evidence, virality scores and reasoning, local speech-activity evidence protecting automatic edges and ASR-missed speech in jump cuts, selected-audio parity for speech/peak analysis and final render, selected-video parity across motion/shots/facial emotion/contact sheets/timeline/reframe, safe SDR analysis previews for executable PQ/HLG paths, optional visual scans that extract high-confidence on-screen text and ground title/cover consistency, reusable local multimodal evidence shared by desktop/CLI/MCP/automation, quality-ranked final-render cover frames, motion timeline, live-chat heat evidence, comfort-first 9:16 composition with single/group shot locks and lost-subject recovery, PQ/HLG linear-light tone mapping to tagged SDR BT.709 only with complete supported primaries, colour matrix and range, separate unconverted and colour-inspection-failed results, SDR-domain adaptive finish bypass for ambiguous HDR, parity across continuous cuts, jump cuts, stitched pieces, caption overlays and repair, optional clip-local adaptive picture finish for non-HDR-detected inputs, frozen-frame and subject-crop render QA, dynamic word-level captions, word-timing provenance and focused review, caption quality lint, filler removal, transcript-timed sensitive-term muting, multi-project workspace, reversible editing and professional shortcuts, restart-safe recovery, durable automation queue, bounded base-render cache, keyframe-safe H.264 copy, desktop health diagnostics, publishing feedback ledger, local A/B experiments, topic-series packs, per-platform publish packs, SRT and bilingual captions",
   "url": "https://xixihhhh.github.io/hotclip/en.html",
   "downloadUrl": "https://github.com/xixihhhh/hotclip/releases/latest",
   "screenshot": "https://xixihhhh.github.io/hotclip/screenshots/04-highlights.png",
@@ -138,7 +138,7 @@
   </div>
   <p class="note">No Python, no Docker, no account — a real desktop app you double-click</p>
   <div class="meta-badges">
-    <span>Latest <b id="gh-version">v0.25.0</b></span>
+    <span>Latest <b id="gh-version">v0.26.0</b></span>
     <span>GitHub <b id="gh-stars">★</b></span>
     <span>Windows · macOS · Linux</span>
   </div>
@@ -314,7 +314,7 @@
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span><h3>Inspect the picture after export</h3><p>One pass checks black frames, long silence and <b>sustained freezes</b>; reused face samples measure subject crop coverage, all recorded without risky automatic recuts.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg></span><h3>Pick the best frame from the final clip</h3><p>Audio peaks propose moments, then local metrics rank <b>sharpness, exposure, information and transition stability</b>; black/white and blurred transition frames lose, variants stay distinct, failures fall back safely.</p></div>
     <div class="b-cell b-wave" data-reveal>
-      <span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-scissors"/></svg></span><h3>Filler words &amp; silences, gone</h3><p>Silence jump-cuts and an um/uh pass; loudness normalized to <b>-14 LUFS</b>.</p>
+      <span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-scissors"/></svg></span><h3>Remove silence, never gamble on speech</h3><p>A jump cut now requires no words, low peaks and local speech-negative evidence; ASR misses and quiet phoneme tails stay, failures <b>fall back exactly</b>, and loudness lands at -14 LUFS.</p>
       <div class="wave-demo" aria-hidden="true"><i></i><i></i><i></i><i class="cut-gap"></i><i></i><i></i><i class="cut-gap"></i><i></i><i></i><i></i></div>
     </div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-voice"/></svg></span><h3>Speaker diarization</h3><p><b>Who-said-what</b> labels for interviews and multi-host shows (fully local), color-coded captions.</p></div>
@@ -323,7 +323,7 @@
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-film"/></svg></span><h3>A real multi-project workspace</h3><p>Switch, rename, close, delete and relink projects; offline or changed sources <b>keep their edit state</b>, and deleting a project never deletes media.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-scissors"/></svg></span><h3>Every human edit can step back</h3><p>Selection, copy, boundaries, manual clips and transcript fixes share persistent undo/redo, plus keyboard transport, seek and in/out controls.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>Restart-safe work, durable queue</h3><p>Sources, transcripts, candidates and manual cuts recover; folder watch and webhooks share a <b>persistent queue</b> with cancel and retry.</p></div>
-    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span><h3>Health check before a long run</h3><p>Checks FFmpeg, downloader, nine model roles, LLM routing, disk and cache; core model preparation supports cancel and resume.</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span><h3>Health check before a long run</h3><p>Checks FFmpeg, downloader, ten model roles, LLM routing, disk and cache; core model preparation supports cancel and resume.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg></span><h3>Analysis and render see the same picture</h3><p>Motion, shots, facial emotion, thumbnails and optional vision bind the final selected video stream; HDR gets a safe SDR preview, and the <b>64MB local index</b> isolates picture plus colour decision.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>Repeat long-video exports get faster</h3><p>Matching base renders restore from a local cache; H.264 copies only when keyframes and pixel operations make it safe, otherwise it <b>falls back to accurate encoding</b>. The 1GB cache clears separately.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-scissors"/></svg></span><h3>Mute terms, keep the audit trail</h3><p>An editable local list drives transcript-timed audio muting across jump cuts and multi-piece clips; <b>captions keep the original text</b>.</p></div>

@@ -11,7 +11,7 @@ import {
   readEvidence,
   writeEvidence,
 } from "../evidence-index";
-import { collectSignalsEvidence, collectVisionEvidence, detectShotBoundariesEvidence } from "../media-evidence";
+import { collectSignalsEvidence, collectVisionEvidence, detectShotBoundariesEvidence, detectSpeechActivityEvidence } from "../media-evidence";
 
 let root = "";
 
@@ -123,6 +123,24 @@ describe("capability adapters", () => {
     await detectShotBoundariesEvidence({ ...common, analysis: { videoStreamIndex: 1 } });
     await detectShotBoundariesEvidence({ ...common, analysis: { videoStreamIndex: 1 } });
     expect(detect).toHaveBeenCalledTimes(2);
+  });
+
+  it("scopes speech evidence by exact range and selected audio stream", async () => {
+    const { dir, sourcePath } = await fresh();
+    const detect = vi.fn(async () => [{ startSec: 1, endSec: 2 }]);
+    const common = {
+      mediaPath: sourcePath,
+      startSec: 0,
+      endSec: 5,
+      modelsRoot: root,
+      evidenceDir: dir,
+      detect,
+    };
+    await detectSpeechActivityEvidence({ ...common, audioStreamIndex: 1 });
+    await detectSpeechActivityEvidence({ ...common, audioStreamIndex: 1 });
+    await detectSpeechActivityEvidence({ ...common, audioStreamIndex: 2 });
+    await detectSpeechActivityEvidence({ ...common, startSec: 1, audioStreamIndex: 2 });
+    expect(detect).toHaveBeenCalledTimes(3);
   });
 
   it("reuses visual outcomes across API-key changes but not model changes", async () => {

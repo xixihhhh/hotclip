@@ -24,6 +24,7 @@ import {
   TRANSNETV2_MODEL,
   SEGMENTATION_MODEL,
   SPEAKER_EMBEDDING_MODEL,
+  SILERO_VAD_MODEL,
 } from "./models";
 
 const execFileAsync = promisify(execFile);
@@ -51,6 +52,7 @@ const MODEL_ROWS: Array<{ asset: ModelAsset; label: { zh: string; en: string }; 
   { asset: YUNET_MODEL, label: { zh: "人脸检测 YuNet(竖屏取景)", en: "YuNet face detection (vertical framing)" }, core: true },
   { asset: EMOTION_MODEL, label: { zh: "表情识别 FER+(爆点信号)", en: "FER+ facial emotion (highlight signal)" }, core: true },
   { asset: TRANSNETV2_MODEL, label: { zh: "镜头检测 TransNetV2(切点吸附)", en: "TransNetV2 shot detection (cut snapping)" }, core: true },
+  { asset: SILERO_VAD_MODEL, label: { zh: "语音活动检测(安全切点)", en: "Speech activity detection (safe cuts)" }, core: true },
   { asset: PARAFORMER_MODEL, label: { zh: "转写 Paraformer(更准档)", en: "Paraformer transcription (accurate)" }, core: false },
   { asset: FIRERED_MODEL, label: { zh: "转写 FireRedASR2(最准档)", en: "FireRedASR2 transcription (highest accuracy)" }, core: false },
   { asset: PUNCT_MODEL, label: { zh: "标点恢复(更准档转写需要)", en: "Punctuation restoration" }, core: false },
