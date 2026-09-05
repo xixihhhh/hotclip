@@ -9,6 +9,9 @@ import {
   groupWordsIntoLines,
   mergeKeywordWords,
   widthUnits,
+  planReadableCaptions,
+  captionReadableChars,
+  type CaptionReadabilityOptions,
   type AssLayout,
   type CaptionStyle,
 } from "./subtitle";
@@ -26,7 +29,8 @@ export function lintSubtitleTimeline(
   layout: AssLayout,
   style: CaptionStyle,
   forcedBreaks: number[] = [],
-  keywords: string[] = []
+  keywords: string[] = [],
+  options: CaptionReadabilityOptions = {}
 ): SubtitleQualityReport {
   const issues: SubtitleQualityIssue[] = [];
   const maxUnits = captionMaxLineUnits(style, layout);
@@ -76,16 +80,17 @@ export function lintSubtitleTimeline(
       });
     }
   }
-  const lines = groupWordsIntoLines(displayWords, maxUnits, forcedBreaks);
+  const planned = options.readability ? planReadableCaptions(displayWords, maxUnits, forcedBreaks, options.endSec) : undefined;
+  const lines = planned ? planned.map((line) => line.words) : groupWordsIntoLines(displayWords, maxUnits, forcedBreaks);
   let maxCps = 0;
-  for (const line of lines) {
+  for (const [index, line] of lines.entries()) {
     const startSec = line[0].startSec;
-    const endSec = line[line.length - 1].endSec;
+    const endSec = planned?.[index].endSec ?? line[line.length - 1].endSec;
     const durationSec = Math.max(0.001, endSec - startSec);
-    const chars = readableChars(line);
+    const chars = planned ? captionReadableChars(line.map((w) => w.text).join("")) : readableChars(line);
     const cps = chars / durationSec;
     maxCps = Math.max(maxCps, cps);
-    if (cps > SUBTITLE_MAX_CPS) {
+    if (cps > (planned?.[index].maxCps ?? SUBTITLE_MAX_CPS)) {
       issues.push({
         code: "reading-speed",
         severity: "warning",

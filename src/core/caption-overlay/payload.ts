@@ -4,7 +4,7 @@
  * fusion reuse the proven ASS pipeline logic, so web captions and libass
  * captions break identically. Pure — the Electron renderer lives in main/.
  */
-import { groupWordsIntoLines, mergeKeywordWords, CAPTION_HOLD_MAX_SEC, type AssLayout } from "../subtitle";
+import { groupWordsIntoLines, mergeKeywordWords, CAPTION_HOLD_MAX_SEC, planReadableCaptions, type CaptionReadabilityOptions, type AssLayout } from "../subtitle";
 import { isValidHex, lightenHex, DEFAULT_HIGHLIGHT_HEX } from "../brand";
 import type { TranscriptWord } from "../../shared/api-types";
 import type { ColorRenderPlan } from "../color";
@@ -32,6 +32,7 @@ export type OverlayRenderFn = (
 
 /** Output-only render metadata needed after the base clip is already assembled. */
 export interface OverlayOutputOptions {
+  signal?: AbortSignal;
   /** Restate BT.709 on overlay re-encodes of a tone-mapped base clip. */
   color?: ColorRenderPlan;
   /** Global stream indices selected from the already-rendered base clip. */
@@ -75,13 +76,14 @@ const LINE_LINGER_MS = 350;
 export function buildOverlayPayload(
   words: TranscriptWord[],
   layout: AssLayout,
-  options: { keywords?: string[]; forcedBreaks?: number[]; highlightHex?: string } = {}
+  options: CaptionReadabilityOptions & { keywords?: string[]; forcedBreaks?: number[]; highlightHex?: string } = {}
 ): OverlayPayload {
   const fused = mergeKeywordWords(words, options.keywords ?? []);
   const keywordSet = new Set(
     (options.keywords ?? []).map((k) => k.toLowerCase()).filter(Boolean)
   );
-  const grouped = groupWordsIntoLines(fused, layout.maxLineUnits, options.forcedBreaks).filter(
+  const planned = options.readability ? planReadableCaptions(fused, layout.maxLineUnits, options.forcedBreaks, options.endSec) : undefined;
+  const grouped = planned ? planned.map((line) => line.words) : groupWordsIntoLines(fused, layout.maxLineUnits, options.forcedBreaks).filter(
     (l) => l.length > 0
   );
 
@@ -96,7 +98,7 @@ export function buildOverlayPayload(
       : lastEnd + LINE_LINGER_MS / 1000;
     return {
       startMs: Math.round(start * 1000),
-      endMs: Math.round(Math.max(end, lastEnd) * 1000),
+      endMs: Math.round((planned?.[i].endSec ?? Math.max(end, lastEnd)) * 1000),
       words: lineWords.map((w) => ({
         text: w.text,
         startMs: Math.round(w.startSec * 1000),

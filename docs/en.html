@@ -31,7 +31,7 @@
   "name": "HotClip",
   "operatingSystem": "Windows, macOS, Linux",
   "applicationCategory": "MultimediaApplication",
-  "softwareVersion": "0.27.0",
+  "softwareVersion": "0.28.0",
   "inLanguage": ["en", "zh-CN"],
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
   "description": "Free, open-source, local-first AI video clipper: turn long videos and livestream replays into 9:16 shorts with AI highlight detection, dynamic word-level captions, comfort-first per-shot auto-reframe and metadata-gated HDR-to-SDR export. No credits or watermark.",
@@ -138,7 +138,7 @@
   </div>
   <p class="note">No Python, no Docker, no account — a real desktop app you double-click</p>
   <div class="meta-badges">
-    <span>Latest <b id="gh-version">v0.27.0</b></span>
+    <span>Latest <b id="gh-version">v0.28.0</b></span>
     <span>GitHub <b id="gh-stars">★</b></span>
     <span>Windows · macOS · Linux</span>
   </div>
@@ -307,7 +307,7 @@
     </div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-caption"/></svg></span><h3>Dynamic captions, auto-burned</h3><p>Word-level lighting and semantic line breaks; <b>SRT export</b> and bilingual captions one toggle away.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg></span><h3>Words in the picture count as evidence</h3><p>The optional vision pass also captures clear product names, prices, scores and slide facts in the same call; <b>uncertainty stays blank</b>, so valuable static frames are not discarded as low-energy.</p></div>
-    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg></span><h3>See exactly where caption timing needs review</h3><p>Native, aligned, interpolated and edited timing stays visible; filter the transcript to review ranges, while final clips check <b>overlap, reading speed and flashes</b> in the receipt.</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg></span><h3>Search long transcripts, review timing</h3><p>Cross-sentence search and a responsive long-form editor; selected timing changes support <b>listen, preview, apply and undo</b> while keeping the original text.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-reframe"/></svg></span><h3>9:16 auto-reframe</h3><p><b>Comfort-first composition</b>: safe shots truly hold until the next cut, follow only when needed, never pan through removed jump-cut time, and recover after sustained loss.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg></span><h3>Finish only what needs it</h3><p>On non-HDR-detected inputs, optional adaptive finishing makes a <b>hard-capped subtle correction</b> only when clearly dark, flat or oversaturated. Detected PQ/HLG bypasses this SDR-domain pass.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span><h3>HDR conversion that never guesses</h3><p>PQ/HLG becomes <b>tagged SDR BT.709</b> only with complete, supported primaries, matrix and range; available peak metadata constrains highlights. Unsupported HDR and inspection failures keep the existing path, skip SDR-domain finishing and show distinct states.</p></div>
@@ -319,11 +319,11 @@
     </div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-voice"/></svg></span><h3>Smart dialogue at 48kHz</h3><p>The explicit Smart tier downloads an optional ~10MB local model, cleaning fan, HVAC and room noise after the edit but before SFX/BGM. It <b>falls back to Basic</b> if unavailable and leaves video pixels untouched.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-voice"/></svg></span><h3>Speaker diarization</h3><p><b>Who-said-what</b> labels for interviews and multi-host shows (fully local), color-coded captions.</p></div>
-    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-globe"/></svg></span><h3>Native Chinese + English</h3><p>Dedicated Chinese ASR engines covering dialects and code-switching; bilingual UI.</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-globe"/></svg></span><h3>Have subtitles? Start editing</h3><p>Import original-language <b>SRT / WebVTT</b> with cue timing intact, or opt into a separately managed Qwen3 local speech service.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg></span><h3>Every cut is auditable</h3><p>Reasoning, removed fillers, applied styles — all logged to the <b>clips.json receipt</b>. Veto anything.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-film"/></svg></span><h3>A real multi-project workspace</h3><p>Switch, rename, close, delete and relink projects; offline or changed sources <b>keep their edit state</b>, and deleting a project never deletes media.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-scissors"/></svg></span><h3>Every human edit can step back</h3><p>Selection, copy, boundaries, manual clips and transcript fixes share persistent undo/redo, plus keyboard transport, seek and in/out controls.</p></div>
-    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>Restart-safe work, durable queue</h3><p>Sources, transcripts, candidates and manual cuts recover; folder watch and webhooks share a <b>persistent queue</b> with cancel and retry.</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>Resume interrupted transcription</h3><p>Completed local speech windows survive interruption. Export preparation can also be cancelled, then <b>retried with candidates intact</b>.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span><h3>Health check before a long run</h3><p>Checks FFmpeg, downloader, eleven model roles, LLM routing, disk and cache; core model preparation supports cancel and resume.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg></span><h3>Analysis and render see the same picture</h3><p>Motion, shots, facial emotion, thumbnails and optional vision bind the final selected video stream; HDR gets a safe SDR preview, and the <b>64MB local index</b> isolates picture plus colour decision.</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>Repeat long-video exports get faster</h3><p>Matching base renders restore from a local cache; H.264 copies only when keyframes and pixel operations make it safe, otherwise it <b>falls back to accurate encoding</b>. The 1GB cache clears separately.</p></div>

@@ -1,3 +1,4 @@
+import { LocalSpeechConnection } from "./LocalSpeechConnection";
 /**
  * Wizard step 2: engine picker → transcription progress → sentence transcript.
  * Transcript quality gates everything downstream, so the engine choice is an
@@ -26,6 +27,7 @@ import { editSegmentText } from "../../../shared/edit-transcript";
 import { parseTranscribeError } from "../../../shared/transcribe-errors";
 import { diffReplacement, applyGlossaryToTranscript, countGlossaryHits, upsertGlossaryEntry } from "../../../shared/glossary";
 import { GlossaryModal } from "./GlossaryModal";
+import { SubtitleImport } from "./SubtitleImport";
 import type { Transcript, TranscribeProgressEvent, AsrEngineInfo, GlossaryEntry } from "../../../shared/api-types";
 
 function formatClock(totalSeconds: number): string {
@@ -51,6 +53,7 @@ const STAGE_KEY: Record<TranscribeProgressEvent["stage"], string> = {
 const ENGINE_TEXT: Record<string, { name: string; desc: string }> = {
   sensevoice: { name: "engineSensevoiceName", desc: "engineSensevoiceDesc" },
   paraformer: { name: "engineParaformerName", desc: "engineParaformerDesc" },
+  qwen3: { name: "engineQwenName", desc: "engineQwenDesc" },
   fireredasr: { name: "engineFireredName", desc: "engineFireredDesc" },
   elevenlabs: { name: "engineElevenlabsName", desc: "engineElevenlabsDesc" },
 };
@@ -81,9 +84,15 @@ export function TranscribeView({
   autoStart?: boolean;
 }): React.JSX.Element {
   const t = useT("transcribe");
-  const { engineId, setEngineId, keys, setKey } = useAsrStore();
+  const { engineId, setEngineId, keys, setKey, localServiceUrl } = useAsrStore();
   const [engines, setEngines] = useState<AsrEngineInfo[] | null>(null);
   const [running, setRunning] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const generation = useRef(0);
+  const runningRef = useRef(false);
+  useEffect(() => () => { generation.current++; if (runningRef.current) getApi().cancelTranscribe(); }, []);
+  const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState<TranscribeProgressEvent>({ fraction: 0, stage: "preparing" });
   const [transcript, setTranscript] = useState<Transcript | null>(cached ?? null);
   const [error, setError] = useState<string | null>(null);
@@ -134,12 +143,13 @@ export function TranscribeView({
   useEffect(() => {
     if (cached) return;
     if (autoStart) {
-      // 托管: no picker, run immediately with the remembered engine
-      if (!autoStarted.current) {
-        autoStarted.current = true;
-        start();
-      }
-      return () => unsubRef.current?.();
+      // StrictMode may mount/clean up/mount effects. Start after that cycle so
+      // the cleanup cannot leave an automatically started job permanently busy.
+      const timer = setTimeout(() => {
+        if (!autoStarted.current) { autoStarted.current = true; start(); }
+      }, 0);
+      void getApi().listAsrEngines().then(setEngines).catch(() => setEngines([]));
+      return () => { clearTimeout(timer); unsubRef.current?.(); };
     }
     getApi()
       .listAsrEngines()
@@ -149,7 +159,11 @@ export function TranscribeView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const start = (): void => {
+  const start = (restart = false): void => {
+    if (runningRef.current) return;
+    const request = ++generation.current;
+    runningRef.current = true;
+    setPaused(false); setCancelling(false);
     setRunning(true);
     setError(null);
     setErrorDetail(null);
@@ -157,12 +171,15 @@ export function TranscribeView({
     const api = getApi();
     unsubRef.current = api.onTranscribeProgress(setProgress);
     api
-      .transcribeMedia(filePath, engineId, keys[engineId])
+      .transcribeMedia(filePath, engineId, keys[engineId], { localServiceUrl, restart })
       .then((result) => {
+        if (request !== generation.current) return;
         setTranscript(result);
         onDone?.(result);
       })
       .catch((e: unknown) => {
+        if (request !== generation.current) return;
+        if (/cancelled|AbortError/.test(String(e))) { setPaused(true); return; }
         // 真实失败原因透传:没音轨/模型下载失败给对症提示,其余附上
         // 原始错误细节——曾经一律提示「确认音轨」,误导用户反复转码(issue #2)
         const { kind, detail } = parseTranscribeError(e instanceof Error ? e.message : String(e));
@@ -178,6 +195,9 @@ export function TranscribeView({
         setErrorDetail(kind !== "no-audio" && detail ? detail : null);
       })
       .finally(() => {
+        if (request !== generation.current) return;
+        runningRef.current = false;
+        setCancelling(false);
         unsubRef.current?.();
         unsubRef.current = null;
         setRunning(false);
@@ -202,6 +222,12 @@ export function TranscribeView({
         <>
           <h1 className="text-center text-3xl font-extrabold tracking-tight">{t("enginePickTitle")}</h1>
           <p className="mt-3 max-w-lg text-center text-[14px] text-mut">{t("enginePickDesc")}</p>
+
+          {paused && <p role="status" className="mt-3 text-sm text-amber-400">{t(engineId === "elevenlabs" ? "speechCloudCancelled" : "speechResumeHint")}</p>}
+          <SubtitleImport filePath={filePath} onBusy={setImporting} onImported={(result) => {
+            setTranscript(result);
+            onDone?.(result);
+          }} />
 
           <div className="mt-8 grid w-full gap-3">
             {(engines ?? []).map((e) => {
@@ -246,16 +272,16 @@ export function TranscribeView({
                       {e.uploads ? <LuCloudUpload className="h-3 w-3" /> : <LuShieldCheck className="h-3 w-3 text-emerald-400" />}
                       {e.uploads ? t("badgeNeedsUpload") : t("badgeLocalPrivate")}
                     </span>
-                    <span className="chip flex items-center gap-1 rounded-md px-2 py-0.5">
+                    {!e.experimental && <span className="chip flex items-center gap-1 rounded-md px-2 py-0.5">
                       <LuGauge className="h-3 w-3" />
                       {"●".repeat(e.speed)}{"○".repeat(3 - e.speed)}
-                    </span>
-                    <span className="chip flex items-center gap-1 rounded-md px-2 py-0.5">
+                    </span>}
+                    {!e.experimental && <span className="chip flex items-center gap-1 rounded-md px-2 py-0.5">
                       <LuTarget className="h-3 w-3" />
                       {"●".repeat(e.accuracy)}{"○".repeat(3 - e.accuracy)}
-                    </span>
+                    </span>}
                     <span className="chip rounded-md px-2 py-0.5">{t("badgeLangs", { langs: e.langs.join("/") })}</span>
-                    {e.kind === "local" && (
+                    {e.kind === "local" && !e.experimental && (
                       <span className={`chip rounded-md px-2 py-0.5 ${e.installed ? "text-emerald-400" : ""}`}>
                         {e.installed ? t("badgeInstalled") : t("badgeDownload", { n: e.sizeMB ?? 0 })}
                       </span>
@@ -266,6 +292,7 @@ export function TranscribeView({
             })}
           </div>
 
+          {engineId === "qwen3" && <div className="mt-4 w-full"><LocalSpeechConnection /></div>}
           <div className="mt-6 flex items-center gap-3">
             <button
               type="button"
@@ -277,12 +304,13 @@ export function TranscribeView({
             </button>
             <button
               type="button"
-              onClick={start}
-              disabled={engines?.find((e) => e.id === engineId)?.kind === "cloud" && !keys[engineId]}
+              onClick={() => start()}
+              disabled={importing || (engines?.find((e) => e.id === engineId)?.kind === "cloud" && !keys[engineId])}
               className="btn-flame rounded-xl px-9 py-3 text-[14px] font-bold text-white disabled:opacity-40"
             >
-              {t("engineStart")}
+              {t(paused && engineId !== "elevenlabs" ? "speechResume" : "engineStart")}
             </button>
+            {paused && engineId !== "elevenlabs" && <button type="button" onClick={() => start(true)} className="text-xs text-mut underline">{t("speechRestart")}</button>}
           </div>
         </>
       )}
@@ -315,6 +343,8 @@ export function TranscribeView({
               </p>
             )}
             {progress.stage === "extracting-model" && <p className="mt-3 text-xs text-mut">{t("extractHint")}</p>}
+            {progress.totalWindows !== undefined && <p className="mt-3 text-xs text-mut" role="status">{t("speechWindows", { done: progress.completedWindows ?? 0, total: progress.totalWindows, resumed: progress.resumedWindows ?? 0 })}</p>}
+            <button type="button" disabled={cancelling} onClick={() => { setCancelling(true); getApi().cancelTranscribe(); }} className="mt-4 rounded border border-line px-3 py-2 text-sm disabled:opacity-40">{t(cancelling ? "speechCancelling" : "speechCancel")}</button>
           </div>
         </>
       )}
@@ -343,8 +373,9 @@ export function TranscribeView({
               }}
               className="btn-flame rounded-lg px-5 py-2 text-sm font-bold text-white"
             >
-              {t("engineStart")}
+              {t(paused && engineId !== "elevenlabs" ? "speechResume" : "engineStart")}
             </button>
+            {paused && engineId !== "elevenlabs" && <button type="button" onClick={() => start(true)} className="text-xs text-mut underline">{t("speechRestart")}</button>}
           </div>
         </div>
       )}
@@ -360,7 +391,7 @@ export function TranscribeView({
               </h1>
               <p className="mt-1.5 text-[13px] text-mut">
                 {t("resultCount", { n: transcript.segments.length, lang: transcript.language })} ·{" "}
-                {usedEngine ? t(usedEngine.name) : t("engineLocal")}
+                {transcript.engine.startsWith("subtitle-") ? t("subtitleImported") : usedEngine ? t(usedEngine.name) : t("engineLocal")}
               </p>
             </div>
             <div className="flex items-center gap-2.5">

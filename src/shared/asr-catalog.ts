@@ -17,6 +17,8 @@ export interface AsrEngineFacts {
   accuracy: 1 | 2 | 3;
   /** True when the user's media must leave the machine. */
   uploads: boolean;
+  /** User-managed local service; quality tiers are not benchmark claims. */
+  experimental?: boolean;
 }
 
 /**
@@ -50,6 +52,10 @@ export const ASR_CATALOG: AsrEngineFacts[] = [
     speed: 2,
     accuracy: 3,
     uploads: false,
+  },
+  {
+    id: "qwen3", kind: "local", langs: ["30 languages"], speed: 1, accuracy: 3,
+    uploads: false, experimental: true,
   },
   {
     id: "elevenlabs",

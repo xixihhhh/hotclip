@@ -27,7 +27,12 @@ const api: HotClipApi = {
   sessionCheckpointClear: () => ipcRenderer.invoke("hotclip:session-checkpoint-clear"),
   probeMedia: (filePath) => ipcRenderer.invoke("hotclip:probe-media", filePath),
   listAsrEngines: () => ipcRenderer.invoke("hotclip:list-asr-engines"),
-  transcribeMedia: (filePath, engineId, apiKey) => ipcRenderer.invoke("hotclip:transcribe", filePath, engineId, apiKey),
+  transcribeMedia: (filePath, engineId, apiKey, options) => ipcRenderer.invoke("hotclip:transcribe", filePath, engineId, apiKey, options),
+  cancelTranscribe: () => ipcRenderer.send("hotclip:transcribe-cancel"),
+  checkLocalSpeech: (url) => ipcRenderer.invoke("hotclip:local-speech-check", url),
+  previewAlignment: (filePath, transcript, request) => ipcRenderer.invoke("hotclip:alignment-preview", filePath, transcript, request),
+  cancelAlignment: () => ipcRenderer.send("hotclip:alignment-cancel"),
+  importSubtitle: (filePath, text, format) => ipcRenderer.invoke("hotclip:import-subtitle", filePath, text, format),
   onTranscribeProgress: (cb) => {
     const listener = (_e: IpcRendererEvent, p: TranscribeProgressEvent): void => cb(p);
     ipcRenderer.on("hotclip:transcribe-progress", listener);

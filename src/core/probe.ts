@@ -249,16 +249,18 @@ export function parseProbeOutput(raw: unknown): MediaInfo {
 }
 
 /** Probe a local media file. Throws with an actionable message when ffprobe fails. */
-export async function probeMedia(filePath: string): Promise<MediaInfo> {
+export async function probeMedia(filePath: string, signal?: AbortSignal): Promise<MediaInfo> {
+  signal?.throwIfAborted();
   const ffprobe = resolveFfprobePath();
   let stdout: string;
   try {
     ({ stdout } = await execFileAsync(
       ffprobe,
       ["-v", "error", "-print_format", "json", "-show_format", "-show_streams", filePath],
-      { maxBuffer: 16 * 1024 * 1024 }
+      { maxBuffer: 16 * 1024 * 1024, signal }
     ));
   } catch (e) {
+    signal?.throwIfAborted();
     const msg = e instanceof Error ? e.message : String(e);
     throw new Error(`ffprobe failed for "${filePath}": ${msg}`);
   }
@@ -280,11 +282,12 @@ export async function probeMedia(filePath: string): Promise<MediaInfo> {
       const frame = await execFileAsync(
         ffprobe,
         ["-v", "error", "-select_streams", String(info.videoStreamIndex), "-read_intervals", "%+#1", "-show_frames", "-print_format", "json", filePath],
-        { maxBuffer: 4 * 1024 * 1024 }
+        { maxBuffer: 4 * 1024 * 1024, signal }
       );
       const peak = parseHdrPeakOutput(JSON.parse(frame.stdout), info.videoStreamIndex);
       if (peak > 0) info.hdrPeakNits = peak;
     } catch {
+      signal?.throwIfAborted();
       // Peak metadata is optional; tone-map retains FFmpeg's bounded fallback.
     }
   }

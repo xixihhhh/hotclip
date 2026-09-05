@@ -10,7 +10,9 @@
  *    seconds off on livestream VODs with sparse keyframes) — preview only.
  */
 import { spawn } from "child_process";
-import { writeFile, rm } from "fs/promises";
+import { withAtomicOutput } from "./atomic-output";
+import { writeFile } from "fs/promises";
+import { resolve } from "path";
 import { resolveFfmpegPath } from "./binaries";
 import { toFfmpegTime } from "./time";
 import { buildZoomFilter } from "./autozoom";
@@ -143,11 +145,19 @@ export async function runFfmpeg(
   args: string[],
   opts: { signal?: AbortSignal; onTimeSec?: (sec: number) => void } = {}
 ): Promise<void> {
+  opts.signal?.throwIfAborted();
   await new Promise<void>((resolve, reject) => {
     const child = spawn(resolveFfmpegPath(), ["-progress", "pipe:1", "-nostats", ...args], {
       stdio: ["ignore", "pipe", "pipe"],
       signal: opts.signal,
     });
+    let processError: Error | undefined;
+    let killTimer: ReturnType<typeof setTimeout> | undefined;
+    const forceStop = (): void => {
+      killTimer = setTimeout(() => child.kill("SIGKILL"), 2000);
+      killTimer.unref();
+    };
+    opts.signal?.addEventListener("abort", forceStop, { once: true });
     let stderrTail = "";
     child.stderr.on("data", (d: Buffer) => {
       stderrTail = (stderrTail + d.toString()).slice(-4000);
@@ -156,9 +166,15 @@ export async function runFfmpeg(
       const sec = parseFfmpegProgress(d.toString());
       if (sec !== null) opts.onTimeSec?.(sec);
     });
-    child.on("error", (e) => reject(e)); // 含 AbortError
+    // Abort emits error before close. Wait for close before a caller removes or
+    // publishes the output (especially important while Windows holds the file).
+    child.on("error", (e) => { processError = e; });
     child.on("close", (code) => {
-      if (code === 0) resolve();
+      if (killTimer) clearTimeout(killTimer);
+      opts.signal?.removeEventListener("abort", forceStop);
+      if (opts.signal?.aborted) reject(opts.signal.reason ?? new Error("export cancelled"));
+      else if (processError) reject(processError);
+      else if (code === 0) resolve();
       else reject(new Error(stderrTail.split("\n").slice(-6).join("\n") || `ffmpeg exited ${code}`));
     });
   });
@@ -411,21 +427,23 @@ export async function cutJumpClip(
   signal?: AbortSignal,
   onTimeSec?: (sec: number) => void
 ): Promise<void> {
-  const args = buildJumpCutArgs(inputPath, outputPath, clipStartSec, segments, options);
-  try {
-    await runFfmpeg(args, { signal, onTimeSec });
-  } catch (e) {
-    if (options.encoder && options.encoder !== "libx264" && !signal?.aborted) {
-      await runFfmpeg(
-        buildJumpCutArgs(inputPath, outputPath, clipStartSec, segments, { ...options, encoder: "libx264" }),
-        { signal, onTimeSec }
-      );
-      return;
+  await withAtomicOutput(outputPath, async (temporaryPath) => {
+    const args = buildJumpCutArgs(inputPath, temporaryPath, clipStartSec, segments, options);
+    try {
+      await runFfmpeg(args, { signal, onTimeSec });
+    } catch (e) {
+      if (options.encoder && options.encoder !== "libx264" && !signal?.aborted) {
+        await runFfmpeg(
+          buildJumpCutArgs(inputPath, temporaryPath, clipStartSec, segments, { ...options, encoder: "libx264" }),
+          { signal, onTimeSec }
+        );
+        return;
+      }
+      const msg = e instanceof Error ? e.message : String(e);
+      const tail = msg.split("\n").slice(-6).join("\n");
+      throw new Error(`ffmpeg jump cut failed (${segments.length} segments): ${tail}`);
     }
-    const msg = e instanceof Error ? e.message : String(e);
-    const tail = msg.split("\n").slice(-6).join("\n");
-    throw new Error(`ffmpeg jump cut failed (${segments.length} segments): ${tail}`);
-  }
+  }, signal);
 }
 
 /** Execute one cut. Throws with ffmpeg's stderr tail on failure. */
@@ -438,37 +456,39 @@ export async function cutClip(
   signal?: AbortSignal,
   onTimeSec?: (sec: number) => void
 ): Promise<"copy" | "encode"> {
-  const args = buildCutArgs(inputPath, outputPath, startSec, endSec, options);
-  try {
-    await runFfmpeg(args, { signal, onTimeSec });
-    return options.videoCopy ? "copy" : "encode";
-  } catch (e) {
-    // Smart video copy is an optimization only. Container/bitstream quirks can
-    // still reject an otherwise eligible stream, so retry the proven accurate
-    // path before considering hardware-encoder fallback.
-    if (options.videoCopy && !signal?.aborted) {
-      try {
+  return withAtomicOutput(outputPath, async (temporaryPath) => {
+    const args = buildCutArgs(inputPath, temporaryPath, startSec, endSec, options);
+    try {
+      await runFfmpeg(args, { signal, onTimeSec });
+      return options.videoCopy ? "copy" : "encode";
+    } catch (e) {
+      // Smart video copy is an optimization only. Container/bitstream quirks can
+      // still reject an otherwise eligible stream, so retry the proven accurate
+      // path before considering hardware-encoder fallback.
+      if (options.videoCopy && !signal?.aborted) {
+        try {
+          await runFfmpeg(
+            buildCutArgs(inputPath, temporaryPath, startSec, endSec, { ...options, videoCopy: false }),
+            { signal, onTimeSec }
+          );
+          return "encode";
+        } catch (accurateError) {
+          e = accurateError;
+        }
+      }
+      if (options.encoder && options.encoder !== "libx264" && !signal?.aborted) {
         await runFfmpeg(
-          buildCutArgs(inputPath, outputPath, startSec, endSec, { ...options, videoCopy: false }),
+          buildCutArgs(inputPath, temporaryPath, startSec, endSec, { ...options, videoCopy: false, encoder: "libx264" }),
           { signal, onTimeSec }
         );
         return "encode";
-      } catch (accurateError) {
-        e = accurateError;
       }
+      const msg = e instanceof Error ? e.message : String(e);
+      // ffmpeg errors bury the cause at the end of stderr — surface only the tail
+      const tail = msg.split("\n").slice(-6).join("\n");
+      throw new Error(`ffmpeg cut failed (${toFfmpegTime(startSec)}→${toFfmpegTime(endSec)}): ${tail}`);
     }
-    if (options.encoder && options.encoder !== "libx264" && !signal?.aborted) {
-      await runFfmpeg(
-        buildCutArgs(inputPath, outputPath, startSec, endSec, { ...options, videoCopy: false, encoder: "libx264" }),
-        { signal, onTimeSec }
-      );
-      return "encode";
-    }
-    const msg = e instanceof Error ? e.message : String(e);
-    // ffmpeg errors bury the cause at the end of stderr — surface only the tail
-    const tail = msg.split("\n").slice(-6).join("\n");
-    throw new Error(`ffmpeg cut failed (${toFfmpegTime(startSec)}→${toFfmpegTime(endSec)}): ${tail}`);
-  }
+  }, signal);
 }
 
 /** concat demuxer 列表文件内容(路径里的单引号按其语法转义)。 */
@@ -493,11 +513,9 @@ export async function concatClips(
   metadata?: Record<string, string>
 ): Promise<void> {
   if (paths.length < 2) throw new Error("concat requires at least two clips");
-  const listPath = `${outputPath}.list.txt`;
-  await writeFile(listPath, buildConcatList(paths), "utf8");
-  try {
-    await runFfmpeg(buildConcatArgs(listPath, outputPath, metadata), { signal });
-  } finally {
-    await rm(listPath, { force: true });
-  }
+  await withAtomicOutput(outputPath, async (temporaryPath) => {
+    const listPath = `${temporaryPath}.list.txt`;
+    await writeFile(listPath, buildConcatList(paths.map((path) => resolve(path))), "utf8");
+    await runFfmpeg(buildConcatArgs(listPath, temporaryPath, metadata), { signal });
+  }, signal);
 }

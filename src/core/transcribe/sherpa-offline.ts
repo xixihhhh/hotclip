@@ -6,25 +6,19 @@
  * A tier is described by a spec; adding a model = adding a spec.
  */
 import { join } from "path";
-import { rm } from "fs/promises";
-import { tmpdir } from "os";
-import { resolveFfmpegPath } from "../binaries";
 import {
   ensureModel,
-  extractPcmF32le16k,
   isModelInstalled,
   modelDir,
-  readF32leSamples,
   PUNCT_MODEL,
   type ModelAsset,
 } from "../models";
 import { toAnsiSafeDir } from "../win-ansi-path";
-import { segmentWords, joinWords } from "./segment";
+import { joinWords } from "./segment";
 import { applyPunctuation } from "./punctuate";
 import type { Transcript, TranscribeEngine, TranscribeOptions, TranscriptWord } from "./types";
 
-/** Window length per decode call; offline models handle ≤30s comfortably. */
-const WINDOW_SEC = 28;
+import { transcribeWindows } from "./windowed";
 
 export interface SherpaResult {
   text: string;
@@ -57,13 +51,13 @@ export function tokensToWords(result: SherpaResult, offsetSec: number, windowEnd
   for (let i = 0; i < tokens.length; i++) {
     const text = tokens[i];
     if (!text || !text.trim()) continue;
-    const start = offsetSec + (stamps[i] ?? 0);
+    const start = Math.min(windowEndSec, Math.max(offsetSec, offsetSec + (stamps[i] ?? 0)));
     const nextStamp = stamps[i + 1];
     const end = nextStamp !== undefined ? offsetSec + nextStamp : Math.min(start + 0.3, windowEndSec);
     words.push({
       text: text.trim(),
       startSec: start,
-      endSec: Math.max(end, start),
+      endSec: Math.min(windowEndSec, Math.max(end, start)),
       timingSource: stamps[i] !== undefined ? "native" : "estimated",
     });
   }
@@ -114,76 +108,46 @@ export class SherpaOfflineEngine implements TranscribeEngine {
     await ensureModel(this.modelsRoot, spec.asset, download, signal);
     if (spec.punctuate) await ensureModel(this.modelsRoot, PUNCT_MODEL, download, signal);
 
-    onProgress?.({ fraction: 0, stage: "decoding" });
-    const pcmPath = join(tmpdir(), `hotclip-${Date.now()}-16k.f32le`);
-    try {
-      await extractPcmF32le16k(resolveFfmpegPath(), filePath, pcmPath);
 
-      const sh = loadSherpa();
-      // 模型文件由原生层自己打开(ANSI):Windows 中文路径先转 8.3 短路径(issue #4)
-      const dir = await toAnsiSafeDir(modelDir(this.modelsRoot, spec.asset));
-      const recognizer = new sh.OfflineRecognizer({
-        featConfig: { sampleRate: 16000, featureDim: 80 },
-        modelConfig: {
-          ...spec.buildModelConfig(dir),
-          tokens: join(dir, "tokens.txt"),
-          numThreads: spec.numThreads ?? 2,
-          provider: "cpu",
-          debug: 0,
-        },
-      });
-      const punct = spec.punctuate
-        ? new sh.OfflinePunctuation({
-            model: {
-              ctTransformer: join(await toAnsiSafeDir(modelDir(this.modelsRoot, PUNCT_MODEL)), "model.int8.onnx"),
-              numThreads: 1,
-              provider: "cpu",
-              debug: 0,
-            },
-          })
-        : null;
+    const sh = loadSherpa();
+    // 模型文件由原生层自己打开(ANSI):Windows 中文路径先转 8.3 短路径(issue #4)
+    const dir = await toAnsiSafeDir(modelDir(this.modelsRoot, spec.asset));
+    const recognizer = new sh.OfflineRecognizer({
+      featConfig: { sampleRate: 16000, featureDim: 80 },
+      modelConfig: {
+        ...spec.buildModelConfig(dir),
+        tokens: join(dir, "tokens.txt"),
+        numThreads: spec.numThreads ?? 2,
+        provider: "cpu",
+        debug: 0,
+      },
+    });
+    const punct = spec.punctuate
+      ? new sh.OfflinePunctuation({
+          model: {
+            ctTransformer: join(await toAnsiSafeDir(modelDir(this.modelsRoot, PUNCT_MODEL)), "model.int8.onnx"),
+            numThreads: 1,
+            provider: "cpu",
+            debug: 0,
+          },
+        })
+      : null;
 
-      // 样本走 Node 读入(Unicode 路径免疫),不让原生层 readWave 自己开临时文件
-      const samples = await readF32leSamples(pcmPath);
-      const sampleRate = 16000;
-      const durationSec = samples.length / sampleRate;
-      const windowSamples = WINDOW_SEC * sampleRate;
-
-      const allWords: TranscriptWord[] = [];
-      let detectedLang = "";
-
-      for (let start = 0; start < samples.length; start += windowSamples) {
-        if (signal?.aborted) throw new Error("transcription cancelled");
-        const chunk = samples.subarray(start, Math.min(start + windowSamples, samples.length));
-        const offsetSec = start / sampleRate;
+    return transcribeWindows(filePath, this.id,
+      JSON.stringify([this.id, spec.asset, spec.buildModelConfig("MODEL"), spec.punctuate, "sherpa-1.13-v2"]), options,
+      async (samples, startSec, endSec) => {
+        signal?.throwIfAborted();
         const stream = recognizer.createStream();
-        stream.acceptWaveform({ sampleRate, samples: chunk });
-        recognizer.decode(stream);
-        const result = recognizer.getResult(stream) as SherpaResult;
-        if (!detectedLang && typeof spec.language === "function") {
-          detectedLang = spec.language(result) ?? "";
+        try {
+          stream.acceptWaveform({ sampleRate: 16000, samples });
+          recognizer.decode(stream);
+          const result = recognizer.getResult(stream) as SherpaResult;
+          let words = tokensToWords(result, startSec, endSec);
+          if (punct && words.length > 0) words = applyPunctuation(words, punct.addPunct(joinWords(words)) as string);
+          return { words, language: typeof spec.language === "string" ? spec.language : spec.language(result) };
+        } finally {
+          stream.free?.();
         }
-        let words = tokensToWords(result, offsetSec, offsetSec + chunk.length / sampleRate);
-        if (punct && words.length > 0) {
-          // per-window punctuation: ~28s of speech is ample sentence context
-          words = applyPunctuation(words, punct.addPunct(joinWords(words)) as string);
-        }
-        allWords.push(...words);
-        onProgress?.({
-          fraction: Math.min(1, (start + chunk.length) / samples.length),
-          stage: "transcribing",
-        });
-      }
-
-      onProgress?.({ fraction: 1, stage: "finalizing" });
-      return {
-        language: typeof spec.language === "string" ? spec.language : detectedLang || "auto",
-        segments: segmentWords(allWords),
-        engine: this.id,
-        durationSec,
-      };
-    } finally {
-      await rm(pcmPath, { force: true });
-    }
+      });
   }
 }

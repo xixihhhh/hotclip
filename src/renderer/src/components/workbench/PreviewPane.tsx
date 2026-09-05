@@ -11,7 +11,9 @@ import { useT } from "../../i18n/store";
 
 export interface PreviewTransportCommand {
   id: number;
-  action: "toggle" | "back5" | "forward5";
+  action: "toggle" | "back5" | "forward5" | "audition";
+  startSec?: number;
+  endSec?: number;
 }
 
 function formatClock(totalSeconds: number): string {
@@ -31,6 +33,7 @@ export function PreviewPane({
   onPrevCandidate,
   onNextCandidate,
   transportCommand,
+  compact = false,
 }: {
   filePath: string | null;
   durationSec: number;
@@ -40,9 +43,11 @@ export function PreviewPane({
   onPrevCandidate: () => void;
   onNextCandidate: () => void;
   transportCommand?: PreviewTransportCommand | null;
+  compact?: boolean;
 }): React.JSX.Element {
   const t = useT("workbench");
   const mainRef = useRef<HTMLVideoElement>(null);
+  const auditionEnd = useRef<number | null>(null);
   const cropRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
   const [now, setNow] = useState(0);
@@ -57,6 +62,7 @@ export function PreviewPane({
   useEffect(() => {
     const v = mainRef.current;
     if (!v || !Number.isFinite(seekSec)) return;
+    auditionEnd.current = null;
     v.currentTime = seekSec;
   }, [seekSec]);
 
@@ -75,6 +81,7 @@ export function PreviewPane({
   const togglePlay = (): void => {
     const v = mainRef.current;
     if (!v) return;
+    auditionEnd.current = null;
     if (v.paused) void v.play().catch(() => {});
     else v.pause();
   };
@@ -82,6 +89,13 @@ export function PreviewPane({
   useEffect(() => {
     const video = mainRef.current;
     if (!video || !transportCommand) return;
+    auditionEnd.current = null;
+    if (transportCommand.action === "audition" && Number.isFinite(transportCommand.startSec) && Number.isFinite(transportCommand.endSec)) {
+      video.currentTime = Math.max(0, transportCommand.startSec!);
+      auditionEnd.current = Math.min(durationSec, transportCommand.endSec!);
+      void video.play().catch(() => { auditionEnd.current = null; });
+      return;
+    }
     if (transportCommand.action === "toggle") {
       if (video.paused) void video.play().catch(() => {});
       else video.pause();
@@ -93,7 +107,7 @@ export function PreviewPane({
 
   return (
     <div className="flex shrink-0 flex-col gap-2">
-      <div className="flex h-[236px] gap-2.5">
+      <div className={`flex gap-2.5 ${compact ? "h-[132px]" : "h-[236px]"}`}>
         {/* 源画面 */}
         <div className="relative min-w-0 flex-1 overflow-hidden rounded-xl border border-line/60 bg-black">
           {src ? (
@@ -112,6 +126,7 @@ export function PreviewPane({
               }}
               onTimeUpdate={(e) => {
                 const sec = (e.target as HTMLVideoElement).currentTime;
+                if (auditionEnd.current !== null && sec >= auditionEnd.current) { mainRef.current?.pause(); auditionEnd.current = null; }
                 setNow(sec);
                 onTime(sec);
                 syncCrop();

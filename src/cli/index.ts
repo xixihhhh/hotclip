@@ -1,3 +1,4 @@
+import { localSpeechUrl } from "../core/transcribe/qwen-local";
 /**
  * HotClip Headless CLI —— 不开桌面端,终端或 Coding Agent 直接驱动本地
  * 切片管线(与桌面端/MCP/录播监听共用 core/pipeline,产物完全一致):
@@ -14,6 +15,7 @@ import { join, basename } from "path";
 import { transcribeCached, detectForPipeline, autoClip, analyzeReferenceVideo } from "../core/pipeline";
 import type { ReferenceProfile } from "../core/reference";
 import { loadGlossary } from "../core/glossary-store";
+import { describeSubtitleImportError } from "../shared/subtitle-import";
 import { userDataDir, modelsRoot, cacheDir, renderCacheDir, evidenceCacheDir, llmFromEnv } from "../core/appenv";
 import { runDoctor } from "../core/doctor";
 import { ensureModel } from "../core/models";
@@ -24,7 +26,12 @@ const USAGE = `HotClip CLI —— 本地 AI 切片,素材不出电脑
 
 用法:
   pnpm cli transcribe <视频路径>
-      端侧逐字转写(SenseVoice,带缓存;首次自动下载模型)
+      本地逐字转写(默认 SenseVoice,自动续跑已完成的识别段)
+      --engine sensevoice|paraformer|fireredasr|qwen3
+      --asr-url http://127.0.0.1:8766   可选 Qwen3 本地服务
+      --restart-transcription          丢弃当前引擎的分段进度并重做
+      transcribe / highlights / clip 均支持 --subtitles <原文.srt|原文.vtt>
+      显式导入已有 UTF-8 字幕,跳过 ASR;字词时间为估算,需复核
 
   pnpm cli highlights <视频路径> [--max-clips N] [--reference 对标视频] [--json]
       AI 通读全文找爆点,输出候选清单(评分/钩子/切点,先审后剪)
@@ -66,6 +73,10 @@ export interface CliArgs {
   outDir?: string;
   /** 对标爆款视频路径(参考画像驱动选段)。 */
   referencePath?: string;
+  subtitlePath?: string;
+  engineId?: string;
+  localServiceUrl?: string;
+  restart?: boolean;
   json: boolean;
   /** doctor 专用:把缺失的默认管线模型现在预下载好。 */
   download: boolean;
@@ -86,6 +97,16 @@ export function parseCliArgs(argv: string[]): CliArgs {
     else if (a === "--smart-denoise") args.denoiseMode = "smart";
     else if (a === "--json") args.json = true;
     else if (a === "--download") args.download = true;
+    else if (a === "--restart-transcription") args.restart = true;
+    else if (a === "--engine") {
+      const value = rest[++i];
+      if (!["sensevoice", "paraformer", "fireredasr", "qwen3"].includes(value)) throw new Error("--engine: sensevoice | paraformer | fireredasr | qwen3");
+      args.engineId = value;
+    } else if (a === "--asr-url") {
+      const value = rest[++i];
+      if (!value) throw new Error("--asr-url requires a loopback URL");
+      args.localServiceUrl = localSpeechUrl(value);
+    }
     else if (a === "--max-clips") {
       const v = Number(rest[++i]);
       if (!Number.isFinite(v)) throw new Error("--max-clips 需要一个数字");
@@ -98,6 +119,10 @@ export function parseCliArgs(argv: string[]): CliArgs {
       const v = rest[++i];
       if (!v) throw new Error("--reference 需要一个对标视频路径");
       args.referencePath = v;
+    } else if (a === "--subtitles") {
+      const v = rest[++i];
+      if (!v?.trim() || v.startsWith("--")) throw new Error("--subtitles 需要一个 SRT 或 WebVTT 文件路径");
+      args.subtitlePath = v;
     } else if (a.startsWith("--")) {
       throw new Error(`未知选项: ${a}\n\n${USAGE}`);
     } else if (!args.videoPath) {
@@ -106,6 +131,7 @@ export function parseCliArgs(argv: string[]): CliArgs {
   }
   // doctor/feedback-report 不吃路径;feedback 的位置参数是指标文件路径
   if (!args.videoPath && !["doctor", "feedback-report"].includes(args.command)) throw new Error(`缺少视频路径或数据文件路径\n\n${USAGE}`);
+  if (args.subtitlePath && !["transcribe", "highlights", "clip"].includes(args.command)) throw new Error("--subtitles 仅用于 transcribe / highlights / clip");
   return args;
 }
 
@@ -114,7 +140,7 @@ function fmtClock(sec: number): string {
   return `${String(m).padStart(2, "0")}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
 }
 
-async function main(): Promise<void> {
+async function main(signal?: AbortSignal): Promise<void> {
   const args = parseCliArgs(process.argv.slice(2));
 
   if (args.command === "doctor") {
@@ -174,6 +200,7 @@ async function main(): Promise<void> {
         cacheDir: cacheDir(),
         evidenceCacheDir: evidenceCacheDir(),
         glossary,
+        signal,
       });
       const cuts = p.cutsPerMin !== null ? `·镜头 ${p.cutsPerMin} 切/分` : "";
       const unit = p.zh ? "字" : "词";
@@ -188,8 +215,10 @@ async function main(): Promise<void> {
   };
 
   if (args.command === "transcribe") {
-    const t = await transcribeCached(args.videoPath, modelsRoot(), cacheDir(), glossary);
-    for (const s of t.segments) process.stdout.write(`[${fmtClock(s.startSec)}] ${s.text}\n`);
+    const t = await transcribeCached(args.videoPath, modelsRoot(), cacheDir(), glossary, signal, args.subtitlePath, { engineId: args.engineId, localServiceUrl: args.localServiceUrl, restart: args.restart });
+    if (args.json) process.stdout.write(`${JSON.stringify(t, null, 2)}\n`);
+    else for (const s of t.segments) process.stdout.write(`[${fmtClock(s.startSec)}] ${s.text}\n`);
+    if (args.subtitlePath) process.stderr.write("已导入字幕;句内字词时间为估算,请复核字幕时间与自动切点。\n");
     process.stderr.write(`语言:${t.language} 时长:${fmtClock(t.durationSec)} 共 ${t.segments.length} 句\n`);
     return;
   }
@@ -197,8 +226,8 @@ async function main(): Promise<void> {
   if (args.command === "highlights") {
     const llm = llmFromEnv();
     const reference = await loadReference();
-    process.stderr.write("转写中(带缓存)…\n");
-    const transcript = await transcribeCached(args.videoPath, modelsRoot(), cacheDir(), glossary);
+    process.stderr.write(args.subtitlePath ? "导入字幕中(字词时间为估算)…\n" : "转写中(带缓存)…\n");
+    const transcript = await transcribeCached(args.videoPath, modelsRoot(), cacheDir(), glossary, signal, args.subtitlePath, { engineId: args.engineId, localServiceUrl: args.localServiceUrl, restart: args.restart });
     process.stderr.write("AI 找爆点中…\n");
     const candidates = await detectForPipeline(args.videoPath, transcript, {
       modelsRoot: modelsRoot(),
@@ -209,6 +238,7 @@ async function main(): Promise<void> {
       // 桌面审阅台积累的本机偏好,CLI 检测同享(只读)
       reviewMemory: await loadReviewMemory(userDataDir()),
       performanceMemory: await loadPerformanceMemory(userDataDir()),
+      signal,
     });
     if (candidates.length === 0) {
       process.stderr.write("没有找到值得切的爆点候选。\n");
@@ -253,6 +283,9 @@ async function main(): Promise<void> {
       captions: args.captions,
       autoEnhance: args.autoEnhance,
       denoiseMode: args.denoiseMode,
+      subtitlePath: args.subtitlePath,
+      asr: { engineId: args.engineId, localServiceUrl: args.localServiceUrl, restart: args.restart },
+      signal,
       outDir: args.outDir,
       reference,
       reviewMemory: await loadReviewMemory(userDataDir()),
@@ -260,7 +293,7 @@ async function main(): Promise<void> {
       fontsDir: join(__dirname, "..", "..", "resources", "fonts"),
       glossary,
       onStage: (stage) => {
-        const label = { transcribing: "转写中(带缓存)…", detecting: "AI 找爆点中…", exporting: "出片中…" }[stage];
+        const label = { transcribing: args.subtitlePath ? "导入字幕中(字词时间为估算)…" : "转写中(带缓存)…", detecting: "AI 找爆点中…", exporting: "出片中…" }[stage];
         process.stderr.write(`${label}\n`);
       },
     });
@@ -324,8 +357,12 @@ async function main(): Promise<void> {
 
 // 仅作为入口执行时才跑主流程(单测只 import parseCliArgs)
 if (require.main === module) {
-  main().catch((e) => {
-    process.stderr.write(`${e instanceof Error ? e.message : String(e)}\n`);
-    process.exit(1);
-  });
+  const abort = new AbortController();
+  const cancel = (): void => abort.abort();
+  const speechCommand = ["transcribe", "highlights", "clip"].includes(process.argv[2]);
+  if (speechCommand) { process.once("SIGINT", cancel); process.once("SIGTERM", cancel); }
+  main(abort.signal).catch((e) => {
+    process.stderr.write(abort.signal.aborted ? "Stopped. Completed local transcription windows can resume on the next run.\n" : `${describeSubtitleImportError(e)}\n`);
+    process.exitCode = abort.signal.aborted ? 130 : 1;
+  }).finally(() => { process.removeListener("SIGINT", cancel); process.removeListener("SIGTERM", cancel); });
 }

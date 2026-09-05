@@ -19,6 +19,9 @@ export interface TranscribeOptions {
   onProgress?: (p: TranscribeProgressEvent) => void;
   /** Abort long runs (user pressed cancel). */
   signal?: AbortSignal;
+  /** Local checkpoint root. Failed/cancelled windows can resume on the next run. */
+  cacheDir?: string;
+  restart?: boolean;
 }
 
 /** Every transcription backend (local or cloud) implements this. */

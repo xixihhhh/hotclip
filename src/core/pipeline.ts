@@ -1,3 +1,7 @@
+import { QwenLocalEngine } from "./transcribe/qwen-local";
+import { ParaformerEngine } from "./transcribe/paraformer";
+import { FireRedEngine } from "./transcribe/firered";
+import type { SpeechRunOptions } from "../shared/api-types";
 /**
  * 自动切片公共管线(无 UI 依赖):转写(带缓存)→ 信号采集 → LLM 找爆点 →
  * 导出推荐切片。MCP Server 与录播监听(watch 文件夹)共用同一条路径,
@@ -8,6 +12,7 @@ import { stat } from "fs/promises";
 import type { GlossaryEntry, LlmConfig, Transcript, HighlightCandidate } from "../shared/api-types";
 import { applyGlossaryToTranscript } from "../shared/glossary";
 import { SenseVoiceEngine } from "./transcribe/sensevoice";
+import { importSubtitleFile } from "./subtitle-import";
 import { readTranscriptCache, writeTranscriptCache } from "./transcribe/cache";
 import { detectHighlights } from "./highlight/detect";
 import { collectSignalsEvidence, detectShotBoundariesEvidence } from "./media-evidence";
@@ -27,6 +32,9 @@ import type { AnalysisVideoOptions } from "./analysis-video";
 export interface AutoClipConfig {
   modelsRoot: string;
   cacheDir: string;
+  /** Explicit UTF-8 SRT/WebVTT transcript for this source; bypasses ASR/cache. */
+  subtitlePath?: string;
+  asr?: SpeechRunOptions & { engineId?: string };
   /** Reusable bounded base-render cache; omit to disable. */
   renderCacheDir?: string;
   /** Reusable bounded source-analysis evidence; omit to disable. */
@@ -72,18 +80,27 @@ export async function transcribeCached(
   modelsRoot: string,
   cacheDir: string,
   glossary?: GlossaryEntry[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  subtitlePath?: string,
+  asr: SpeechRunOptions & { engineId?: string } = {}
 ): Promise<Transcript> {
   signal?.throwIfAborted();
+  // User-supplied text is authoritative, including on failure. Never silently
+  // replace it with ASR or run ASR glossary corrections over reviewed subtitles.
+  if (subtitlePath !== undefined) return importSubtitleFile(videoPath, subtitlePath, signal);
   const s = await stat(videoPath).catch(() => null);
   if (!s || !s.isFile()) throw new Error(`文件不存在或不可读: ${videoPath}`);
   const fileStat = { size: s.size, mtimeMs: s.mtimeMs };
   const applied = (t: Transcript): Transcript => applyGlossaryToTranscript(t, glossary ?? []).transcript;
-  const cached = await readTranscriptCache(cacheDir, videoPath, fileStat, "sensevoice");
+  const engineId = asr.engineId ?? "sensevoice";
+  if (!["sensevoice", "paraformer", "fireredasr", "qwen3"].includes(engineId)) throw new Error("Unknown local ASR engine");
+  const cached = !asr.restart && engineId !== "qwen3" ? await readTranscriptCache(cacheDir, videoPath, fileStat, engineId) : undefined;
   if (cached) return applied(cached);
-  const engine = new SenseVoiceEngine(modelsRoot);
-  const t = await engine.transcribe(videoPath, { signal });
-  await writeTranscriptCache(cacheDir, videoPath, fileStat, "sensevoice", t).catch(() => {});
+  const engine = engineId === "qwen3" ? new QwenLocalEngine(asr.localServiceUrl)
+    : engineId === "paraformer" ? new ParaformerEngine(modelsRoot)
+    : engineId === "fireredasr" ? new FireRedEngine(modelsRoot) : new SenseVoiceEngine(modelsRoot);
+  const t = await engine.transcribe(videoPath, { ...asr, signal, cacheDir });
+  if (engineId !== "qwen3") await writeTranscriptCache(cacheDir, videoPath, fileStat, engineId, t).catch(() => {});
   return applied(t);
 }
 
@@ -182,7 +199,7 @@ export async function detectForPipeline(
 export async function autoClip(videoPath: string, cfg: AutoClipConfig): Promise<AutoClipResult> {
   cfg.signal?.throwIfAborted();
   cfg.onStage?.("transcribing");
-  const transcript = await transcribeCached(videoPath, cfg.modelsRoot, cfg.cacheDir, cfg.glossary, cfg.signal);
+  const transcript = await transcribeCached(videoPath, cfg.modelsRoot, cfg.cacheDir, cfg.glossary, cfg.signal, cfg.subtitlePath, cfg.asr);
   cfg.signal?.throwIfAborted();
   cfg.onStage?.("detecting");
   const candidates = await detectForPipeline(videoPath, transcript, cfg);

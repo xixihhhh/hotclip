@@ -1,6 +1,6 @@
 {
   "name": "hotclip",
-  "version": "0.27.0",
+  "version": "0.28.0",
   "description": "Turn long videos & livestream replays into viral vertical shorts — AI highlight detection, auto captions, 9:16 reframe. Free, local-first, no watermark. 长视频/直播回放一键切成爆款竖屏短视频。",
   "main": "./out/main/index.js",
   "author": "xixihhhh",
@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
     "quality:eval": "tsx tools/quality-eval.ts",
+    "quality:eval:asr": "tsx tools/asr-model-benchmark.ts",
     "quality:eval:vision": "tsx tools/vision-model-benchmark.ts",
     "mcp": "tsx src/mcp/server.ts",
     "cli": "tsx src/cli/index.ts",

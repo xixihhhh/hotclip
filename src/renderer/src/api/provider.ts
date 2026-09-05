@@ -1,3 +1,4 @@
+import { ASR_CATALOG } from "../../../shared/asr-catalog";
 /**
  * API provider: resolves the active HotClipApi implementation.
  *
@@ -24,6 +25,8 @@ import type {
   ProjectSummary,
 } from "../../../shared/api-types";
 import { applyGlossaryToTranscript, sanitizeGlossary } from "../../../shared/glossary";
+import { parseSubtitleTranscript } from "../../../shared/subtitle-import";
+import { clipDurationSec } from "../../../shared/pieces";
 
 const MOCK_MEDIA: MediaInfo = {
   durationSec: 5427.4, // 1:30:27 — a typical podcast episode
@@ -67,6 +70,9 @@ function mockTranscript(): Transcript {
 
 type ProgressCb = (p: TranscribeProgressEvent) => void;
 const progressListeners = new Set<ProgressCb>();
+let mockSpeechCancelled = false;
+let mockSpeechCompleted = 0;
+let mockAlignmentCancelled = false;
 const emit = (p: TranscribeProgressEvent): void => progressListeners.forEach((cb) => cb(p));
 type ExportCb = (p: ExportProgressEvent) => void;
 const exportListeners = new Set<ExportCb>();
@@ -295,33 +301,49 @@ const browserMock: HotClipApi = {
   },
   async listAsrEngines() {
     await sleep(200);
-    return [
-      { id: "sensevoice", kind: "local", langs: ["zh", "yue", "en", "ja", "ko"], sizeMB: 170, speed: 3, accuracy: 1, uploads: false, installed: true },
-      { id: "paraformer", kind: "local", langs: ["zh", "en"], sizeMB: 230, speed: 2, accuracy: 2, uploads: false, installed: false },
-      { id: "fireredasr", kind: "local", langs: ["zh", "方言", "en"], sizeMB: 520, speed: 2, accuracy: 3, uploads: false, installed: false },
-      { id: "elevenlabs", kind: "cloud", langs: ["90+", "zh", "en"], speed: 3, accuracy: 3, uploads: true, installed: false },
-    ];
+    return ASR_CATALOG.map((facts) => ({ ...facts, installed: facts.id === "sensevoice" }));
   },
   async probeMedia() {
     await sleep(600);
     return { ...MOCK_MEDIA };
   },
-  async transcribeMedia() {
+  cancelTranscribe() { mockSpeechCancelled = true; },
+  async checkLocalSpeech() { throw new Error("qwen:browser-preview-no-service"); },
+  cancelAlignment() { mockAlignmentCancelled = true; },
+  async previewAlignment(_file, transcript, request) {
+    mockAlignmentCancelled = false;
+    await sleep(900);
+    if (mockAlignmentCancelled) throw new Error("speech:cancelled");
+    const segments = transcript.segments.filter((s) => request.segmentIds.includes(s.id)).map((s) => ({ ...s, words: s.words.map((w) => ({ ...w, timingSource: "aligned" as const })) }));
+    return { segments, skipped: [], alignedWords: segments.reduce((n, s) => n + s.words.length, 0), uncertainWords: 0 };
+  },
+  async transcribeMedia(_file, _engine, _key, options) {
+    mockSpeechCancelled = false;
+    if (options?.restart) mockSpeechCompleted = 0;
+    const resumed = mockSpeechCompleted;
     const total = 170 * 1024 * 1024;
     for (let i = 1; i <= 4; i++) {
       emit({ fraction: 0, stage: "downloading-model", downloadedBytes: (total * i) / 4, totalBytes: total });
       await sleep(280);
+      if (mockSpeechCancelled) throw new Error("speech:cancelled");
     }
     emit({ fraction: 0, stage: "decoding" });
     await sleep(500);
-    for (let i = 1; i <= 8; i++) {
-      emit({ fraction: i / 8, stage: "transcribing" });
+    for (let i = resumed + 1; i <= 8; i++) {
+      if (mockSpeechCancelled) throw new Error("speech:cancelled");
+      emit({ fraction: i / 8, stage: "transcribing", completedWindows: i, totalWindows: 8, resumedWindows: resumed });
+      mockSpeechCompleted = i;
       await sleep(320);
     }
     emit({ fraction: 1, stage: "finalizing" });
     await sleep(250);
+    if (mockSpeechCancelled) throw new Error("speech:cancelled");
+    mockSpeechCompleted = 0;
     // 与主进程同款:转写结果返回前自动应用热词词表
     return applyGlossaryToTranscript(mockTranscript(), mockGlossaryLoad()).transcript;
+  },
+  async importSubtitle(_filePath, text, format) {
+    return parseSubtitleTranscript(text, format, MOCK_MEDIA.durationSec);
   },
   onTranscribeProgress(cb) {
     progressListeners.add(cb);
@@ -329,6 +351,9 @@ const browserMock: HotClipApi = {
   },
   async exportClips(_filePath, clips, options) {
     mockExportCancelled = false;
+    emitExport({ current: 0, total: clips.length, clipId: clips[0]?.id ?? 0, stage: "preparing", preparation: "media" });
+    await sleep(700);
+    if (mockExportCancelled) throw new Error("export cancelled");
     const results = [];
     for (let i = 0; i < clips.length; i++) {
       if (mockExportCancelled) throw new Error("export cancelled");
@@ -336,6 +361,7 @@ const browserMock: HotClipApi = {
       for (let f = 0; f <= 1; f += 0.25) {
         emitExport({ current: i + 1, total: clips.length, clipId: clips[i].id, stage: "cutting", fraction: f });
         await sleep(220);
+        if (mockExportCancelled) throw new Error("export cancelled");
       }
       if (mockExportCancelled) throw new Error("export cancelled");
       emitExport({ current: i + 1, total: clips.length, clipId: clips[i].id, stage: "done" });
@@ -344,9 +370,12 @@ const browserMock: HotClipApi = {
         title: clips[i].title,
         path: `/Movies/HotClip/我的直播回放-2026-07-04/0${i + 1}-${clips[i].title}.mp4`,
         sizeBytes: 8_400_000 + i * 1_700_000,
-        durationSec: clips[i].endSec - clips[i].startSec,
+        durationSec: clipDurationSec(clips[i]),
       });
     }
+    emitExport({ current: clips.length, total: clips.length, clipId: clips.at(-1)?.id ?? 0, stage: "finalizing" });
+    await sleep(600);
+    if (mockExportCancelled) throw new Error("export cancelled");
     // 与主进程同款:精华合集按时间序流复制拼接,附章节时间戳
     if (options?.compilation && results.length > 1) {
       results.push({

@@ -1,3 +1,6 @@
+import { runSpeechWorker } from "./run-speech-worker";
+import { qwenHealth } from "../core/transcribe/qwen-local";
+import type { SpeechRunOptions, AlignmentRequest, AlignmentPreview } from "../shared/api-types";
 /**
  * Electron main process: window lifecycle + IPC surface.
  * All heavy pipeline work lives in src/core and is invoked from here,
@@ -22,6 +25,8 @@ import { ParaformerEngine } from "@core/transcribe/paraformer";
 import { FireRedEngine } from "@core/transcribe/firered";
 import { ElevenLabsEngine } from "@core/transcribe/elevenlabs";
 import { readTranscriptCache, writeTranscriptCache } from "@core/transcribe/cache";
+import { importSubtitleText } from "@core/subtitle-import";
+import { validateSubtitleInput } from "../shared/subtitle-import";
 import { isModelInstalled, ensureModel, SENSEVOICE_MODEL, PARAFORMER_MODEL, FIRERED_MODEL, SEGMENTATION_MODEL, SPEAKER_EMBEDDING_MODEL } from "@core/models";
 import { runDiarization, labelTranscript } from "@core/diarize";
 import { ASR_CATALOG } from "../shared/asr-catalog";
@@ -78,6 +83,8 @@ import { tagTranscribeError } from "../shared/transcribe-errors";
 import { autoClip, analyzeReferenceVideo } from "@core/pipeline";
 import type { ReferenceProfile } from "@core/reference";
 import { exportClips, sanitizeFilename } from "@core/export";
+import { ExportTaskRunner, optionalExportStep } from "@core/export-task";
+import { exportNeedsTranscript } from "../shared/export-transcript";
 import { sliceWords } from "@core/subtitle";
 import { wordsInPieces } from "../shared/pieces";
 import { snapContextAround } from "@core/shots";
@@ -608,6 +615,20 @@ ipcMain.handle("hotclip:list-asr-engines", async () => {
 });
 
 let transcribing = false;
+let transcriptionAbort: AbortController | null = null;
+let alignmentAbort: AbortController | null = null;
+app.on("before-quit", () => { transcriptionAbort?.abort(); alignmentAbort?.abort(); });
+ipcMain.on("hotclip:transcribe-cancel", () => transcriptionAbort?.abort());
+ipcMain.on("hotclip:alignment-cancel", () => alignmentAbort?.abort());
+ipcMain.handle("hotclip:local-speech-check", (_event, url: string) => qwenHealth(url));
+ipcMain.handle("hotclip:alignment-preview", async (_event, filePath: string, transcript: Transcript, request: AlignmentRequest) => {
+  if (alignmentAbort || transcribing) throw new Error("speech:busy");
+  if (typeof filePath !== "string" || !filePath) throw new Error("alignment:source-required");
+  const abort = new AbortController();
+  alignmentAbort = abort;
+  try { return await runSpeechWorker<AlignmentPreview>({ kind: "align", filePath, transcript, request, modelsRoot: modelsRoot() }, abort.signal); }
+  finally { if (alignmentAbort === abort) alignmentAbort = null; }
+});
 
 // Tier-0 signal collection is slow on long sources (full audio + downscaled
 // video scan), so it kicks off IN PARALLEL with transcription — by the time
@@ -643,17 +664,25 @@ async function warmSignals(
   return p;
 }
 
-ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: unknown, apiKey: unknown) => {
+ipcMain.handle("hotclip:import-subtitle", async (_event, filePath: unknown, text: unknown, format: unknown) => {
+  if (typeof filePath !== "string" || !filePath.trim()) throw new Error("subtitle import requires a source path");
+  validateSubtitleInput(text, format);
+  return importSubtitleText(filePath, text, format as "srt" | "vtt");
+});
+
+ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: unknown, apiKey: unknown, options: SpeechRunOptions = {}) => {
   if (typeof filePath !== "string" || !filePath.trim()) {
     throw new Error("transcribe requires a file path");
   }
-  if (transcribing) throw new Error("another transcription is already running");
+  if (transcribing || alignmentAbort) throw new Error("another speech operation is already running");
   transcribing = true;
+  const abort = new AbortController();
+  transcriptionAbort = abort;
   void warmSignals(filePath); // runs alongside transcription
   try {
     const resolvedEngineId =
-      engineId === "elevenlabs"
-        ? "elevenlabs"
+      engineId === "elevenlabs" || engineId === "qwen3"
+        ? engineId
         : typeof engineId === "string" && engineId in ASR_ENGINES
           ? engineId
           : "sensevoice";
@@ -668,36 +697,33 @@ ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: 
     // 缓存永远存 ASR 原始结果,词表在返回侧应用——词表更新后同素材
     // 重放替换即可生效,不重跑 ASR
     const glossary = await loadGlossary(app.getPath("userData"));
-    if (fileStat) {
+    if (fileStat && !options.restart && resolvedEngineId !== "qwen3") {
       const cached = await readTranscriptCache(transcriptCacheDir(), filePath, fileStat, resolvedEngineId);
       if (cached) return applyGlossaryToTranscript(cached, glossary).transcript;
     }
-    // cloud engines take the user's key for this one call — never persisted here
-    const engine =
-      resolvedEngineId === "elevenlabs"
-        ? new ElevenLabsEngine(typeof apiKey === "string" ? apiKey : "")
-        : ASR_ENGINES[resolvedEngineId as keyof typeof ASR_ENGINES].make();
     let result: Transcript;
     try {
-      result = await engine.transcribe(filePath, {
-        onProgress: (p) => {
-          // renderer may already be gone on quit — guard the send
-          if (!event.sender.isDestroyed()) event.sender.send("hotclip:transcribe-progress", p);
-        },
+      result = await runSpeechWorker<Transcript>({
+        kind: "transcribe", filePath, engineId: resolvedEngineId, apiKey: typeof apiKey === "string" ? apiKey : "",
+        modelsRoot: modelsRoot(), cacheDir: transcriptCacheDir(), options,
+      }, abort.signal, (p) => {
+        if (!event.sender.isDestroyed()) event.sender.send("hotclip:transcribe-progress", p);
       });
     } catch (e) {
+      if (abort.signal.aborted) throw new Error("speech:cancelled");
       // 失败后补一次探测,把「素材真没音轨」从模型下载/解压/解码失败里
       // 区分出来打标记——否则 UI 只能笼统提示,误导用户反复转码(issue #2)
       const raw = e instanceof Error ? e.message : String(e);
       const media = await probeMedia(filePath).catch(() => null);
       throw new Error(tagTranscribeError(raw, media));
     }
-    if (fileStat && result?.segments?.length) {
+    if (fileStat && resolvedEngineId !== "qwen3" && result?.segments?.length) {
       void writeTranscriptCache(transcriptCacheDir(), filePath, fileStat, resolvedEngineId, result);
     }
     return applyGlossaryToTranscript(result, glossary).transcript;
   } finally {
     transcribing = false;
+    if (transcriptionAbort === abort) transcriptionAbort = null;
   }
 });
 
@@ -913,8 +939,9 @@ async function diarizeTranscript(t: Transcript, filePath: string): Promise<Trans
 // Output goes to <导出根目录>/<source-name>/ — 出厂是 ~/Movies/HotClip,界面可改。
 
 // 导出取消:单并发导出,一个活动控制器;cancel 会 kill 正在跑的 ffmpeg
-let exportAbort: AbortController | null = null;
-ipcMain.on("hotclip:export-cancel", () => exportAbort?.abort());
+const exportTasks = new ExportTaskRunner();
+ipcMain.on("hotclip:export-cancel", () => exportTasks.cancel());
+app.on("before-quit", () => exportTasks.cancel());
 
 /** 一条候选实际要用的词表:拼接片只取落在各段内的词,单段照旧按区间取。 */
 function clipWords(transcript: Transcript, c: HighlightCandidate): TranscriptWord[] {
@@ -922,18 +949,25 @@ function clipWords(transcript: Transcript, c: HighlightCandidate): TranscriptWor
   return c.pieces && c.pieces.length > 1 ? wordsInPieces(words, c.pieces) : words;
 }
 
-ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: unknown, options: unknown) => {
+ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: unknown, options: unknown) => exportTasks.run(async (abortSignal) => {
   if (typeof filePath !== "string" || !filePath.trim()) throw new Error("export requires a file path");
   const list = clips as HighlightCandidate[];
   if (!Array.isArray(list) || list.length === 0) throw new Error("no clips selected");
   const opts = (options ?? {}) as ExportOptions;
+  const preparing = (preparation: "translation" | "publish" | "variants" | "media"): void => {
+    abortSignal.throwIfAborted();
+    if (!event.sender.isDestroyed()) event.sender.send("hotclip:export-progress", {
+      current: 0, total: list.length, clipId: list[0].id, stage: "preparing", preparation,
+    });
+  };
+  preparing("media");
   const style =
     opts.captionStyle && opts.captionStyle !== "none" && opts.transcript ? opts.captionStyle : undefined;
   const jumpCut = Boolean(opts.jumpCut && opts.transcript);
   const cleanFillers = Boolean(opts.cleanFillers && opts.transcript);
   const cutRetakes = Boolean(opts.cutRetakes && opts.transcript);
   const muteTerms = sanitizeSensitiveWords(opts.muteTerms);
-  const needWords = Boolean(style) || jumpCut || cleanFillers || cutRetakes || muteTerms.length > 0;
+  const needWords = Boolean(opts.transcript) && exportNeedsTranscript({ ...opts, captionStyle: style ?? "none", muteTerms });
   const sourceName = sanitizeFilename(basename(filePath, extname(filePath)), "video");
   const outDir = clipOutDir(opts.outDir, app.getPath("videos"), sourceName);
   // bundled caption font: packaged → resources/fonts, dev → repo resources/fonts
@@ -955,7 +989,8 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
     tr.llm?.baseUrl && tr.llm?.model && opts.transcript
   ) {
     translatable = collectClipSegments(opts.transcript, list);
-    translations = await translateSegments(translatable, tr.targetLang, tr.llm, chatComplete).catch(() => null);
+    preparing("translation");
+    translations = await optionalExportStep(abortSignal, () => translateSegments(translatable, tr.targetLang, tr.llm, chatComplete, abortSignal));
   }
   // 发布文案(可选):一次 LLM 批量为所有切片生成标题+话题+简介(fail-open)。
   const zh = !(opts.transcript?.language ?? "zh").startsWith("en");
@@ -964,30 +999,31 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
   let publishCopies: Map<number, import("@core/publish").PublishCopy> | null = null;
   const pub = opts.publishCopy;
   if (pub?.llm?.baseUrl && pub.llm.model) {
-    publishCopies = await generatePublishCopies(copySources, zh, pub.llm, chatComplete).catch(() => null);
+    preparing("publish");
+    publishCopies = await optionalExportStep(abortSignal, () => generatePublishCopies(copySources, zh, pub.llm, chatComplete, abortSignal));
   }
   // 一片多版(可选):一次 LLM 为整批切片生成差异化包装计划(fail-open——
   // 失败只是没有变体,原版照常导出)。
   let variantPlans: Map<number, import("@core/variants").VariantPackaging[]> | null = null;
   const varOpt = opts.variants;
   if (varOpt?.llm?.baseUrl && varOpt.llm.model && Number(varOpt.count) >= 2) {
-    variantPlans = await generateVariantPlans(
+    preparing("variants");
+    variantPlans = await optionalExportStep(abortSignal, () => generateVariantPlans(
       copySources,
       Math.min(Number(varOpt.count), VARIANT_TOTAL_MAX),
       zh,
       varOpt.llm,
-      chatComplete
-    ).catch(() => null);
+      chatComplete,
+      abortSignal
+    ));
   }
-  exportAbort = new AbortController();
-  const abortSignal = exportAbort.signal;
+  preparing("media");
   // 精准切点:主转写不是 Paraformer 档时才有意义(它自己的 CIF 时间戳已是
   // 最优);对齐器整批复用一个,模型首次使用才下载(用户显式开了才发生)
   const alignWords =
     opts.preciseAlign && needWords && opts.transcript && opts.transcript.engine !== "paraformer-local"
       ? createClipAligner(modelsRoot(), abortSignal)
       : undefined;
-  try {
   const baseSpecs: import("@core/export").ExportClipSpec[] = list.map((c) => ({
       id: c.id,
       title: c.title,
@@ -1127,10 +1163,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
     console.error("publish ledger registration failed:", error);
   });
   return exported;
-  } finally {
-    exportAbort = null;
-  }
-});
+}));
 
 // ---- 录播监听:watch 文件夹,新录播写完落稳后自动全托管切片 ----
 // 轮询式监听(网络盘/分段写盘下 fs.watch 不可靠);已处理记录持久化,重启不重切。

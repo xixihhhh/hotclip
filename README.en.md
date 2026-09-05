@@ -24,6 +24,14 @@
 
 </div>
 
+Local transcription now checkpoints completed windows and resumes after interruption. Transcript editing adds cross-sentence search, virtualized long lists, and timing calibration with listen/apply/undo. Exports improve language-aware caption readability. See the [speech and long-transcript guide](docs/local-speech.md) for optional local Qwen3-ASR setup and reproducible model evaluation.
+
+## Export progress and cancellation
+
+Exports identify preparation, translation, publish copy, variants, encoding and finalization. Cancel during preparation, wait for cleanup, then retry without losing the candidate selection. A second desktop export cannot replace an active job. Progress stays below 100% until delivery completes. SRT-only export retains word timings even when burned captions are off.
+
+Cuts, jump cuts, audiograms, compilations and web-caption renders write into a private folder beside the destination, then replace it only after successful encoding. Failed or cancelled encoding preserves the previous target; previously completed clips stay available. Normal cancellation cleans staging files. A forced process exit can leave hidden `.hotclip-write-*` folders; remove them only after confirming no export is active. Protection applies to each encoding operation, not an all-or-nothing batch rollback.
+
 ## Why HotClip
 
 - **Actually free, not a trial**: AGPL-3.0 open source — no watermark, no credits, no length caps, no account. There is no crippled free tier, and no quota that expires at month's end
@@ -116,6 +124,10 @@ Commercial clippers meter **credits per source minute** (a 2-hour podcast burns 
 > The full pipeline — import → AI highlights → vertical clips with captions — ships today. Expand each group for details; the details are all real features, not adjectives.
 
 ### 🎙️ Local transcription: three engines, word-level timestamps
+
+Already have a transcript? Choose **Import subtitles** on the transcription screen and select a UTF-8 SRT / WebVTT aligned to the current source. Review, correct and pick sentences immediately; start AI detection when needed. Import runs without ASR and leaves the transcription cache intact. Original cue boundaries are preserved; within-cue word timing is marked as estimated and appears in the timing-review filter. Manual splices strictly respect your selected boundaries.
+
+CLI `transcribe`, `highlights` and `clip` accept `--subtitles "/path/original.srt"`; all three MCP tools accept `subtitlePath`. For structured output with timing provenance, run `pnpm cli transcribe "/path/video.mp4" --subtitles "/path/original.vtt" --json`. Use one original-language transcript track, up to 5 MB, 20,000 cues and 100,000 words. Overlapping, unordered, out-of-range or streaming-clock-mapped subtitles produce an actionable error instead of silently dropping dialogue.
 
 Fast SenseVoice (5 languages, 170MB) / balanced Paraformer / most-accurate FireRedASR2 (Mandarin, dialects, code-switching) — all local, CPU-friendly, auto-downloaded with resume support; optional cloud tier (ElevenLabs, your key, audio track only).
 
@@ -296,6 +308,8 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 </details>
 
 ## What's new
+
+**[v0.28.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.28.0)** (2026-09-05): **Subtitle import and long transcripts** (SRT / WebVTT, cross-sentence search, selective alignment preview and undo); **resumable local speech** with optional Qwen3-ASR; **language-aware caption pacing** and **safer exports** with preparation-stage cancellation, safe output replacement, direct retry and SRT-only output. [Release notes](docs/releases/v0.28.0.md).
 
 **[v0.27.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.27.0)** (2026-08-31) "Make the voice clear before adding the polish": **48kHz smart dialogue enhancement** (an explicit Smart tier downloads a SHA-256-verified ~10MB DPDFNet2 model on demand, processes channels in bounded chunks and stream-copies finished video); **correct publish-audio order** (runs after stitched/cold-open assembly but before SFX/BGM, with loudness measured after enhancement); **availability-first fallback** (model, download, decode or inference failure transparently reuses the exact Basic chain, while Off/Basic behavior stays unchanged and the completion view plus `clips.json` reports learned/fallback/skipped truthfully); **updated local multimodal preset** (fresh installs default the optional Ollama vision endpoint to `qwen3.5:4b`, sharing one model across text and contact sheets, with a reproducible VLM comparison command). Desktop, CLI and MCP share the same tier semantics; the official 48k model runtime smoke and FFmpeg integration regressions pass.
 

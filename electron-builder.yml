@@ -13,6 +13,8 @@ asarUnpack:
   - "**/node_modules/onnxruntime-node/**"
 # bundled caption font (OFL) — libass reads it via the subtitles filter's fontsdir
 extraResources:
+  - from: tools/qwen-speech-server.py
+    to: speech/qwen-speech-server.py
   - from: resources/fonts
     to: fonts
   # web-caption overlay templates (rendered by the offscreen BrowserWindow)

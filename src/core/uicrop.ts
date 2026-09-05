@@ -80,7 +80,8 @@ export async function detectUiCrop(
   inputPath: string,
   durationSec: number,
   videoStreamIndex?: number,
-  color?: ColorRenderPlan | null
+  color?: ColorRenderPlan | null,
+  signal?: AbortSignal
 ): Promise<UiCrop> {
   const fps = SAMPLES / Math.max(1, durationSec);
   const { stdout } = await execFileAsync(
@@ -93,7 +94,7 @@ export async function detectUiCrop(
       "-frames:v", String(SAMPLES),
       "-f", "rawvideo", "-",
     ],
-    { encoding: "buffer", maxBuffer: 64 * 1024 * 1024 }
+    { encoding: "buffer", maxBuffer: 64 * 1024 * 1024, signal }
   );
   const frameBytes = AW * AH;
   const frames: Uint8Array[] = [];

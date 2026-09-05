@@ -6,7 +6,7 @@
  * 的同一套断行规则,保证 .srt 与画面里的字幕逐行一致。纯字符串构建,零依赖。
  */
 import type { TranscriptWord } from "../shared/api-types";
-import { groupWordsIntoLines, needsSpaceAfter, CAPTION_HOLD_MAX_SEC } from "./subtitle";
+import { groupWordsIntoLines, needsSpaceAfter, CAPTION_HOLD_MAX_SEC, planReadableCaptions, type CaptionReadabilityOptions } from "./subtitle";
 import type { TranslationLine } from "./translate";
 
 /** SRT 行宽(视觉单位:CJK=2/latin=1)——比竖屏字幕宽,接近通用播放器习惯。 */
@@ -38,16 +38,18 @@ export function formatSrtTime(sec: number): string {
 export function srtLinesFromWords(
   words: TranscriptWord[],
   forcedBreaks: number[] = [],
-  translation: TranslationLine[] = []
+  translation: TranslationLine[] = [],
+  options: CaptionReadabilityOptions = {}
 ): SrtLine[] {
-  const lines = groupWordsIntoLines(words, SRT_MAX_LINE_UNITS, forcedBreaks).filter((l) => l.length > 0);
+  const planned = options.readability ? planReadableCaptions(words, SRT_MAX_LINE_UNITS, forcedBreaks, options.endSec) : undefined;
+  const lines = planned ? planned.map((line) => line.words) : groupWordsIntoLines(words, SRT_MAX_LINE_UNITS, forcedBreaks).filter((l) => l.length > 0);
   const out: SrtLine[] = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const startSec = line[0].startSec;
     const lastEnd = line[line.length - 1].endSec;
     const nextStart = lines[i + 1]?.[0].startSec;
-    const endSec = nextStart !== undefined ? Math.min(nextStart, lastEnd + CAPTION_HOLD_MAX_SEC) : lastEnd;
+    const endSec = planned?.[i].endSec ?? (nextStart !== undefined ? Math.min(nextStart, lastEnd + CAPTION_HOLD_MAX_SEC) : lastEnd);
     const text = line
       .map((w, j) => w.text + (needsSpaceAfter(w.text, line[j + 1]?.text) ? " " : ""))
       .join("")

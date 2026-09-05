@@ -8,6 +8,8 @@
  * stdin/stdout 与真实管线在 server.ts。
  */
 
+import { describeSubtitleImportError } from "../shared/subtitle-import";
+
 /** MCP 协议版本(2024-11-05 基线,客户端普遍兼容)。 */
 export const MCP_PROTOCOL_VERSION = "2024-11-05";
 
@@ -31,11 +33,15 @@ export const MCP_TOOLS: McpToolDef[] = [
   {
     name: "clip_video",
     description:
-      "全托管切片:把一个本地长视频(播客/直播回放/课程)转写、AI 找爆点并导出为可发布的竖屏短视频(烧字幕/跳剪/表情信号),返回输出目录与每条切片的标题/评分/时间码。首次运行会自动下载本地 ASR 模型。需要环境变量 HOTCLIP_LLM_BASE_URL/HOTCLIP_LLM_MODEL(以及非本地端点的 HOTCLIP_LLM_API_KEY)。",
+      "全托管切片:把一个本地长视频(播客/直播回放/课程)转写、AI 找爆点并导出为可发布的竖屏短视频(烧字幕/跳剪/表情信号),返回输出目录与每条切片的标题/评分/时间码。未提供 subtitlePath 时,首次运行会自动下载本地 ASR 模型。需要环境变量 HOTCLIP_LLM_BASE_URL/HOTCLIP_LLM_MODEL(以及非本地端点的 HOTCLIP_LLM_API_KEY)。",
     inputSchema: {
       type: "object",
       properties: {
         videoPath: { type: "string", description: "本地视频文件的绝对路径" },
+        engineId: { type: "string", enum: ["sensevoice", "paraformer", "fireredasr", "qwen3"], description: "本地 ASR 引擎，默认 sensevoice；qwen3 需要单独启动本地语音服务。" },
+        localServiceUrl: { type: "string", description: "Qwen3 本地服务地址，仅 127.0.0.1 / ::1，默认 http://127.0.0.1:8766。" },
+        restart: { type: "boolean", description: "重新转写，不复用本次素材的当前引擎分段进度；默认自动续跑。" },
+        subtitlePath: { type: "string", description: "可选:与当前素材对齐的 UTF-8 SRT/WebVTT 单轨原文字幕绝对路径(最大 5 MB、无重叠)。跳过 ASR,保留原句时间;句内字词时间为估算,需复核。" },
         maxClips: { type: "number", description: "最多导出几条(1-12,默认 6)" },
         vertical: { type: "boolean", description: "竖屏 9:16 输出(默认 true)" },
         captions: { type: "boolean", description: "烧录动态字幕(默认 true)" },
@@ -55,6 +61,10 @@ export const MCP_TOOLS: McpToolDef[] = [
       type: "object",
       properties: {
         videoPath: { type: "string", description: "本地视频文件的绝对路径" },
+        engineId: { type: "string", enum: ["sensevoice", "paraformer", "fireredasr", "qwen3"], description: "本地 ASR 引擎，默认 sensevoice；qwen3 需要单独启动本地语音服务。" },
+        localServiceUrl: { type: "string", description: "Qwen3 本地服务地址，仅 127.0.0.1 / ::1，默认 http://127.0.0.1:8766。" },
+        restart: { type: "boolean", description: "重新转写，不复用本次素材的当前引擎分段进度；默认自动续跑。" },
+        subtitlePath: { type: "string", description: "可选:与当前素材对齐的 UTF-8 SRT/WebVTT 单轨原文字幕绝对路径(最大 5 MB、无重叠)。跳过 ASR,保留原句时间;句内字词时间为估算,需复核。" },
         maxClips: { type: "number", description: "最多几条候选(1-12,默认 6)" },
         referencePath: { type: "string", description: "对标爆款视频的本地路径(可选):实测其节奏画像,候选向对标节奏靠拢;分析失败按无参考继续" },
       },
@@ -64,11 +74,15 @@ export const MCP_TOOLS: McpToolDef[] = [
   {
     name: "transcribe_video",
     description:
-      "本地转写:用端侧 ASR(SenseVoice,首次自动下载)把视频/音频转成带时间戳的逐句稿。结果有缓存,同一文件二次调用秒回。不需要 LLM 配置。",
+      "字幕接入或本地转写:提供 subtitlePath 时导入已有字幕并估算字词时间;否则用端侧 ASR(SenseVoice,首次自动下载)把视频/音频转成带时间戳的逐句稿。结果有缓存,同一文件二次调用秒回。不需要 LLM 配置。",
     inputSchema: {
       type: "object",
       properties: {
         videoPath: { type: "string", description: "本地视频/音频文件的绝对路径" },
+        engineId: { type: "string", enum: ["sensevoice", "paraformer", "fireredasr", "qwen3"], description: "本地 ASR 引擎，默认 sensevoice；qwen3 需要单独启动本地语音服务。" },
+        localServiceUrl: { type: "string", description: "Qwen3 本地服务地址，仅 127.0.0.1 / ::1，默认 http://127.0.0.1:8766。" },
+        restart: { type: "boolean", description: "重新转写，不复用本次素材的当前引擎分段进度；默认自动续跑。" },
+        subtitlePath: { type: "string", description: "可选:导入已有 UTF-8 SRT/WebVTT 原文字幕,跳过 ASR(最大 5 MB、无重叠)。句内字词时间为估算,需复核。" },
       },
       required: ["videoPath"],
     },
@@ -138,7 +152,7 @@ export async function handleMcpMessage(
       try {
         return result(msg.id, toolText(await execute(name, args)));
       } catch (e) {
-        return result(msg.id, toolText(e instanceof Error ? e.message : String(e), true));
+        return result(msg.id, toolText(describeSubtitleImportError(e), true));
       }
     }
     default:

@@ -81,7 +81,7 @@ export function sliceWords(transcript: Transcript, startSec: number, endSec: num
   return out.sort((a, b) => a.startSec - b.startSec);
 }
 
-const HARD_PUNCT_END = /[。!?!?…]$/;
+const HARD_PUNCT_END = /[。.!?！？…]$/;
 /**
  * Clause-boundary punctuation (comma / ideographic comma / semicolon / colon).
  * The ASR punctuation model places these at real syntactic pauses, so breaking
@@ -112,6 +112,52 @@ const LOOKBACK_MIN_FRAC = 0.35;
  * (≤ GAP_BREAK_SEC); a longer, genuine pause still clears the caption.
  */
 export const CAPTION_HOLD_MAX_SEC = 0.8;
+
+/** Product defaults for reading speed, not an accuracy/confidence score. */
+export function captionReadingCps(text: string): number {
+  if (/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(text)) return 7;
+  if (/\p{Script=Han}/u.test(text)) return 9;
+  if (/\p{Script=Hangul}/u.test(text)) return 12;
+  return 20;
+}
+
+export function captionReadableChars(text: string): number {
+  return Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text)).filter((part) => !/^\s+$/u.test(part.segment)).length;
+}
+
+export interface CaptionReadabilityOptions { readability?: boolean; endSec?: number }
+export interface PlannedCaptionLine { words: TranscriptWord[]; startSec: number; endSec: number; maxCps: number }
+
+/** Only display events change: speech/karaoke word timestamps remain intact.
+ * Short neighboring lines may merge within width, speaker and splice bounds. */
+export function planReadableCaptions(words: TranscriptWord[], maxUnits: number, forcedBreaks: number[] = [], endSec = Infinity): PlannedCaptionLine[] {
+  const breaks = [...forcedBreaks].filter(Number.isFinite).sort((a, b) => a - b);
+  const grouped = groupWordsIntoLines(words, maxUnits, breaks);
+  const merged: TranscriptWord[][] = [];
+  for (const line of grouped) {
+    const previous = merged[merged.length - 1];
+    const prevEnd = previous?.[previous.length - 1].endSec;
+    const start = line[0].startSec;
+    const short = previous && prevEnd - previous[0].startSec < 0.7;
+    const sameSpeaker = previous && new Set([...previous, ...line].map((w) => w.speaker ?? -1)).size === 1;
+    const crosses = previous && breaks.some((b) => b > previous[0].startSec && b <= start + 1e-6);
+    if (short && sameSpeaker && !crosses && start >= prevEnd - 0.001 && start - prevEnd <= 0.25 &&
+        [...previous, ...line].reduce((n, w) => n + widthUnits(w.text), 0) <= maxUnits) previous.push(...line);
+    else merged.push([...line]);
+  }
+  return merged.map((line, i) => {
+    const startSec = line[0].startSec;
+    const lastEnd = line[line.length - 1].endSec;
+    const text = line.map((w) => w.text).join("");
+    const maxCps = captionReadingCps(text);
+    const wanted = Math.max(lastEnd, startSec + 0.7, startSec + captionReadableChars(text) / maxCps);
+    const nextStart = merged[i + 1]?.[0].startSec ?? Infinity;
+    const splice = breaks.find((b) => b > startSec + 1e-6) ?? Infinity;
+    const boundary = Math.min(endSec, nextStart, splice);
+    const hold = Math.min(lastEnd + CAPTION_HOLD_MAX_SEC, Math.max(wanted, Math.min(nextStart, lastEnd + 0.2)));
+    return { words: line, startSec, endSec: Math.max(startSec, Math.min(hold, boundary)), maxCps };
+  });
+}
 
 /**
  * On a width-overflow break, find the latest word inside `line` that ends on a
@@ -159,14 +205,15 @@ export function groupWordsIntoLines(
     const wUnits = widthUnits(w.text);
     const prev = line[line.length - 1];
     const gapBreak = prev !== undefined && w.startSec - prev.endSec > GAP_BREAK_SEC;
+    const speakerBreak = prev !== undefined && prev.speaker !== w.speaker && (prev.speaker !== undefined || w.speaker !== undefined);
     const overflow = units + wUnits > maxLineUnits;
-    if (line.length > 0 && (forced || overflow || gapBreak)) {
+    if (line.length > 0 && (forced || overflow || gapBreak || speakerBreak)) {
       // Width-only overflow backs the break up to the nearest particle boundary
       // so a long comma-free clause doesn't split mid-phrase; the trailing words
       // carry onto the next line with `w`. Forced (jump-cut) and silence-gap
       // breaks are real boundaries — honor them exactly, no look-back.
       let carry: TranscriptWord[] = [];
-      if (overflow && !forced && !gapBreak) {
+      if (overflow && !forced && !gapBreak && !speakerBreak) {
         const k = particleBreakIndex(line, maxLineUnits);
         if (k >= 0 && k < line.length - 1) carry = line.splice(k + 1);
       }
@@ -339,7 +386,7 @@ const WHITE_INLINE = "&HFFFFFF&";
  */
 export type CaptionStyle = "karaoke" | "keyword" | "pop" | "hormozi" | "minimal";
 
-export interface CaptionOptions {
+export interface CaptionOptions extends CaptionReadabilityOptions {
   fontName?: string;
   /** Verbatim keywords to emphasize (keyword style). */
   keywords?: string[];
@@ -659,13 +706,14 @@ export function buildCaptionAss(
     const maxUnits = captionMaxLineUnits(style, layout);
     // 动态极简与 keyword 同款:先把关键词连成一个词,断块永远不劈开高亮词
     const chunkWords = style === "minimal" ? mergeKeywordWords(words, options.keywords ?? []) : words;
-    const units = groupWordsIntoLines(chunkWords, maxUnits, forcedBreaks);
+    const planned = options.readability ? planReadableCaptions(chunkWords, maxUnits, forcedBreaks, options.endSec) : undefined;
+    const units = planned ? planned.map((line) => line.words) : groupWordsIntoLines(chunkWords, maxUnits, forcedBreaks);
     for (let i = 0; i < units.length; i++) {
       const unit = units[i];
       const start = unit[0].startSec - clipStartSec;
       const lastEnd = unit[unit.length - 1].endSec;
       const next = units[i + 1]?.[0].startSec;
-      const end = (next !== undefined ? Math.min(next, lastEnd + CAPTION_HOLD_MAX_SEC) : lastEnd + 0.2) - clipStartSec;
+      const end = (planned?.[i].endSec ?? (next !== undefined ? Math.min(next, lastEnd + CAPTION_HOLD_MAX_SEC) : lastEnd + 0.2)) - clipStartSec;
       // 说话人标签放在动效标签之前:标签字符不参与顶入/弹入缩放动画,
       // 后续正文的动效覆写不受影响
       const tag = speakerTag(unit);
@@ -684,7 +732,8 @@ export function buildCaptionAss(
   } else {
     // keyword style: fuse keyword runs first so line breaks can't split them
     const lineWords = style === "keyword" ? mergeKeywordWords(words, options.keywords ?? []) : words;
-    const lines = groupWordsIntoLines(lineWords, layout.maxLineUnits, forcedBreaks).filter((l) => l.length > 0);
+    const planned = options.readability ? planReadableCaptions(lineWords, layout.maxLineUnits, forcedBreaks, options.endSec) : undefined;
+    const lines = planned ? planned.map((line) => line.words) : groupWordsIntoLines(lineWords, layout.maxLineUnits, forcedBreaks).filter((l) => l.length > 0);
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const start = line[0].startSec - clipStartSec;
@@ -693,7 +742,7 @@ export function buildCaptionAss(
       // pause still clears it; the last line ends with its final word.
       const nextStart = lines[i + 1]?.[0].startSec;
       const end =
-        (nextStart !== undefined ? Math.min(nextStart, lastEnd + CAPTION_HOLD_MAX_SEC) : lastEnd) - clipStartSec;
+        (planned?.[i].endSec ?? (nextStart !== undefined ? Math.min(nextStart, lastEnd + CAPTION_HOLD_MAX_SEC) : lastEnd)) - clipStartSec;
       const text = style === "karaoke" ? karaokeText(line) : keywordText(line, options.keywords ?? [], highlightHex);
       events.push(dialogue(start, end, speakerTag(line) + text));
     }

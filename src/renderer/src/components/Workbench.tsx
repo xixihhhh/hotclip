@@ -182,6 +182,7 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
   const [showWatch, setShowWatch] = useState(false);
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [defaultOutDir, setDefaultOutDir] = useState("");
+  const [showTranscriptTimeline, setShowTranscriptTimeline] = useState(false);
   const [transportCommand, setTransportCommand] = useState<PreviewTransportCommand | null>(null);
   const currentSecRef = useRef(0);
   useEffect(() => {
@@ -201,10 +202,13 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
   const detectedFor = useRef<unknown>(null);
   useEffect(() => {
     if (!transcript || candidates !== null || detecting || !llmReady) return;
+    // Importing reviewed subtitles first opens the transcript. AI analysis is
+    // an explicit next step; selecting a subtitle file must not spend LLM quota.
+    if (transcript.engine.startsWith("subtitle-") && !auto) return;
     if (detectedFor.current === transcript) return;
     detectedFor.current = transcript;
     void run();
-  }, [transcript, candidates, detecting, llmReady, run]);
+  }, [transcript, candidates, detecting, llmReady, auto, run]);
 
   // 托管:候选落地即按当前偏好把「建议发」全部出片
   const autoExported = useRef(false);
@@ -332,7 +336,7 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
         <LeftRail onOpenWatch={() => setShowWatch(true)} />
 
         {/* 中央 */}
-        <div className="flex min-w-0 flex-1 flex-col gap-2.5 p-3">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2.5 overflow-y-auto p-3">
           {!transcript ? (
             // 还没有逐句稿:转写流程(引擎选择/进度/错误)住进中央区
             <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto pt-6">
@@ -341,7 +345,10 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
                 cached={null}
                 autoStart={auto}
                 onBack={onCloseProject}
-                onDone={(tr) => session.setTranscript(tr)}
+                onDone={(tr) => {
+                  if (tr.engine.startsWith("subtitle-")) setTab("transcript");
+                  session.setTranscript(tr);
+                }}
                 onEdited={(tr) => session.setTranscript(tr)}
               />
             </div>
@@ -357,9 +364,10 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
                 }}
                 onPrevCandidate={() => stepCandidate(-1)}
                 onNextCandidate={() => stepCandidate(1)}
+                compact={tab === "transcript"}
                 transportCommand={transportCommand}
               />
-              <Timeline
+              {(tab !== "transcript" || showTranscriptTimeline) && <Timeline
                 filePath={file.path}
                 durationSec={durationSec}
                 candidates={candidates}
@@ -367,7 +375,7 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
                 currentSec={currentSec}
                 onFocus={focusCandidate}
                 onSeek={seek}
-              />
+              />}
               {/* 候选 / 逐句稿 页签 */}
               <div className="flex shrink-0 items-center gap-1.5">
                 {(
@@ -388,6 +396,7 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
                     {key === "candidates" && candidates && <span className="ml-1.5 font-mono text-[10px] tabular-nums">{candidates.length}</span>}
                   </button>
                 ))}
+                {tab === "transcript" && <button type="button" aria-pressed={showTranscriptTimeline} onClick={() => setShowTranscriptTimeline((v) => !v)} className="rounded border border-line px-2 py-1.5 text-xs text-mut">{t("toggleTranscriptTimeline")}</button>}
                 <div className="min-w-0 flex-1 px-2">
                   <StatsLine />
                 </div>
@@ -436,7 +445,7 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
                 </button>
               </div>
               {tab === "transcript" ? (
-                <TranscriptPanel transcript={transcript} onSeek={seek} />
+                <TranscriptPanel transcript={transcript} onSeek={seek} onAudition={(startSec, endSec) => setTransportCommand((previous) => ({ id: (previous?.id ?? 0) + 1, action: "audition", startSec, endSec }))} />
               ) : !llmReady ? (
                 // LLM 未配置:指路设置中心(配置本体已移到那里)
                 <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-line/70 p-6 text-center">
@@ -490,7 +499,7 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
           )}
         </div>
 
-        {transcript && <Inspector transcript={transcript} onRedetect={() => void run()} onOpenReview={setReviewId} />}
+        {transcript && tab !== "transcript" && <Inspector transcript={transcript} onRedetect={() => void run()} onOpenReview={setReviewId} />}
       </div>
 
       {transcript && candidates && candidates.length > 0 && (

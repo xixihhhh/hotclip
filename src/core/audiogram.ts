@@ -1,3 +1,4 @@
+import { withAtomicOutput } from "./atomic-output";
 /**
  * Audiogram 出片:纯音频源(播客/录音)导出时自动合成画面——深色底 +
  * 品牌色波形动画(ffmpeg showwaves)+ 既有字幕/标题贴片/水印照常烧录。
@@ -159,6 +160,8 @@ export async function runAudiogram(
   signal?: AbortSignal,
   onTimeSec?: (sec: number) => void
 ): Promise<void> {
-  const args = buildAudiogramArgs(inputPath, outputPath, ranges, options);
-  await runFfmpeg(args, { signal, onTimeSec });
+  await withAtomicOutput(outputPath, async (temporaryPath) => {
+    const args = buildAudiogramArgs(inputPath, temporaryPath, ranges, options);
+    await runFfmpeg(args, { signal, onTimeSec });
+  }, signal);
 }

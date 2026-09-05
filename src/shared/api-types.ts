@@ -133,6 +133,7 @@ export interface AsrEngineInfo {
   speed: 1 | 2 | 3;
   accuracy: 1 | 2 | 3;
   uploads: boolean;
+  experimental?: boolean;
   /** Local model already on disk (no download needed). */
   installed: boolean;
 }
@@ -143,6 +144,29 @@ export interface TranscribeProgressEvent {
   stage: TranscribeStage;
   downloadedBytes?: number;
   totalBytes?: number;
+  completedWindows?: number;
+  totalWindows?: number;
+  resumedWindows?: number;
+}
+
+export interface SpeechRunOptions {
+  localServiceUrl?: string;
+  restart?: boolean;
+  language?: string;
+}
+
+export interface AlignmentRequest {
+  segmentIds: number[];
+  engine: "paraformer" | "qwen3";
+  language?: string;
+  localServiceUrl?: string;
+}
+
+export interface AlignmentPreview {
+  segments: TranscriptSegment[];
+  skipped: Array<{ id: number; reason: "unsupported-language" | "low-match" | "invalid-timing" }>;
+  alignedWords: number;
+  uncertainWords: number;
 }
 
 /** LLM connection settings (OpenAI-compatible endpoint; Atlas Cloud preset default). */
@@ -749,7 +773,8 @@ export interface ExportProgressEvent {
   current: number;
   total: number;
   clipId: number;
-  stage: "cutting" | "done";
+  stage: "preparing" | "cutting" | "finalizing" | "done";
+  preparation?: "translation" | "publish" | "variants" | "media";
   /** 当前切片的编码进度 0-1(ffmpeg 实时回报);切片间事件缺省。 */
   fraction?: number;
 }
@@ -827,7 +852,13 @@ export interface HotClipApi {
   /** List selectable transcription engines with install state. */
   listAsrEngines: () => Promise<AsrEngineInfo[]>;
   /** Transcribe with the chosen engine; cloud engines need the user's API key. */
-  transcribeMedia: (filePath: string, engineId?: string, apiKey?: string) => Promise<Transcript>;
+  transcribeMedia: (filePath: string, engineId?: string, apiKey?: string, options?: SpeechRunOptions) => Promise<Transcript>;
+  cancelTranscribe: () => void;
+  checkLocalSpeech: (url: string) => Promise<{ model: string; aligner: boolean; device: string }>;
+  previewAlignment: (filePath: string, transcript: Transcript, request: AlignmentRequest) => Promise<AlignmentPreview>;
+  cancelAlignment: () => void;
+  /** Import existing subtitle text against the source duration, without ASR. */
+  importSubtitle: (filePath: string, text: string, format: "srt" | "vtt") => Promise<Transcript>;
   /** Subscribe to transcription progress; returns an unsubscribe function. */
   onTranscribeProgress: (cb: (p: TranscribeProgressEvent) => void) => () => void;
   /** Detect highlight candidates via the configured LLM; filePath enables audiovisual-signal evidence. */

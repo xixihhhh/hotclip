@@ -1,3 +1,4 @@
+import { matchingCharacters, paraformerSupportsText } from "../shared/speech-text";
 /**
  * 精准切点(二遍对齐):导出期只对进入决赛的候选片段,用 Paraformer
  * (sherpa-onnx-paraformer-zh-2023-09-14,唯一支持时间戳的档)重解码一遍,
@@ -39,9 +40,6 @@ const ALIGN_WINDOW_SEC = 28;
 /** 词最短时长(秒):重映射后不允许出现零长词。 */
 const MIN_WORD_SEC = 0.02;
 
-/** CJK 判定(与 subtitle.ts 同源的粗粒度即可)。 */
-const CJK_RE = /[぀-ヿ㐀-鿿豈-﫿가-힯]/;
-
 /** 归一化的对齐单元:一个 CJK 字或一个拉丁/数字字符。 */
 interface AlignUnit {
   ch: string;
@@ -53,9 +51,7 @@ interface AlignUnit {
 export function toAlignUnits(items: Array<{ text: string }>): AlignUnit[] {
   const units: AlignUnit[] = [];
   for (let i = 0; i < items.length; i++) {
-    for (const ch of items[i].text.toLowerCase()) {
-      if (CJK_RE.test(ch) || /[a-z0-9]/.test(ch)) units.push({ ch, idx: i });
-    }
+    for (const ch of matchingCharacters(items[i].text)) units.push({ ch, idx: i });
   }
   return units;
 }
@@ -87,6 +83,8 @@ export function refineWordTimings(
   // 标准 LCS 动态规划(候选段字符量级 ~10^3,毫秒级)
   const n = tgt.length;
   const m = ref.length;
+  // Bound both allocation and CPU work for pathological imported/edited cues.
+  if ((n + 1) * (m + 1) > 4_000_000) return { words: [...words], matchedFrac: 0, alignedWords: 0, interpolatedWords: words.length };
   const dp = new Uint16Array((n + 1) * (m + 1));
   for (let i = 1; i <= n; i++) {
     for (let j = 1; j <= m; j++) {
@@ -218,7 +216,7 @@ export function createClipAligner(
   const decodeSpan = async (filePath: string, fromSec: number, durationSec: number): Promise<TranscriptWord[]> => {
     const pcmPath = join(tmpdir(), `hotclip-align-${Date.now()}-${Math.round(fromSec * 1000)}.f32le`);
     try {
-      await extractPcmF32le16k(resolveFfmpegPath(), filePath, pcmPath, { startSec: fromSec, durationSec });
+      await extractPcmF32le16k(resolveFfmpegPath(), filePath, pcmPath, { startSec: fromSec, durationSec }, undefined, signal);
       const samples = await readF32leSamples(pcmPath);
       const sampleRate = 16000;
       const windowSamples = ALIGN_WINDOW_SEC * sampleRate;
@@ -232,6 +230,8 @@ export function createClipAligner(
         const result = recognizer.getResult(stream) as SherpaResult;
         const offsetSec = fromSec + start / sampleRate;
         tokens.push(...tokensToWords(result, offsetSec, offsetSec + chunk.length / sampleRate));
+        stream.free?.();
+        await new Promise<void>((resolve) => setImmediate(resolve));
       }
       return tokens;
     } finally {
@@ -240,6 +240,8 @@ export function createClipAligner(
   };
 
   return async (filePath, clip) => {
+    signal?.throwIfAborted();
+    if (!paraformerSupportsText(clip.words.map((w) => w.text).join(""))) return null;
     await ensure();
     const ranges: Array<{ startSec: number; endSec: number }> =
       clip.pieces && clip.pieces.length > 1 ? clip.pieces : [{ startSec: clip.startSec, endSec: clip.endSec }];

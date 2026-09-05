@@ -6,6 +6,7 @@
  * effects libass cannot express (gradients, springs, emoji) come for free.
  */
 import { BrowserWindow, app } from "electron";
+import { withAtomicOutput } from "../core/atomic-output";
 import { spawn } from "child_process";
 import { join } from "path";
 import { resolveFfmpegPath } from "../core/binaries";
@@ -39,7 +40,19 @@ export async function renderCaptionOverlay(
   template = "bubble",
   options: OverlayRenderOptions = {}
 ): Promise<void> {
+  return withAtomicOutput(outPath, (temporaryPath) => renderOverlayToFile(basePath, temporaryPath, payload, durationSec, template, options), options.signal);
+}
+
+async function renderOverlayToFile(
+  basePath: string,
+  outPath: string,
+  payload: OverlayPayload,
+  durationSec: number,
+  template: string,
+  options: OverlayRenderOptions
+): Promise<void> {
   const { fps = 30, onProgress, signal } = options;
+  signal?.throwIfAborted();
   const { width, height } = payload;
   const baseVideo = ffmpegVideoStreamSpecifier(options.videoStreamIndex);
 
@@ -55,6 +68,9 @@ export async function renderCaptionOverlay(
       backgroundThrottling: false,
     },
   });
+  let stopEncoder: (() => Promise<void>) | undefined;
+  const closeWindow = (): void => { if (!win.isDestroyed()) win.destroy(); };
+  signal?.addEventListener("abort", closeWindow, { once: true });
   try {
     win.setContentSize(width, height);
     // template = a bundled name ("bubble") or an absolute .html path (tests)
@@ -65,6 +81,7 @@ export async function renderCaptionOverlay(
       true
     );
 
+    signal?.throwIfAborted();
     const ffmpeg = spawn(
       resolveFfmpegPath(),
       [
@@ -103,18 +120,40 @@ export async function renderCaptionOverlay(
         "+faststart",
         outPath,
       ],
-      { stdio: ["pipe", "ignore", "pipe"] }
+      { stdio: ["pipe", "ignore", "pipe"], signal }
     );
     let ffmpegErr = "";
     ffmpeg.stderr.on("data", (d: Buffer) => {
       ffmpegErr = (ffmpegErr + d.toString()).slice(-4000);
     });
-    const ffmpegDone = new Promise<void>((resolve, reject) => {
-      ffmpeg.on("close", (code) =>
-        code === 0 ? resolve() : reject(new Error(`overlay ffmpeg exited ${code}: ${ffmpegErr.slice(-500)}`))
-      );
-      ffmpeg.on("error", reject);
+    let closed = false;
+    let processError: Error | undefined;
+    let abortTimer: ReturnType<typeof setTimeout> | undefined;
+    const forceStop = (): void => {
+      abortTimer = setTimeout(() => ffmpeg.kill("SIGKILL"), 2000);
+      abortTimer.unref();
+    };
+    signal?.addEventListener("abort", forceStop, { once: true });
+    // Settle to a value: early exit must not create an unhandled rejection
+    // while Chromium is still capturing a frame.
+    const ffmpegDone = new Promise<Error | null>((resolve) => {
+      ffmpeg.on("close", (code) => {
+        closed = true;
+        if (abortTimer) clearTimeout(abortTimer);
+        signal?.removeEventListener("abort", forceStop);
+        resolve(processError ?? (code === 0 ? null : new Error(`overlay ffmpeg exited ${code}: ${ffmpegErr.slice(-500)}`)));
+      });
+      ffmpeg.on("error", (error) => { processError = error; });
     });
+    ffmpeg.stdin.on("error", () => { /* write callbacks and close own failure reporting */ });
+    stopEncoder = async (): Promise<void> => {
+      if (closed) return;
+      ffmpeg.stdin.destroy();
+      ffmpeg.kill("SIGTERM");
+      const timer = setTimeout(() => ffmpeg.kill("SIGKILL"), 2000);
+      timer.unref();
+      try { await ffmpegDone; } finally { clearTimeout(timer); }
+    };
 
     const writeFrame = (buf: Buffer): Promise<void> =>
       new Promise((resolve, reject) => {
@@ -141,9 +180,13 @@ export async function renderCaptionOverlay(
       if (f % 15 === 0) onProgress?.(f / totalFrames);
     }
     ffmpeg.stdin.end();
-    await ffmpegDone;
+    const encoderError = await ffmpegDone;
+    signal?.throwIfAborted();
+    if (encoderError) throw encoderError;
     onProgress?.(1);
   } finally {
-    win.destroy();
+    await stopEncoder?.();
+    signal?.removeEventListener("abort", closeWindow);
+    closeWindow();
   }
 }

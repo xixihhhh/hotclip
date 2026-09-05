@@ -1,3 +1,4 @@
+import { LocalSpeechConnection } from "./LocalSpeechConnection";
 /**
  * 设置中心:左导航 + 分区内容,原先散落七处的配置合并到这里,任何时刻可达。
  *  - AI 模型:LLM 供应商/初筛/视觉(从爆点页的配置门整体搬来,不再"进不去爆点页就改不了")
@@ -63,6 +64,7 @@ const CAPTION_KEY: Record<CaptionStyleChoice, string> = {
 const ENGINE_TEXT: Record<string, { name: string; desc: string }> = {
   sensevoice: { name: "engineSensevoiceName", desc: "engineSensevoiceDesc" },
   paraformer: { name: "engineParaformerName", desc: "engineParaformerDesc" },
+  qwen3: { name: "engineQwenName", desc: "engineQwenDesc" },
   fireredasr: { name: "engineFireredName", desc: "engineFireredDesc" },
   elevenlabs: { name: "engineElevenlabsName", desc: "engineElevenlabsDesc" },
 };
@@ -696,7 +698,7 @@ function AsrSection(): React.JSX.Element {
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[10.5px]">
               <span className="chip rounded-md px-2 py-0.5">{e.uploads ? t("badgeNeedsUpload") : t("badgeLocalPrivate")}</span>
               <span className="chip rounded-md px-2 py-0.5">{t("badgeLangs", { langs: e.langs.join("/") })}</span>
-              {e.kind === "local" && (
+              {e.kind === "local" && !e.experimental && (
                 <span className={`chip rounded-md px-2 py-0.5 ${e.installed ? "text-emerald-400" : ""}`}>
                   {e.installed ? t("badgeInstalled") : t("badgeDownload", { n: e.sizeMB ?? 0 })}
                 </span>
@@ -705,6 +707,7 @@ function AsrSection(): React.JSX.Element {
           </button>
         );
       })}
+      {engineId === "qwen3" && <LocalSpeechConnection />}
     </div>
   );
 }

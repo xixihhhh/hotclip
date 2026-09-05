@@ -135,6 +135,17 @@ describe("planFromPieces", () => {
 });
 
 describe("拼接复用跳剪机器(端到端口径)", () => {
+  it("manual boundaries exclude even very short unwanted speech between pieces", () => {
+    const pieces = [{ startSec: 1, endSec: 3 }, { startSec: 3.1, endSec: 5 }];
+    const spans = pieceCutSpans(pieces, { exact: true });
+    expect(spans).toEqual([{ startSec: 3, endSec: 3.1 }]);
+    const plan = computeJumpCut([
+      { text: "keep", startSec: 1, endSec: 3 },
+      { text: "also", startSec: 3.1, endSec: 5 },
+    ], 1, 5, { forceCutSpans: spans, gapThresholdSec: Infinity });
+    expect(plan.segments).toEqual(pieces);
+    expect(plan.durationSec).toBeCloseTo(3.9);
+  });
   // 两段:10-14s 和 100-104s,各 4 个词;段间空隙当强制剪除区间喂进去
   const words = [
     { text: "前", startSec: 10, endSec: 11 },

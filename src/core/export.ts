@@ -446,15 +446,8 @@ export interface ExportedClip {
   qa?: ClipQaReport | null;
 }
 
-export interface ExportProgressEvent {
-  /** 1-based index of the clip currently being cut. */
-  current: number;
-  total: number;
-  clipId: number;
-  stage: "cutting" | "done";
-  /** 当前切片的编码进度 0-1(ffmpeg 实时回报);切片间事件缺省。 */
-  fraction?: number;
-}
+export type { ExportProgressEvent } from "../shared/api-types";
+import type { ExportProgressEvent } from "../shared/api-types";
 
 /** Whitelist-sanitize: keep letters (all scripts incl. CJK), digits, space, dash, underscore. */
 export function sanitizeFilename(name: string, fallback = "clip"): string {
@@ -503,6 +496,8 @@ export async function exportClips(
   onProgress?: (p: ExportProgressEvent) => void,
   signal?: AbortSignal
 ): Promise<ExportedClip[]> {
+  signal?.throwIfAborted();
+  onProgress?.({ current: 0, total: clips.length, clipId: clips[0]?.id ?? 0, stage: "preparing", preparation: "media" });
   await mkdir(outDir, { recursive: true });
   // ASS files live in a throwaway temp dir for the duration of the run.
   const needAss =
@@ -512,87 +507,97 @@ export async function exportClips(
   // 音效素材目录:首次要用时才建(mkdtemp + ffmpeg 合成三个 wav,幂等)
   let sfxDir: string | null = null;
   const ensureSfxDir = async (): Promise<string> => {
-    if (!sfxDir) sfxDir = await ensureSfxAssets(await mkdtemp(join(tmpdir(), "hotclip-sfx-")), signal);
+    if (!sfxDir) {
+      sfxDir = await mkdtemp(join(tmpdir(), "hotclip-sfx-"));
+      await ensureSfxAssets(sfxDir, signal);
+    }
     return sfxDir;
   };
-  // 品牌预设:字号/位置作用于布局,高亮色传给字幕构建,水印挂进 filter 链
-  const baseLayout = applyBrandToLayout(options.vertical ? VERTICAL_LAYOUT : HORIZONTAL_LAYOUT, options.brand);
-  const watermark: WatermarkSpec | undefined = options.brand?.watermark
-    ? {
-        path: options.brand.watermark.path,
-        corner: options.brand.watermark.corner,
-        opacity: options.brand.watermark.opacity,
-        // 竖屏输出恒为 1080 宽,logo 占 16%;横屏输出宽度=源宽(未知),用固定 300px
-        widthPx: options.vertical ? Math.round(1080 * 0.16) : 300,
-      }
-    : undefined;
+  try {
+    // 品牌预设:字号/位置作用于布局,高亮色传给字幕构建,水印挂进 filter 链
+    const baseLayout = applyBrandToLayout(options.vertical ? VERTICAL_LAYOUT : HORIZONTAL_LAYOUT, options.brand);
+    const watermark: WatermarkSpec | undefined = options.brand?.watermark
+      ? {
+          path: options.brand.watermark.path,
+          corner: options.brand.watermark.corner,
+          opacity: options.brand.watermark.opacity,
+          // 竖屏输出恒为 1080 宽,logo 占 16%;横屏输出宽度=源宽(未知),用固定 300px
+          widthPx: options.vertical ? Math.round(1080 * 0.16) : 300,
+        }
+      : undefined;
 
-  // 纯音频源(播客/录音)走 audiogram:深色底+品牌色波形自动合成画面,
-  // 视频专属阶段(去录屏UI/人脸取景/镜头吸附)整体跳过
-  const srcInfo = await probeMedia(inputPath).catch(() => null);
-  const sourceStreams = {
-    videoStreamIndex: srcInfo?.videoStreamIndex,
-    audioStreamIndex: srcInfo?.audioStreamIndex,
-  };
-  const colorInspectionFailed = srcInfo === null;
-  const audioOnly = srcInfo ? !srcInfo.hasVideo : false;
-  const color = srcInfo?.hasVideo ? planColorRender(srcInfo) : null;
-  const hdrDetected = isHdrSource(color);
-  const allowSdrVisualEnhance = !hdrDetected && !colorInspectionFailed;
-  // SDR/unknown sources keep their existing pixel treatment. Stream indices
-  // are still explicit so multi-track inputs cannot probe one picture and
-  // render another; the cache identity below isolates those selections.
-  const activeColor = isExecutableColorPlan(color) ? color : undefined;
-  const sourceAnalysis: AnalysisVideoOptions = {
-    videoStreamIndex: srcInfo?.videoStreamIndex,
-    color,
-  };
-  // One encoder probe per process/run. The cut layer retries libx264 if the
-  // advertised hardware encoder is unusable because of a missing device/driver.
-  const videoEncoder = audioOnly ? "libx264" as const : await resolveVideoEncoder();
-  // Cache identity is resolved once per export. If source/watermark metadata
-  // cannot be read, caching simply disables itself and the normal render path
-  // continues unchanged.
-  let cacheSource: FileFingerprint | null = null;
-  let cacheWatermark: FileFingerprint | null = null;
-  if (options.renderCacheDir) {
-    cacheSource = await fingerprintRenderFile(inputPath).catch(() => null);
-    if (watermark) cacheWatermark = await fingerprintRenderFile(watermark.path).catch(() => null);
-  }
-  const renderCacheReady = Boolean(
-    options.renderCacheDir && cacheSource && (!watermark || cacheWatermark)
-  );
-  let visualSamples: VisualSignalSample[] = [];
-  if (options.autoEnhance && !audioOnly && allowSdrVisualEnhance) {
-    const signals = await collectSignalsEvidence({
-      videoPath: inputPath,
-      evidenceDir: options.evidenceCacheDir,
-      signal,
-      source: cacheSource ?? undefined,
-      analysis: sourceAnalysis,
-    }).catch((error) => {
-      if (signal?.aborted) throw error;
+    // 纯音频源(播客/录音)走 audiogram:深色底+品牌色波形自动合成画面,
+    // 视频专属阶段(去录屏UI/人脸取景/镜头吸附)整体跳过
+    const srcInfo = await probeMedia(inputPath, signal).catch(() => {
+      signal?.throwIfAborted();
       return null;
     });
-    visualSamples = signals?.visualSamples ?? [];
-  }
+    const sourceStreams = {
+      videoStreamIndex: srcInfo?.videoStreamIndex,
+      audioStreamIndex: srcInfo?.audioStreamIndex,
+    };
+    const colorInspectionFailed = srcInfo === null;
+    const audioOnly = srcInfo ? !srcInfo.hasVideo : false;
+    const color = srcInfo?.hasVideo ? planColorRender(srcInfo) : null;
+    const hdrDetected = isHdrSource(color);
+    const allowSdrVisualEnhance = !hdrDetected && !colorInspectionFailed;
+    // SDR/unknown sources keep their existing pixel treatment. Stream indices
+    // are still explicit so multi-track inputs cannot probe one picture and
+    // render another; the cache identity below isolates those selections.
+    const activeColor = isExecutableColorPlan(color) ? color : undefined;
+    const sourceAnalysis: AnalysisVideoOptions = {
+      videoStreamIndex: srcInfo?.videoStreamIndex,
+      color,
+    };
+    // One encoder probe per process/run. The cut layer retries libx264 if the
+    // advertised hardware encoder is unusable because of a missing device/driver.
+    const videoEncoder = audioOnly ? "libx264" as const : await resolveVideoEncoder();
+    // Cache identity is resolved once per export. If source/watermark metadata
+    // cannot be read, caching simply disables itself and the normal render path
+    // continues unchanged.
+    let cacheSource: FileFingerprint | null = null;
+    let cacheWatermark: FileFingerprint | null = null;
+    if (options.renderCacheDir) {
+      cacheSource = await fingerprintRenderFile(inputPath).catch(() => null);
+      if (watermark) cacheWatermark = await fingerprintRenderFile(watermark.path).catch(() => null);
+    }
+    const renderCacheReady = Boolean(
+      options.renderCacheDir && cacheSource && (!watermark || cacheWatermark)
+    );
+    let visualSamples: VisualSignalSample[] = [];
+    if (options.autoEnhance && !audioOnly && allowSdrVisualEnhance) {
+      const signals = await collectSignalsEvidence({
+        videoPath: inputPath,
+        evidenceDir: options.evidenceCacheDir,
+        signal,
+        source: cacheSource ?? undefined,
+        analysis: sourceAnalysis,
+      }).catch((error) => {
+        if (signal?.aborted) throw error;
+        return null;
+      });
+      visualSamples = signals?.visualSamples ?? [];
+    }
 
-  // 多画幅:开「+横屏版」时进度总数翻倍(第二遍横屏在主循环后递归跑)。
-  // 竖屏源裁不出可用的 16:9,原画幅本来就是竖的——直接跳过横屏版。
-  const alsoLandscape =
-    Boolean(options.alsoLandscape && options.vertical) &&
-    (srcInfo && srcInfo.hasVideo ? srcInfo.width >= srcInfo.height : !audioOnly);
-  const totalUnits = clips.length * (alsoLandscape ? 2 : 1);
+    // 多画幅:开「+横屏版」时进度总数翻倍(第二遍横屏在主循环后递归跑)。
+    // 竖屏源裁不出可用的 16:9,原画幅本来就是竖的——直接跳过横屏版。
+    const alsoLandscape =
+      Boolean(options.alsoLandscape && options.vertical) &&
+      (srcInfo && srcInfo.hasVideo ? srcInfo.width >= srcInfo.height : !audioOnly);
+    const totalUnits = clips.length * (alsoLandscape ? 2 : 1);
 
-  // one UI-chrome detection pass for the whole source (bands don't move)
-  let uiCrop: UiCrop | undefined;
-  if (options.trimUi && clips.length > 0 && !audioOnly) {
-    const spanEnd = Math.max(...clips.map((c) => c.endSec));
-    uiCrop = await detectUiCrop(inputPath, spanEnd, srcInfo?.videoStreamIndex, color).catch(() => undefined);
-    if (uiCrop && uiCrop.topFrac === 0 && uiCrop.bottomFrac === 0) uiCrop = undefined;
-  }
+    // one UI-chrome detection pass for the whole source (bands don't move)
+    let uiCrop: UiCrop | undefined;
+    if (options.trimUi && clips.length > 0 && !audioOnly) {
+      const spanEnd = Math.max(...clips.map((c) => c.endSec));
+      uiCrop = await detectUiCrop(inputPath, spanEnd, srcInfo?.videoStreamIndex, color, signal).catch(() => {
+        signal?.throwIfAborted();
+        return undefined;
+      });
+      if (uiCrop && uiCrop.topFrac === 0 && uiCrop.bottomFrac === 0) uiCrop = undefined;
+    }
 
-  try {
+    signal?.throwIfAborted();
     const results: ExportedClip[] = [];
     // "you decide what got cut": removed filler texts surface in clips.json
     const removedFillersByClip = new Map<number, string[]>();
@@ -754,7 +759,7 @@ export async function exportClips(
       // stutters become forced-cut spans (they are audible speech — neither
       // the gap rule nor the silence gate would remove them).
       // 拼接片的段间空隙就是强制剪除区间——拼接完全复用跳剪机器,不另起时间轴
-      const stitchSpans = stitched ? pieceCutSpans(pieces) : [];
+      const stitchSpans = stitched ? pieceCutSpans(pieces, { exact: clip.manualBounds }) : [];
       let plan = null;
       let fillerHits: FillerHit[] = [];
       let retakeHits: RetakeHit[] = [];
@@ -817,7 +822,7 @@ export async function exportClips(
         : undefined;
       const assStyle: CaptionStyle = isWebCaptionStyle(options.captionStyle) ? "keyword" : (options.captionStyle ?? "keyword");
       const subtitleQuality = wantCaptions
-        ? lintSubtitleTimeline(captionWords!, layout, assStyle, plan?.breaks, clip.keywords)
+        ? lintSubtitleTimeline(captionWords!, layout, assStyle, plan?.breaks, clip.keywords, { readability: true, endSec: captionShift + clipDuration })
         : null;
       // Opening hook: burn the AI teaser (悬念句) big in the upper third for the
       // clip's first seconds — this is what the teaser was generated for.
@@ -839,6 +844,8 @@ export async function exportClips(
           layout,
           assStyle,
           {
+            readability: true,
+            endSec: captionShift + clipDuration,
             keywords: clip.keywords,
             forcedBreaks: plan?.breaks,
             titleCard: options.titleCard ? { text: clip.title, durationSec: clipDuration } : undefined,
@@ -1077,7 +1084,7 @@ export async function exportClips(
         // Overlay geometry must match the base clip exactly, whatever the cut
         // pipeline produced (vertical 1080×1920 or source-sized horizontal).
         try {
-          const info = await probeMedia(cutTarget);
+          const info = await probeMedia(cutTarget, signal);
           const scale = info.height / layout.playResY;
           const overlayLayout = {
             ...layout,
@@ -1094,17 +1101,24 @@ export async function exportClips(
             speaker: w.speaker, // keep per-word speaker so the overlay colors by talker
           }));
           const payload = buildOverlayPayload(relWords, overlayLayout, {
+            readability: true,
+            endSec: clipDuration,
             keywords: clip.keywords,
             forcedBreaks: plan?.breaks,
             highlightHex: options.brand?.highlightColor,
           });
           await options.renderOverlay!(cutTarget, outPath, payload, clipDuration, webStyle, {
+            signal,
             color: activeColor,
             videoStreamIndex: info.videoStreamIndex,
             audioStreamIndex: info.audioStreamIndex,
           });
           await rm(cutTarget, { force: true });
         } catch (e) {
+          if (signal?.aborted) {
+            await rm(cutTarget, { force: true }).catch(() => {});
+            throw e;
+          }
           // fail-open: ship the base clip (title card intact, no word captions)
           webRenderFailed = true;
           await rm(outPath, { force: true }).catch(() => {});
@@ -1428,7 +1442,7 @@ export async function exportClips(
         // 断行点与词同基:正片整体平移后,跳剪的强制断行时刻也要同步平移;
         // cold-open 接缝处强制断行(钩子行与正片首句不并行)
         const breaks = [...(shift > 0 ? [shift] : []), ...(plan?.breaks ?? []).map((b) => b + shift)];
-        const srt = buildSrt(srtLinesFromWords(relWords, breaks, relTrans));
+        const srt = buildSrt(srtLinesFromWords(relWords, breaks, relTrans, { readability: true, endSec: finalDurationSec }));
         if (srt.trim()) {
           await writeFile(outPath.replace(/\.mp4$/, ".srt"), srt, "utf8").catch(() => {});
         }
@@ -1497,6 +1511,9 @@ export async function exportClips(
       });
       onProgress?.({ current: i + 1, total: totalUnits, clipId: clip.id, stage: "done" });
     }
+
+    signal?.throwIfAborted();
+    onProgress?.({ current: clips.length, total: totalUnits, clipId: clips.at(-1)?.id ?? 0, stage: "finalizing" });
 
     // 精华合集:同批切片编码参数一致,流复制拼接秒级完成零画质损失;
     // 合集惯例硬切不加转场;失败静默跳过,绝不拖垮已导出的单条切片
@@ -1817,6 +1834,7 @@ export async function exportClips(
       }
     }
 
+    signal?.throwIfAborted();
     return results;
   } finally {
     if (assDir) await rm(assDir, { recursive: true, force: true }).catch(() => {});

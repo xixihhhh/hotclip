@@ -9,6 +9,17 @@ import {
 
 const noop: ToolExecutor = async () => "ok";
 
+it("exposes and validates the same optional subtitle path on all three tools", async () => {
+  for (const tool of MCP_TOOLS) {
+    expect((tool.inputSchema.properties as Record<string, unknown>).subtitlePath).toMatchObject({ type: "string" });
+    expect(validateToolArgs(tool, { videoPath: "/v.mp4", subtitlePath: 5 })).toContain("subtitlePath");
+    const result = await handleMcpMessage({ id: 42, method: "tools/call", params: {
+      name: tool.name, arguments: { videoPath: "/v.mp4", subtitlePath: "/original.vtt" },
+    } }, async (_name, args) => String(args.subtitlePath), "test");
+    expect(result).toMatchObject({ result: { content: [{ text: "/original.vtt" }] } });
+  }
+});
+
 describe("handleMcpMessage", () => {
   it("initialize 返回协议版本/能力/服务信息", async () => {
     const res = await handleMcpMessage({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }, noop, "0.5.0");

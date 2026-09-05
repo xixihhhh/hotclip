@@ -2,6 +2,15 @@ import { describe, it, expect } from "vitest";
 import { parseCliArgs } from "../index";
 
 describe("parseCliArgs (CLI 参数解析)", () => {
+  it("accepts an explicit subtitle track for all transcript-consuming commands", () => {
+    for (const command of ["transcribe", "highlights", "clip"]) {
+      expect(parseCliArgs([command, "--subtitles", "/v/原文.srt", "/v/source.mp4", "--json"]))
+        .toMatchObject({ videoPath: "/v/source.mp4", subtitlePath: "/v/原文.srt", json: true });
+    }
+    expect(() => parseCliArgs(["clip", "/v/source.mp4", "--subtitles"])).toThrow(/SRT/);
+    expect(() => parseCliArgs(["clip", "/v/source.mp4", "--subtitles", "--json"])).toThrow(/SRT/);
+    expect(() => parseCliArgs(["doctor", "--subtitles", "/v/原文.srt"])).toThrow(/仅用于/);
+  });
   it("clip 全默认:竖屏+字幕开,视频路径为首个非选项参数", () => {
     const a = parseCliArgs(["clip", "/v/直播回放.mp4"]);
     expect(a).toMatchObject({
@@ -75,5 +84,16 @@ describe("parseCliArgs (CLI 参数解析)", () => {
 
   it("-h / --help → 输出用法", () => {
     expect(() => parseCliArgs(["--help"])).toThrow(/pnpm cli clip/);
+  });
+});
+
+
+describe("local speech engine options", () => {
+  it("parses the optional service and explicit restart", () => {
+    expect(parseCliArgs(["transcribe", "source.mp4", "--engine", "qwen3", "--asr-url", "http://127.0.0.1:8766", "--restart-transcription"])).toMatchObject({ engineId: "qwen3", localServiceUrl: "http://127.0.0.1:8766", restart: true });
+  });
+  it("rejects unsupported engines and remote service URLs", () => {
+    expect(() => parseCliArgs(["transcribe", "source.mp4", "--engine", "unknown"])).toThrow();
+    expect(() => parseCliArgs(["transcribe", "source.mp4", "--asr-url", "https://example.com"])).toThrow();
   });
 });

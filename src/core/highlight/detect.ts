@@ -102,6 +102,7 @@ async function chatAttempt(
       signal,
     });
   } catch (e) {
+    signal?.throwIfAborted();
     const msg = e instanceof Error ? e.message : String(e);
     // 连不上最常见的场景是「选了本地 Ollama 但没装/没启动」(issue #6)——
     // 报错必须告诉用户下一步做什么,一句 fetch failed 只会把人留在原地

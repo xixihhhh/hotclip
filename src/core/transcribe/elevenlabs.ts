@@ -69,7 +69,7 @@ export class ElevenLabsEngine implements TranscribeEngine {
       await execFileAsync(
         resolveFfmpegPath(),
         ["-hide_banner", "-y", "-i", filePath, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "aac", "-b:a", "48k", audioPath],
-        { maxBuffer: 32 * 1024 * 1024 }
+        { maxBuffer: 32 * 1024 * 1024, signal }
       );
 
       onProgress?.({ fraction: 0.2, stage: "transcribing" });

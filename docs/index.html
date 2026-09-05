@@ -32,7 +32,7 @@
   "alternateName": "HotClip 爆款切片",
   "operatingSystem": "Windows, macOS, Linux",
   "applicationCategory": "MultimediaApplication",
-  "softwareVersion": "0.27.0",
+  "softwareVersion": "0.28.0",
   "inLanguage": ["zh-CN", "en"],
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
   "description": "免费开源、本地运行的 AI 视频切片 / 直播切片软件:长视频、直播回放一键切成爆款竖屏短视频。AI 找爆点、弹幕热度进爆点判断、横屏转竖屏 9:16、逐词点亮动态字幕,无积分制、无水印、素材不上传。",
@@ -141,7 +141,7 @@
   </div>
   <p class="note">不用 Python、不用 Docker、连账号都不用注册——下载安装包,双击即用</p>
   <div class="meta-badges">
-    <span>最新版本 <b id="gh-version">v0.27.0</b></span>
+    <span>最新版本 <b id="gh-version">v0.28.0</b></span>
     <span>GitHub <b id="gh-stars">★</b></span>
     <span>Windows · macOS · Linux</span>
   </div>
@@ -311,7 +311,7 @@
     </div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-caption"/></svg></span><h3>自动加动态字幕 · 逐词点亮</h3><p>词级时间戳驱动,语义断行不「拦腰截断」;<b>SRT 可导出</b>,双语字幕一键开。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg></span><h3>画面里的字也参与找爆点</h3><p>可选视觉扫描同一次识别清晰的产品名、价格、比分和 PPT 要点;<b>不确定就不记</b>,静态但有价值的画面也不会被能量分漏掉。</p></div>
-    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg></span><h3>字幕哪里不稳,直接告诉你</h3><p>原生/对齐/内插/手改估时来源可见,逐句稿一键只看需复核句;最终成片还检查<b>重叠、阅读速度与闪现</b>,结果写进回执。</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg></span><h3>长稿搜索与时间校准</h3><p>跨句搜索、高亮定位,长稿滚动流畅;选句校准可<b>试听、确认、撤销</b>,原文保留,估时区间明确可见。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-reframe"/></svg></span><h3>横屏转竖屏 9:16</h3><p><b>舒适优先构图</b>:能装下就真正锁住到下一镜,确有需要才平滑跟随;跳剪不穿越删掉的画面,持续漏检自动回正。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span><h3>HDR 转色不靠猜</h3><p>PQ/HLG 且色彩路径完整受支持才在线性光域转成<b>TV-range SDR BT.709</b>;可用峰值参与高光约束。不支持或色彩检查失败时保留原路径、停用 SDR 域校正并分别提示。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg></span><h3>该校正才校正画面</h3><p>可选智能校正只测最终保留帧;明显偏暗、发灰或过饱和才做<b>有上限的轻调整</b>,正常素材不动、黑白不强行增艳,结果写进回执。</p></div>
@@ -323,11 +323,11 @@
     </div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-voice"/></svg></span><h3>48k 智能人声增强</h3><p>显式智能档按需下载约 10MB 本地模型,在完整剪辑后、音效/BGM 前清理风扇、空调与房间底噪;<b>失败自动回退基础档</b>,视频画质不重编码。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-voice"/></svg></span><h3>说话人分离</h3><p>访谈、连麦一键标注<b>谁在说话</b>(本地零上传),字幕还能按人上色。</p></div>
-    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-globe"/></svg></span><h3>中文原生</h3><p>SenseVoice / Paraformer / FireRedASR2 专用引擎,方言、粤语、中英混说都稳。</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-globe"/></svg></span><h3>已有字幕,直接开始剪</h3><p>导入原文 <b>SRT / WebVTT</b>,保留原句时间并进入逐句稿;也可选配 Qwen3 本地语音服务,默认引擎照常可用。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg></span><h3>每一刀都可审计</h3><p>切点理由、剪了哪些口头禅、用了什么样式——<b>clips.json 回执</b>全记录,可否决可推翻。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-film"/></svg></span><h3>多工程项目工作区</h3><p>工程可切换、重命名、关闭、删除与媒体重连;源素材离线或变化<b>保留工程不丢状态</b>,删除工程不碰素材。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-scissors"/></svg></span><h3>每一步都能撤销重做</h3><p>选片、标题、切点、手动加片和逐句稿纠错共用可逆历史,随项目恢复;播放、跳播和入出点有专业快捷键。</p></div>
-    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>任务断了,重开接着做</h3><p>素材、逐字稿、候选与手调切点自动恢复;录播监听和 webhook 共用<b>持久任务队列</b>,可取消、可重试。</p></div>
+    <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>转写中断,接着识别</h3><p>本地转写按段保存,停止或重启后复用已完成进度;导出准备阶段也能取消,失败后<b>保留候选直接重试</b>。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span><h3>出片前一键健康检查</h3><p>检查 FFmpeg、解析工具、11 类模型、LLM 连通性、磁盘与缓存;核心模型可取消、可续传地准备。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg></span><h3>分析与成片看同一画面</h3><p>运动、镜头、表情、缩略图与可选视觉扫描绑定最终选中视频轨;HDR 预览安全转 SDR 后再分析,<b>64MB 本地索引</b>按画面与色彩决定隔离。</p></div>
     <div class="b-cell" data-reveal><span class="ico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><h3>长视频重复出片更快</h3><p>相同基础成片直接复用本地缓存;H.264 仅在关键帧与画面条件安全时直拷,其余<b>透明回退精确编码</b>。缓存最多 1GB,可单独清理。</p></div>

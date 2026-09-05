@@ -6,8 +6,8 @@
  */
 import type { Transcript, TranscriptWord } from "./api-types";
 
-const CJK_RE = /[一-鿿぀-ヿ가-힯]/;
-const WORD_CHAR_RE = /[A-Za-z0-9''-]/;
+const CJK_RE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+const WORD_CHAR_RE = /[\p{L}\p{M}\p{N}'’\-]/u;
 
 /** 把编辑后的句子切成卡拉OK词单元:CJK 单字、latin 词、标点附着前词。 */
 export function tokenizeForWords(text: string): string[] {
@@ -20,7 +20,7 @@ export function tokenizeForWords(text: string): string[] {
     }
   };
   for (const ch of Array.from(text)) {
-    if (WORD_CHAR_RE.test(ch)) {
+    if (!CJK_RE.test(ch) && WORD_CHAR_RE.test(ch)) {
       latin += ch;
       continue;
     }
@@ -70,7 +70,7 @@ export function rebuildWords(text: string, startSec: number, endSec: number): Tr
  */
 export function editSegmentText(transcript: Transcript, segmentId: number, newText: string): Transcript {
   const text = newText.trim();
-  if (!text) return transcript;
+  if (!text || transcript.segments.find((s) => s.id === segmentId)?.text === text) return transcript;
   return {
     ...transcript,
     segments: transcript.segments.map((seg) =>

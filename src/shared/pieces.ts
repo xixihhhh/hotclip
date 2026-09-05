@@ -86,13 +86,13 @@ export function isStitched(pieces: ClipPiece[] | undefined): boolean {
 
 /**
  * 段与段之间要剪掉的区间(喂给 computeJumpCut 的 forceCutSpans)。
- * 两端各留一点余白,拼接处才不会贴着词硬切。
+ * 自动选段两端留一点余白;手动选段 exact 时严格遵守用户边界。
  */
-export function pieceCutSpans(pieces: ClipPiece[]): ClipPiece[] {
+export function pieceCutSpans(pieces: ClipPiece[], options: { exact?: boolean } = {}): ClipPiece[] {
   const out: ClipPiece[] = [];
   for (let i = 1; i < pieces.length; i++) {
-    const startSec = pieces[i - 1].endSec + PIECE_PAD_AFTER_SEC;
-    const endSec = pieces[i].startSec - PIECE_PAD_BEFORE_SEC;
+    const startSec = pieces[i - 1].endSec + (options.exact ? 0 : PIECE_PAD_AFTER_SEC);
+    const endSec = pieces[i].startSec - (options.exact ? 0 : PIECE_PAD_BEFORE_SEC);
     if (endSec > startSec) out.push({ startSec, endSec });
   }
   return out;

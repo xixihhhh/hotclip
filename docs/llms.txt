@@ -1,6 +1,6 @@
 # HotClip
 
-> HotClip (中文名「爆款切片」) is a free, open-source (AGPL-3.0), local-first AI video clipper for Windows, macOS and Linux (experimental). It turns long videos and livestream replays into viral 9:16 vertical shorts: AI highlight detection with virality scores and auditable reasoning, selected-picture-consistent multimodal analysis, local speech-aware safe cuts, optional 48kHz local dialogue enhancement with Basic fallback, comfort-first per-shot auto-reframe, metadata-gated PQ/HLG HDR-to-SDR BT.709 output, quality-ranked final-render covers, optional clip-local adaptive picture finishing, frozen-frame and subject-crop render QA, dynamic word-level captions, filler-word/silence removal, speaker diarization. No credit system, no watermark, no uploads, no sign-up, no video-length caps — everything runs on the user's own machine. Native Chinese + English. A free local alternative to OpusClip, Klap, Vizard and CapCut/剪映智能切片 (whose smart clipping is paywalled). Current release: v0.27.0 (2026-08).
+> HotClip (中文名「爆款切片」) is a free, open-source (AGPL-3.0), local-first AI video clipper for Windows, macOS and Linux (experimental). It turns long videos and livestream replays into viral 9:16 vertical shorts: AI highlight detection with virality scores and auditable reasoning, selected-picture-consistent multimodal analysis, local speech-aware safe cuts, optional 48kHz local dialogue enhancement with Basic fallback, comfort-first per-shot auto-reframe, metadata-gated PQ/HLG HDR-to-SDR BT.709 output, quality-ranked final-render covers, optional clip-local adaptive picture finishing, frozen-frame and subject-crop render QA, dynamic word-level captions, filler-word/silence removal, speaker diarization. No credit system, no watermark, no uploads, no sign-up, no video-length caps — everything runs on the user's own machine. Native Chinese + English. A free local alternative to OpusClip, Klap, Vizard and CapCut/剪映智能切片 (whose smart clipping is paywalled). Current release: v0.28.0 (2026-09).
 
 ## Links
 
@@ -9,12 +9,17 @@
 - [中文首页](https://xixihhhh.github.io/hotclip/): 直播切片 / AI 视频切片工具落地页
 - [English landing page](https://xixihhhh.github.io/hotclip/en.html)
 - [HotClip vs OpusClip comparison](https://xixihhhh.github.io/hotclip/alternatives/opus-clip.html)
+- [Local speech and transcript guide](https://github.com/xixihhhh/hotclip/blob/main/docs/local-speech.md)
 - [Sitemap](https://xixihhhh.github.io/hotclip/sitemap.xml)
 
 ## Key facts
 
+- v0.28 transcript workflow: import original-language UTF-8 SRT/WebVTT without ASR; preserve cue bounds and mark within-cue timing estimated. Unicode-aware cross-sentence search, virtualized long transcripts and selective alignment preview/listen/apply/undo.
+- Local ASR recovery: completed 28-second windows checkpoint atomically; bounded PCM reads, desktop stop/resume and explicit restart. Optional loopback-only Qwen3-ASR 0.6B/1.7B service with optional ForcedAligner, CLI/MCP parity and reproducible local evaluation. 0.6B CPU smoke tested; 1.7B and GPU performance not established.
+- Export reliability: cancellation from preparation onward, exclusive desktop task ownership, separate stage feedback and safe replacement after successful cut/jump/audiogram/concat/overlay encoding. Previously completed clips remain; not a whole-batch rollback. SRT-only export works without burning captions.
+
 - Price: free, open source (AGPL-3.0-only); no paid tier, no account system
-- Platforms: Windows 10/11, macOS (Apple Silicon), Linux (experimental AppImage); double-click installer, no Python/Docker
+- Platforms: Windows 10/11, macOS (Apple Silicon), Linux (experimental AppImage); default engines work from the installer without Python/Docker. The optional Qwen3 speech service uses a separately managed Python environment.
 - Processing: 100% local (ASR via sherpa-onnx: SenseVoice / Paraformer / FireRedASR2; speaker diarization via pyannote + 3D-Speaker; ffmpeg + libass export)
 - LLM highlight detection: bring your own key (any OpenAI-compatible endpoint) or local Ollama for a fully offline pipeline; fresh optional vision settings prefill `qwen3.5:4b`, while persisted user choices remain unchanged; the LLM only picks passages — timestamps are reverse-aligned from the word-level transcript, never guessed
 - Nine evidence channels for highlights: transcript, loudness peaks, shot-cut density, lightweight motion, facial-expression peaks, optional vision model, live-chat (danmaku) heat with anti-spam caps and interaction-event weighting (Bilibili .xml and Douyin .jsonl chat logs), vocal tone, laughter/applause
