@@ -354,7 +354,11 @@ export const zh = {
     reviewPlayEnd: "查结尾",
     reviewPlayEndHint: "只播最后 2.5 秒,检查结尾收得干不干净",
     reviewBrowserStub: "浏览器预览模式没有本地视频;在桌面应用里可直接看画面",
-    reviewNoVideo: "这个格式无法在应用内预览(不影响导出),可用时间轴和下方文字校对切点",
+    // [FIX] 原文案写"这个格式无法在应用内预览",会把"读取失败"错报成"格式不支持",
+    // 误导用户以为自己的文件有问题。预览失败的真实原因几乎都是媒体流读取中断
+    // (MEDIA_ERR_NETWORK),与容器格式无关,所以文案改为如实描述 + 给出错误码。
+    reviewNoVideo: "视频流读取中断,画面暂时出不来(不影响导出)。可用时间轴和下方文字校对切点",
+    reviewNoVideoCode: "视频流读取中断(错误码 {code})。不影响导出,可用时间轴和下方文字校对切点",
     reviewDragHint: "拖两端手柄微调,自动吸附字词边界;点轨道跳播",
     reviewSheet: "画面速览(片内 3×3 抽帧)",
     reviewSafeZone: "安全区",
@@ -611,6 +615,9 @@ export const zh = {
     sourcePreview: "源画面",
     verticalPreview: "竖屏 9:16",
     noPreview: "此环境无法预览画面(不影响出片)",
+    // [FIX] 读流中断与"环境不支持"是两回事:前者是协议层故障(可修),后者是能力缺失。
+    // 报出 MediaError.code(2=网络/读流中断, 4=源不支持)好让问题可定位。
+    previewReadFailed: "视频流读取中断,画面加载失败(错误码 {code},不影响出片)",
     legendLoud: "响度",
     legendMotion: "画面运动",
     legendDanmaku: "弹幕热度",

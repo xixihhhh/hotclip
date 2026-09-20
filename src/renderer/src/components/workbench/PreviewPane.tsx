@@ -58,6 +58,10 @@ export function PreviewPane({
   // 且该 URL 本会话内不再可播。现在 view 走 pathname 第 2 段。
   const src = filePath ? getApi().mediaUrl(filePath, "main") : "";
   const cropSrc = filePath ? getApi().mediaUrl(filePath, "crop") : "";
+  // [FIX] 主画面读流失败时把 MediaError.code 记下来,占位文案如实说明是"读取中断"
+  // 而不是笼统的"此环境无法预览"——后者会让用户以为是环境/格式不支持。
+  // 2 = MEDIA_ERR_NETWORK(流读取中断,协议层),4 = MEDIA_ERR_SRC_NOT_SUPPORTED。
+  const [mainErrCode, setMainErrCode] = useState(0);
 
   // 外部 seek 请求(时间轴点击/候选聚焦)
   useEffect(() => {
@@ -111,7 +115,9 @@ export function PreviewPane({
       <div className={`flex gap-2.5 ${compact ? "h-[132px]" : "h-[236px]"}`}>
         {/* 源画面 */}
         <div className="relative min-w-0 flex-1 overflow-hidden rounded-xl border border-line/60 bg-black">
-          {src ? (
+          {/* [FIX] 读流失败时不能只是把 <video> 留在原地(它已经黑屏且不会自愈),
+              要显式换成占位块,并报出 MediaError.code。 */}
+          {src && mainErrCode === 0 ? (
             <video
               ref={mainRef}
               src={src}
@@ -132,9 +138,16 @@ export function PreviewPane({
                 onTime(sec);
                 syncCrop();
               }}
+              onCanPlay={() => setMainErrCode(0)}
+              onError={(e) => {
+                setPlaying(false);
+                setMainErrCode(e.currentTarget.error?.code ?? 0);
+              }}
             />
           ) : (
-            <div className="flex h-full items-center justify-center px-6 text-center text-[12px] text-mut">{t("noPreview")}</div>
+            <div className="flex h-full items-center justify-center px-6 text-center text-[12px] text-mut">
+              {mainErrCode > 0 ? t("previewReadFailed").replace("{code}", String(mainErrCode)) : t("noPreview")}
+            </div>
           )}
           <span className="pointer-events-none absolute top-2 left-2 rounded-md bg-black/55 px-2 py-0.5 text-[10px] text-fg/70">
             {t("sourcePreview")}

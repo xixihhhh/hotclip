@@ -98,6 +98,11 @@ export function ClipReviewModal({
   const [playing, setPlaying] = useState(false);
   const [playheadSec, setPlayheadSec] = useState(clip.startSec);
   const [videoFailed, setVideoFailed] = useState(false);
+  // [FIX] 记下 MediaError.code,占位文案里如实报出来。
+  // 2 = MEDIA_ERR_NETWORK(流读取中断,协议层问题),4 = MEDIA_ERR_SRC_NOT_SUPPORTED。
+  // 之前不分因由一律说"这个格式无法预览",把读取故障错报成格式不支持,
+  // 用户会去转码白白折腾一圈。
+  const [videoErrCode, setVideoErrCode] = useState(0);
   // 安全区预览:开关+平台选择持久化;裁窗几何随容器尺寸/视频纵横比实时算
   const [safeZone, setSafeZone] = useState(loadSafeZonePref);
   const [videoAr, setVideoAr] = useState(16 / 9);
@@ -420,9 +425,11 @@ export function ClipReviewModal({
                 stopLoop();
               }}
               onCanPlay={() => setVideoFailed(false)}
-              onError={() => {
+              onError={(e) => {
                 setPlaying(false);
                 stopLoop();
+                // [FIX] 顺手把 MediaError.code 带进占位文案,便于判断是流故障还是格式问题
+                setVideoErrCode(e.currentTarget.error?.code ?? 0);
                 setVideoFailed(true);
               }}
             />
@@ -431,7 +438,11 @@ export function ClipReviewModal({
             <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
               <LuFilm className="h-6 w-6 text-mut" />
               <p className="max-w-md text-[12.5px] leading-relaxed text-mut">
-                {src === "" ? t("reviewBrowserStub") : t("reviewNoVideo")}
+                {src === ""
+                  ? t("reviewBrowserStub")
+                  : videoErrCode > 0
+                    ? t("reviewNoVideoCode").replace("{code}", String(videoErrCode))
+                    : t("reviewNoVideo")}
               </p>
               {/* 浏览器预览没有画面:给一块 9:16 演示框,遮罩形态照常可看 */}
               {safeZone.on && (

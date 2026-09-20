@@ -351,7 +351,11 @@ export const en = {
     reviewPlayEnd: "Check ending",
     reviewPlayEndHint: "Play only the last 2.5 seconds to check the clip lands cleanly",
     reviewBrowserStub: "Browser preview has no local video; the desktop app shows the actual footage here",
-    reviewNoVideo: "This format can't be previewed in-app (export still works). Use the timeline and the text below to verify cut points",
+    // [FIX] The old copy said "this format can't be previewed", reporting a read
+    // failure as an unsupported format. Preview failures are almost always an
+    // interrupted media stream (MEDIA_ERR_NETWORK), unrelated to the container.
+    reviewNoVideo: "The video stream was interrupted, so the picture can't load (export still works). Use the timeline and the text below to verify cut points",
+    reviewNoVideoCode: "The video stream was interrupted (error code {code}). Export still works — use the timeline and the text below to verify cut points",
     reviewDragHint: "Drag the handles to fine-tune — they snap to word boundaries; click the track to seek",
     reviewSheet: "Frame overview (3×3 sampled from the clip)",
     reviewSafeZone: "Safe zone",
@@ -607,6 +611,10 @@ export const en = {
     sourcePreview: "Source",
     verticalPreview: "Vertical 9:16",
     noPreview: "Preview unavailable in this environment (export unaffected)",
+    // [FIX] A read-stream failure is not the same as a missing capability: the
+    // former is a protocol-layer fault (fixable). Reporting MediaError.code
+    // (2 = network/read interrupted, 4 = source not supported) makes it diagnosable.
+    previewReadFailed: "The video stream was interrupted (error code {code}); export is unaffected",
     legendLoud: "loudness",
     legendMotion: "motion",
     legendDanmaku: "chat heat",
