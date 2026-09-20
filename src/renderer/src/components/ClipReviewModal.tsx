@@ -137,11 +137,9 @@ export function ClipReviewModal({
     () => (stitched ? piecesText(transcript, pieces) : clipText(transcript, startSec, endSec)),
     [transcript, stitched, pieces, startSec, endSec]
   );
-  // ?view=review:与工作台预览的两个 <video> 区分 URL,避免撞 Chromium 按 URL 共享的媒体缓冲(详见 PreviewPane)
-  const src = useMemo(() => {
-    const base = filePath ? getApi().mediaUrl(filePath) : "";
-    return base ? `${base}?view=review` : "";
-  }, [filePath]);
+  // [FIX] view 走 pathname 第 2 段(原为 `?view=review`)。query 不参与 Chromium
+  // 的媒体资源判定,且主进程 serveMedia 只取 pathname,原写法等于没区分。
+  const src = useMemo(() => (filePath ? getApi().mediaUrl(filePath, "review") : ""), [filePath]);
   // 成片时长:拼接片是各段之和,不是跨度
   const outDurationSec = stitched ? piecesDurationSec(pieces) : endSec - startSec;
   const dirty =

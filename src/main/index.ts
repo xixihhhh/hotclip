@@ -11,7 +11,6 @@ import { join } from "path";
 import { basename, extname } from "path";
 import { stat, readFile, writeFile, readdir } from "fs/promises";
 import { createReadStream } from "fs";
-import { Readable } from "stream";
 import { randomUUID } from "crypto";
 import { extractPeaks } from "@core/audio-peaks";
 import { createClipAligner } from "@core/align";
@@ -98,8 +97,21 @@ const AUDIO_EXTENSIONS = ["mp3", "m4a", "wav", "aac", "flac"];
 // ---- 本地媒体预览协议(审阅台) ----
 // 渲染层的 <video> 通过 hotclip-media:// 流式读取源文件;必须在 app ready
 // 前注册特权,才能拿到 fetch/流/Range 能力(拖进度条依赖 206 分段响应)。
+// [FIX] 补齐 standard/secure/bypassCSP:只有 stream+supportFetchAPI 时,该 scheme
+// 走的是"非标准 scheme"路径——URL 归一化与同源判定行为都和标准 scheme 不同,
+// 会让下面"用 path 区分媒体资源"的语义变得不可靠。standard 让 pathname 按
+// 标准层级解析,secure 拿到安全上下文,bypassCSP 免于被页面 CSP 二次裁剪。
 protocol.registerSchemesAsPrivileged([
-  { scheme: "hotclip-media", privileges: { stream: true, supportFetchAPI: true } },
+  {
+    scheme: "hotclip-media",
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+      bypassCSP: true,
+    },
+  },
 ]);
 
 // 只放行本会话里 probe 成功过的文件——协议不做任意路径读取
@@ -121,9 +133,23 @@ const MEDIA_MIME: Record<string, string> = {
   flac: "audio/flac",
 };
 
-/** hotclip-media://local/<encodeURIComponent(路径)> → 带 Range 的文件流响应。 */
+/**
+ * hotclip-media://local/<view>/<encodeURIComponent(路径)> → 带 Range 的文件流响应。
+ *
+ * [FIX] 路径多了一段 `<view>`(main / crop / review)。原实现是
+ * `hotclip-media://local/<encodeURIComponent(路径)>?view=main`,但:
+ *   ① serveMedia 只取 pathname,query 被整段丢弃 → 三个 view 返回字节完全相同的流;
+ *   ② Chromium 判定"是否同一媒体资源"时忽略 query → 多个 <video> 仍共享一份
+ *      媒体缓冲,一路坏则全坏,且该 URL 本会话内不再可播。
+ * 把 view 编进 pathname 才真正让每个消费方拿到独立的媒体资源。
+ * view 只参与资源区分,不参与鉴权(鉴权仍看真实路径是否在 allowedMedia 里)。
+ */
 async function serveMedia(request: Request): Promise<Response> {
-  const filePath = decodeURIComponent(new URL(request.url).pathname.replace(/^\//, ""));
+  const pathname = new URL(request.url).pathname.replace(/^\//, "");
+  // 第一段 = view(兼容旧式无 view 的单段 URL),其余 = 编码后的真实路径
+  const slash = pathname.indexOf("/");
+  const encodedPath = slash === -1 ? pathname : pathname.slice(slash + 1);
+  const filePath = decodeURIComponent(encodedPath);
   if (!allowedMedia.has(filePath)) return new Response("forbidden", { status: 403 });
   let size: number;
   try {
@@ -141,9 +167,20 @@ async function serveMedia(request: Request): Promise<Response> {
     "Content-Length": String(range.end - range.start + 1),
   };
   if (range.status === 206) headers["Content-Range"] = `bytes ${range.start}-${range.end}/${size}`;
-  const body = Readable.toWeb(
-    createReadStream(filePath, { start: range.start, end: range.end })
-  ) as unknown as ReadableStream;
+  // [FIX] 不用 Readable.toWeb:Node Readable 的 error 事件不保证转成 Web Stream 的
+  // controller.error(),响应体会"静默截断"——Chromium 侧就报 PIPELINE_ERROR_READ
+  // (error.code=2)。自建 stream 显式传播错误,并在消费方取消时销毁文件句柄。
+  const nodeStream = createReadStream(filePath, { start: range.start, end: range.end });
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      nodeStream.on("data", (chunk) => controller.enqueue(chunk as Uint8Array));
+      nodeStream.on("end", () => controller.close());
+      nodeStream.on("error", (err) => controller.error(err));
+    },
+    cancel() {
+      nodeStream.destroy();
+    },
+  });
   return new Response(body, { status: range.status, headers });
 }
 

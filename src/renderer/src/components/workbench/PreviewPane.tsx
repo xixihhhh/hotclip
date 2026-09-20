@@ -51,12 +51,13 @@ export function PreviewPane({
   const cropRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
   const [now, setNow] = useState(0);
-  // 同一 hotclip-media:// URL 被多个 <video> 同时加载会撞 Chromium 按 URL 共享的媒体缓冲,
-  // 自定义协议下两路一起失败且该 URL 本会话内不再可播——每个消费方用 query 区分独享缓冲
-  // (serveMedia 只取 pathname,query 不影响鉴权与读文件)
-  const srcBase = filePath ? getApi().mediaUrl(filePath) : "";
-  const src = srcBase ? `${srcBase}?view=main` : "";
-  const cropSrc = srcBase ? `${srcBase}?view=crop` : "";
+  // [FIX] 区分标识必须编进 pathname,不能放 query。
+  // 之前写作 `${srcBase}?view=main` / `${srcBase}?view=crop`,但 Chromium 判定
+  // "是否同一媒体资源"时忽略 query,且主进程 serveMedia 只取 pathname —— 两个
+  // <video> 实际仍是同一资源,共享同一 media buffer,一路坏两路一起坏,
+  // 且该 URL 本会话内不再可播。现在 view 走 pathname 第 2 段。
+  const src = filePath ? getApi().mediaUrl(filePath, "main") : "";
+  const cropSrc = filePath ? getApi().mediaUrl(filePath, "crop") : "";
 
   // 外部 seek 请求(时间轴点击/候选聚焦)
   useEffect(() => {

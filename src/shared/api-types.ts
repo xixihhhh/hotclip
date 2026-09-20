@@ -894,8 +894,13 @@ export interface HotClipApi {
   cancelExport: () => void;
   /** Reveal an exported file in Finder / Explorer. */
   revealClip: (path: string) => void;
-  /** 本地媒体的可播放 URL(审阅台 <video> 用);空串 = 当前环境不支持预览。 */
-  mediaUrl: (filePath: string) => string;
+  /**
+   * 本地媒体的可播放 URL(审阅台 <video> 用);空串 = 当前环境不支持预览。
+   * `view` 用于区分同一文件的不同消费方(工作台主画面/竖屏裁切/审阅台弹窗):
+   * 它会被编进 URL 的 pathname —— Chromium 判定"是否同一媒体资源"时不看 query,
+   * 多个 <video> 共享同一资源会撞坏媒体缓冲,所以必须走 path。
+   */
+  mediaUrl: (filePath: string, view?: string) => string;
   /** 选择一张图片(水印 logo 用);取消返回 null。 */
   selectImage: () => Promise<string | null>;
   /** 选择一个音频文件(BGM 用);取消返回 null。 */

@@ -49,7 +49,11 @@ const api: HotClipApi = {
   cancelExport: () => ipcRenderer.send("hotclip:export-cancel"),
   revealClip: (path) => ipcRenderer.send("hotclip:reveal", path),
   // 路径整体编码进 pathname,主进程协议按同样规则解回
-  mediaUrl: (filePath) => `hotclip-media://local/${encodeURIComponent(filePath)}`,
+  // [FIX] view 段编进 pathname(不是 query):Chromium 判定"是否同一媒体资源"时
+  // 不看 query,多个 <video> 用 ?view=xxx 区分是无效的,仍会共享同一媒体缓冲而撞车。
+  // 主进程按 pathname 第 2 段做资源区分,第 3 段才是真实文件路径。
+  mediaUrl: (filePath, view = "main") =>
+    `hotclip-media://local/${encodeURIComponent(view)}/${encodeURIComponent(filePath)}`,
   selectImage: () => ipcRenderer.invoke("hotclip:select-image"),
   selectAudio: () => ipcRenderer.invoke("hotclip:select-audio"),
   generateBgm: (config, genreId) => ipcRenderer.invoke("hotclip:generate-bgm", config, genreId),
