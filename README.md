@@ -320,6 +320,12 @@ LLM 只负责«挑哪段»并引用原文,时间戳由逐字转写**反向对齐
 
 ## 最近更新
 
+**[v0.32.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.32.0)**：修复 Windows 审阅台多个视频共用媒体流导致的永久黑屏和拖动失败；预览失败显示真实错误码；模型清单拉取后提供明确可点击的下拉选择，同时保留手动输入。
+
+**[v0.31.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.31.0)**：多人对谈逐句稿工作台支持按说话人筛选，搜索、相近台词和选段预览同步收窄范围。
+
+**[v0.30.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.30.0)**：精确搜索无结果时可主动查找仅差一个字的相近台词，近似命中明确标注并支持试听确认。
+
 **[v0.29.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.29.0)** (2026-09-16)：台词与画面统一搜索、字词定位、上下文试听与预选成片；长稿选段更流畅，模型请求支持完整超时、可取消的有限重试，本地预筛限制并发并保留失败段落。[完整发布说明](docs/releases/v0.29.0.md)。
 
 **[v0.28.1](https://github.com/xixihhhh/hotclip/releases/tag/v0.28.1)** (2026-09-12)：修复 Qwen3/QwQ 混合思考模型导致的空响应；动态字幕“小”字号降至 0.68；Windows 审阅台媒体加载失败后可直接重试播放。[完整发布说明](docs/releases/v0.28.1.md)。

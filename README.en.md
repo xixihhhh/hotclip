@@ -316,6 +316,12 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server â
 
 ## What's new
 
+**[v0.32.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.32.0)**: fixes permanent black screens and failed seeking in the Windows review desk when multiple videos share a media stream; preview errors now show the actual code; fetched model lists now have an explicit clickable dropdown while manual entry remains available.
+
+**[v0.31.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.31.0)**: the transcript workspace can filter multi-speaker conversations by S1 / S2, with search, similar-speech matches and clip preview following the filter.
+
+**[v0.30.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.30.0)**: opt-in similar-speech search finds recognition results that differ by one character when exact search has no result, with an explicit approximate-match label and audition before selection.
+
 **[v0.29.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.29.0)** (2026-09-16): unified speech/visual search, word seeking, context playback and preselected clips; a virtualized long-transcript picker, bounded model requests with cancellable transient recovery, and limited local screening concurrency with failed-chunk retention. [Release notes](docs/releases/v0.29.0.md).
 
 **[v0.28.1](https://github.com/xixihhhh/hotclip/releases/tag/v0.28.1)** (2026-09-12): fixes empty responses from Qwen3/QwQ hybrid-thinking models, lowers the Small dynamic-caption size to 0.68, and lets Windows review playback retry after a media-load failure. [Release notes](docs/releases/v0.28.1.md).

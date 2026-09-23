@@ -519,6 +519,17 @@ function AiSection(): React.JSX.Element {
           <label className="block">
             <span className="text-[11px] font-semibold text-mut">{t("llmModel")}</span>
             <div className="mt-1 flex gap-2">
+              {modelList.length > 0 && (
+                <select
+                  aria-label={t("llmModelSelect")}
+                  value={modelList.includes(config.model) ? config.model : ""}
+                  onChange={(e) => { if (e.target.value) setConfig({ model: e.target.value }); }}
+                  className="max-w-[42%] min-w-0 rounded-lg border border-line bg-panel-2 px-2.5 py-2 text-[12px] outline-none focus:border-ember/60"
+                >
+                  <option value="" disabled>{t("llmModelSelectPlaceholder")}</option>
+                  {modelList.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              )}
               <input
                 value={config.model}
                 list="hotclip-model-list"
