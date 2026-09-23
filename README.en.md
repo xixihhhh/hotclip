@@ -26,6 +26,8 @@
 
 Local transcription now checkpoints completed windows and resumes after interruption. Transcript editing adds cross-sentence search, virtualized long lists, and timing calibration with listen/apply/undo. After a full visual scan, the same search also finds confirmed scene descriptions and on-screen text, with one-click seeking to each timestamp. Exports improve language-aware caption readability. See the [speech and long-transcript guide](docs/local-speech.md) for optional local Qwen3-ASR setup and reproducible model evaluation.
 
+When exact search finds nothing, the transcript workspace can opt into **Similar speech** to find recognition results that differ by one character. Results are labeled approximate and can be listened to before selecting a clip.
+
 **Search to clip**: browse speech and visual matches in time order, filter by source, seek matched words, play context, then review preselected full sentences in the picker. Estimated timing stays labeled; long transcript picking is virtualized, and added candidates support undo/redo.
 
 ## Export progress and cancellation

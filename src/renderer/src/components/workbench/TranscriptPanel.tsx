@@ -1,4 +1,4 @@
-import { indexTranscript, searchTranscript } from "../../../../shared/transcript-search";
+import { canSearchSimilarTranscript, indexTranscript, searchSimilarTranscript, searchTranscript } from "../../../../shared/transcript-search";
 import { VirtualTranscriptList } from "./VirtualTranscriptList";
 import { AlignmentReview } from "./AlignmentReview";
 /**
@@ -35,6 +35,7 @@ export function TranscriptPanel({ transcript, visualNotes, onSeek, onAudition, o
   const [pending, setPending] = useState<{ entry: GlossaryEntry; count: number } | null>(null);
   const [showTimingReview, setShowTimingReview] = useState(false);
   const [query, setQuery] = useState("");
+  const [similarMode, setSimilarMode] = useState(false);
   const [activeHit, setActiveHit] = useState(-1);
   const [source, setSource] = useState<EvidenceSource>("all");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -45,7 +46,10 @@ export function TranscriptPanel({ transcript, visualNotes, onSeek, onAudition, o
       .map((segment) => segment.id)
   ), [transcript.segments]);
   const searchIndex = useMemo(() => indexTranscript(transcript.segments), [transcript.segments]);
-  const hits = useMemo(() => searchTranscript(searchIndex, query).filter((hit) => !showTimingReview || hit.segmentIds.some((id) => timingReviewIds.has(id))), [searchIndex, query, showTimingReview, timingReviewIds]);
+  const exactHits = useMemo(() => searchTranscript(searchIndex, query).filter((hit) => !showTimingReview || hit.segmentIds.some((id) => timingReviewIds.has(id))), [searchIndex, query, showTimingReview, timingReviewIds]);
+  const hits = useMemo(() => similarMode && exactHits.length === 0
+    ? searchSimilarTranscript(searchIndex, query).filter((hit) => !showTimingReview || hit.segmentIds.some((id) => timingReviewIds.has(id)))
+    : exactHits, [similarMode, exactHits, searchIndex, query, showTimingReview, timingReviewIds]);
   const visualHits = useMemo(() => searchVisualEvidence(visualNotes, query), [visualNotes, query]);
   const results = useMemo(() => evidenceResults(hits, visualHits, transcript.durationSec, source), [hits, visualHits, transcript.durationSec, source]);
   const result = results[Math.max(0, Math.min(activeHit, results.length - 1))];
@@ -97,7 +101,7 @@ export function TranscriptPanel({ transcript, visualNotes, onSeek, onAudition, o
             type="button"
             title={t("timingReviewHint")}
             aria-pressed={showTimingReview}
-            onClick={() => { setShowTimingReview((value) => !value); setActiveHit(-1); }}
+            onClick={() => { setShowTimingReview((value) => !value); setSimilarMode(false); setActiveHit(-1); }}
             className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold transition-colors ${
               showTimingReview ? "bg-amber-500/10 text-amber-400" : "text-mut hover:text-amber-400"
             }`}
@@ -117,17 +121,20 @@ export function TranscriptPanel({ transcript, visualNotes, onSeek, onAudition, o
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line/60 px-3 py-2 text-xs">
         <label className="flex min-w-0 flex-1 items-center gap-2">{t("searchLabel")}
-          <input type="search" value={query} maxLength={500} onChange={(e) => { setQuery(e.target.value); setActiveHit(-1); }} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); moveHit(e.shiftKey ? -1 : 1); } }} placeholder={t("searchHint")} className="min-w-0 flex-1 rounded border border-line bg-panel-2 px-2 py-1.5 outline-none focus:border-ember" />
+          <input type="search" value={query} maxLength={500} onChange={(e) => { setQuery(e.target.value); setSimilarMode(false); setActiveHit(-1); }} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); moveHit(e.shiftKey ? -1 : 1); } }} placeholder={t("searchHint")} className="min-w-0 flex-1 rounded border border-line bg-panel-2 px-2 py-1.5 outline-none focus:border-ember" />
         </label>
         {query.trim() && <>
-          <span role="status">{t("searchCount", { current: results.length ? Math.max(1, Math.min(activeHit + 1, results.length)) : 0, n: `${results.length}${(source !== "visual" && hits.length === 2000) || (source !== "transcript" && visualHits.length === 200) ? "+" : ""}` })}</span>
+          <span role="status">{t("searchCount", { current: results.length ? Math.max(1, Math.min(activeHit + 1, results.length)) : 0, n: `${results.length}${(source !== "visual" && hits.length === (similarMode ? 200 : 2000)) || (source !== "transcript" && visualHits.length === 200) ? "+" : ""}` })}</span>
           <button type="button" disabled={!results.length} aria-label={t("searchPrevious")} onClick={() => moveHit(-1)} className="rounded border border-line px-2 py-1.5 disabled:opacity-40">↑</button>
           <button type="button" disabled={!results.length} aria-label={t("searchNext")} onClick={() => moveHit(1)} className="rounded border border-line px-2 py-1.5 disabled:opacity-40">↓</button>
         </>}
         <button type="button" aria-expanded={alignmentOpen} onClick={() => setAlignmentOpen((v) => !v)} className="rounded border border-line px-2 py-1.5">{t("alignToggle")}</button>
       </div>
       {query.trim() && <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line/60 px-3 py-2 text-xs" role="group" aria-label={t("searchSource")}>
-        {(["all", "transcript", "visual"] as const).map((value) => <button type="button" key={value} aria-pressed={source === value} onClick={() => { setSource(value); setActiveHit(-1); }} className={`rounded-md border px-2 py-1 transition-colors ${source === value ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:text-fg"}`}>{t(`searchSource_${value}`)}</button>)}
+        {(["all", "transcript", "visual"] as const).map((value) => <button type="button" key={value} aria-pressed={source === value} onClick={() => { setSource(value); setSimilarMode(false); setActiveHit(-1); }} className={`rounded-md border px-2 py-1 transition-colors ${source === value ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:text-fg"}`}>{t(`searchSource_${value}`)}</button>)}
+        {source !== "visual" && exactHits.length === 0 && canSearchSimilarTranscript(query) && (
+          <button type="button" aria-pressed={similarMode} title={t("searchSimilarHint")} onClick={() => { setSimilarMode((value) => !value); setActiveHit(-1); }} className={`rounded-md border px-2 py-1 transition-colors ${similarMode ? "border-amber-400/60 bg-amber-400/10 text-amber-300" : "border-line text-mut hover:text-fg"}`}>{t("searchSimilar")}</button>
+        )}
         <span className="text-mut">{t("searchKeyboardHint")}</span>
       </div>}
       {result && context && <div className="shrink-0 border-b border-line/60 bg-panel-2/40 px-3 py-2 text-xs" aria-label={t("searchCurrent")}>
@@ -135,6 +142,7 @@ export function TranscriptPanel({ transcript, visualNotes, onSeek, onAudition, o
           <span>{t(result.kind === "visual" ? "visualSearchLabel" : "searchSource_transcript")}</span>
           <span className="font-mono text-ember">{formatClock(result.startSec)}</span>
           {result.kind === "transcript" && <span>{t(`searchTiming_${result.hit.timing}`)}</span>}
+          {result.kind === "transcript" && result.hit.match === "approximate" && <span className="text-amber-300">{t("searchSimilarBadge")}</span>}
         </div>
         <p className="mt-1 line-clamp-2 break-words leading-relaxed">{result.kind === "visual"
           ? result.hit.match === "screen-text" ? result.hit.visibleText?.join(" / ") : result.hit.note
@@ -199,7 +207,7 @@ export function TranscriptPanel({ transcript, visualNotes, onSeek, onAudition, o
           </button>
         </div>
       )}
-      {visibleSegments.length === 0 && results.length === 0 && <p className="p-4 text-sm text-mut" role="status">{t("searchEmpty")}</p>}
+      {visibleSegments.length === 0 && results.length === 0 && <p className="p-4 text-sm text-mut" role="status">{similarMode ? t("searchSimilarEmpty") : t("searchEmpty")}</p>}
       <VirtualTranscriptList segments={visibleSegments} targetId={hit?.segmentIds.find((id) => !showTimingReview || timingReviewIds.has(id))} targetKey={`${query}:${activeHit}`} pinnedId={editingSeg} label={t("searchResults")}>
         {(seg) => (
           <div key={seg.id} className={`group/seg flex items-baseline gap-2 rounded-lg px-2.5 py-2 transition-colors hover:bg-panel-2 ${hit?.segmentIds.includes(seg.id) ? "bg-ember/10" : ""}`}>
