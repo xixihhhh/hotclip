@@ -30,6 +30,8 @@ When exact search finds nothing, the transcript workspace can opt into **Similar
 
 **Search to clip**: browse speech and visual matches in time order, filter by source, seek matched words, play context, then review preselected full sentences in the picker. Estimated timing stays labeled; long transcript picking is virtualized, and added candidates support undo/redo.
 
+When speaker detection is enabled for a conversation, the transcript workspace can filter by S1 / S2 and keep search, similar-speech matches and clip preview within that speaker.
+
 ## Export progress and cancellation
 
 Exports identify preparation, translation, publish copy, variants, encoding and finalization. Cancel during preparation, wait for cleanup, then retry without losing the candidate selection. A second desktop export cannot replace an active job. Progress stays below 100% until delivery completes. SRT-only export retains word timings even when burned captions are off.

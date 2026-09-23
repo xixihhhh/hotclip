@@ -18,6 +18,15 @@ import { diffReplacement, applyGlossaryToTranscript, countGlossaryHits, upsertGl
 import { GlossaryModal } from "../GlossaryModal";
 import type { GlossaryEntry, Transcript } from "../../../../shared/api-types";
 
+const SPEAKER_COLORS = [
+  "text-sky-400 border-sky-400/40",
+  "text-emerald-400 border-emerald-400/40",
+  "text-amber-300 border-amber-300/40",
+  "text-pink-400 border-pink-400/40",
+  "text-violet-400 border-violet-400/40",
+  "text-teal-300 border-teal-300/40",
+];
+
 function formatClock(totalSeconds: number): string {
   const s = Math.floor(totalSeconds);
   const h = Math.floor(s / 3600);
@@ -36,6 +45,7 @@ export function TranscriptPanel({ transcript, visualNotes, onSeek, onAudition, o
   const [showTimingReview, setShowTimingReview] = useState(false);
   const [query, setQuery] = useState("");
   const [similarMode, setSimilarMode] = useState(false);
+  const [speakerFilter, setSpeakerFilter] = useState<number | null>(null);
   const [activeHit, setActiveHit] = useState(-1);
   const [source, setSource] = useState<EvidenceSource>("all");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -46,12 +56,19 @@ export function TranscriptPanel({ transcript, visualNotes, onSeek, onAudition, o
       .map((segment) => segment.id)
   ), [transcript.segments]);
   const searchIndex = useMemo(() => indexTranscript(transcript.segments), [transcript.segments]);
+  const speakers = useMemo(() => [...new Set(transcript.segments
+    .map((segment) => segment.speaker)
+    .filter((speaker): speaker is number => typeof speaker === "number"))].sort((a, b) => a - b), [transcript.segments]);
+  const segmentSpeakers = useMemo(() => new Map(transcript.segments.map((segment) => [segment.id, segment.speaker])), [transcript.segments]);
+  const effectiveSpeakerFilter = speakerFilter !== null && speakers.includes(speakerFilter) ? speakerFilter : null;
   const exactHits = useMemo(() => searchTranscript(searchIndex, query).filter((hit) => !showTimingReview || hit.segmentIds.some((id) => timingReviewIds.has(id))), [searchIndex, query, showTimingReview, timingReviewIds]);
-  const hits = useMemo(() => similarMode && exactHits.length === 0
+  const speakerFilteredExactHits = useMemo(() => effectiveSpeakerFilter === null ? exactHits : exactHits.filter((hit) => hit.segmentIds.some((id) => segmentSpeakers.get(id) === effectiveSpeakerFilter)), [effectiveSpeakerFilter, exactHits, segmentSpeakers]);
+  const hits = useMemo(() => similarMode && speakerFilteredExactHits.length === 0
     ? searchSimilarTranscript(searchIndex, query).filter((hit) => !showTimingReview || hit.segmentIds.some((id) => timingReviewIds.has(id)))
-    : exactHits, [similarMode, exactHits, searchIndex, query, showTimingReview, timingReviewIds]);
+    : exactHits, [similarMode, speakerFilteredExactHits, exactHits, searchIndex, query, showTimingReview, timingReviewIds]);
+  const speakerFilteredHits = useMemo(() => effectiveSpeakerFilter === null ? hits : hits.filter((hit) => hit.segmentIds.some((id) => segmentSpeakers.get(id) === effectiveSpeakerFilter)), [effectiveSpeakerFilter, hits, segmentSpeakers]);
   const visualHits = useMemo(() => searchVisualEvidence(visualNotes, query), [visualNotes, query]);
-  const results = useMemo(() => evidenceResults(hits, visualHits, transcript.durationSec, source), [hits, visualHits, transcript.durationSec, source]);
+  const results = useMemo(() => evidenceResults(speakerFilteredHits, visualHits, transcript.durationSec, source), [speakerFilteredHits, visualHits, transcript.durationSec, source]);
   const result = results[Math.max(0, Math.min(activeHit, results.length - 1))];
   const hit = result?.kind === "transcript" ? result.hit : undefined;
   const context = useMemo(() => result ? evidenceContext(result, transcript.segments, transcript.durationSec) : null, [result, transcript]);
@@ -62,8 +79,8 @@ export function TranscriptPanel({ transcript, visualNotes, onSeek, onAudition, o
   };
   const visibleSegments = useMemo(() => {
     const matched = query.trim() ? new Set(results.flatMap((r) => r.kind === "transcript" ? r.hit.segmentIds : [])) : null;
-    return transcript.segments.filter((s) => (!showTimingReview || timingReviewIds.has(s.id)) && (!matched || matched.has(s.id)));
-  }, [transcript.segments, showTimingReview, timingReviewIds, query, results]);
+    return transcript.segments.filter((s) => (!showTimingReview || timingReviewIds.has(s.id)) && (effectiveSpeakerFilter === null || s.speaker === effectiveSpeakerFilter) && (!matched || matched.has(s.id)));
+  }, [transcript.segments, showTimingReview, timingReviewIds, query, results, effectiveSpeakerFilter]);
 
   const commitSegEdit = (segId: number, value: string): void => {
     setEditingSeg(null);
@@ -132,10 +149,15 @@ export function TranscriptPanel({ transcript, visualNotes, onSeek, onAudition, o
       </div>
       {query.trim() && <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line/60 px-3 py-2 text-xs" role="group" aria-label={t("searchSource")}>
         {(["all", "transcript", "visual"] as const).map((value) => <button type="button" key={value} aria-pressed={source === value} onClick={() => { setSource(value); setSimilarMode(false); setActiveHit(-1); }} className={`rounded-md border px-2 py-1 transition-colors ${source === value ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:text-fg"}`}>{t(`searchSource_${value}`)}</button>)}
-        {source !== "visual" && exactHits.length === 0 && canSearchSimilarTranscript(query) && (
+        {source !== "visual" && speakerFilteredExactHits.length === 0 && canSearchSimilarTranscript(query) && (
           <button type="button" aria-pressed={similarMode} title={t("searchSimilarHint")} onClick={() => { setSimilarMode((value) => !value); setActiveHit(-1); }} className={`rounded-md border px-2 py-1 transition-colors ${similarMode ? "border-amber-400/60 bg-amber-400/10 text-amber-300" : "border-line text-mut hover:text-fg"}`}>{t("searchSimilar")}</button>
         )}
         <span className="text-mut">{t("searchKeyboardHint")}</span>
+      </div>}
+      {speakers.length >= 2 && <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-line/60 px-3 py-2 text-xs" role="group" aria-label={t("speakerFilter")}>
+        <span className="mr-1 text-mut">{t("speakerFilter")}</span>
+        <button type="button" aria-pressed={effectiveSpeakerFilter === null} onClick={() => { setSpeakerFilter(null); setActiveHit(-1); }} className={`rounded-md border px-2 py-1 font-semibold transition-colors ${effectiveSpeakerFilter === null ? "border-ember/60 bg-ember/10 text-fg" : "border-line text-mut hover:text-fg"}`}>{t("speakerAll")}</button>
+        {speakers.map((id) => <button type="button" key={id} aria-pressed={effectiveSpeakerFilter === id} title={t("speakerFilterHint", { n: id + 1 })} onClick={() => { setSpeakerFilter((current) => current === id ? null : id); setActiveHit(-1); }} className={`rounded-md border px-2 py-1 font-bold transition-colors ${SPEAKER_COLORS[id % SPEAKER_COLORS.length]} ${effectiveSpeakerFilter === id ? "bg-ember/10" : "opacity-70 hover:opacity-100"}`}>S{id + 1}</button>)}
       </div>}
       {result && context && <div className="shrink-0 border-b border-line/60 bg-panel-2/40 px-3 py-2 text-xs" aria-label={t("searchCurrent")}>
         <div className="flex flex-wrap items-center gap-2 text-mut">
