@@ -24,8 +24,8 @@ jobs:
       matrix:
         include:
           - os: macos-latest # arm64 dmg
-            args: --mac dmg
-          - os: windows-latest # nsis installer + portable zip (绿色版)
+            args: --mac dmg --arm64
+          - os: windows-latest # nsis installer + portable zip
             args: --win
           - os: ubuntu-latest # experimental AppImage (issue #7)
             args: --linux
@@ -54,8 +54,12 @@ jobs:
       - name: Package installers
         run: pnpm exec electron-builder ${{ matrix.args }} --publish never
         env:
-          # unsigned builds for now — signing is a paid-cert decision
+          # Keep certificate discovery off; mac.identity explicitly selects ad-hoc signing.
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Verify macOS app signature
+        if: runner.os == 'macOS'
+        run: bash tools/verify-macos-app.sh dist/mac-arm64/HotClip.app
 
       - uses: actions/upload-artifact@v7
         with:

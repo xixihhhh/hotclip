@@ -30,6 +30,9 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
 mac:
+  identity: "-"
+  hardenedRuntime: false
+  notarize: false
   target:
     - dmg
   artifactName: HotClip-${version}-mac-${arch}.${ext}

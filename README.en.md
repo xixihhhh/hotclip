@@ -98,7 +98,7 @@ Cuts, jump cuts, audiograms, compilations and web-caption renders write into a p
 | macOS (Apple Silicon) | `HotClip-x.y.z-mac-arm64.dmg` | Drag into Applications |
 | Linux (experimental) | `HotClip-x.y.z-linux-x64.AppImage` | `chmod +x` then run; add `--no-sandbox` if it fails to launch with a sandbox error |
 
-> ⚠️ Builds are currently unsigned: on Windows SmartScreen choose "More info → Run anyway"; on macOS right-click → Open on first launch (or allow it under System Settings → Privacy & Security). Code signing is on the roadmap.
+> ⚠️ Windows builds are unsigned: on SmartScreen choose "More info → Run anyway". macOS builds use ad-hoc signatures from v0.32.1 and are not Apple-notarized; allow the first launch under System Settings → Privacy & Security. For “app is damaged”, see the [macOS installation guide](docs/macos-install.md).
 >
 > No Python, no Docker, no command line, no account — a real desktop app you double-click.
 

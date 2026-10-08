@@ -102,7 +102,7 @@
 | macOS(Apple 芯片) | `HotClip-x.y.z-mac-arm64.dmg` | 拖进「应用程序」 |
 | Linux(实验性) | `HotClip-x.y.z-linux-x64.AppImage` | `chmod +x` 后运行;启动报 sandbox 错误加 `--no-sandbox` |
 
-> ⚠️ 当前版本未做代码签名:Windows SmartScreen 提示时点「更多信息 → 仍要运行」;macOS 首次打开用右键 → 打开(或到「系统设置 → 隐私与安全性」允许)。代码签名已在规划中。
+> ⚠️ Windows builds are unsigned: on SmartScreen choose "More info → Run anyway". macOS builds use ad-hoc signatures from v0.32.1 and are not Apple-notarized; allow the first launch under System Settings → Privacy & Security. For “app is damaged”, see the [macOS installation guide](docs/macos-install.md).
 >
 > 不用 Python、不用 Docker、不用命令行——下载安装包双击即开。
 
