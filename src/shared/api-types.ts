@@ -177,7 +177,14 @@ export interface LlmConfig {
 }
 
 /** 切片时长档:不同平台/账号定位的节奏(短=快节奏竖屏,长=B站/播客金句段)。 */
-export type ClipLength = "short" | "standard" | "long";
+export type ClipLength = "short" | "standard" | "long" | "extended";
+
+/** Shared selection settings for desktop, CLI, MCP and unattended tasks. */
+export interface DetectionOptions {
+  clipLength?: ClipLength;
+  maxClips?: number;
+  genre?: { id?: string; custom?: string };
+}
 
 /** 用户点题(v0.13):自然语言告诉 AI 本场重点找什么/明确不要什么。 */
 export interface DetectBrief {
@@ -766,6 +773,8 @@ export interface AutomationTask {
   status: AutomationTaskStatus;
   stage: AutomationTaskStage;
   attempts: number;
+  /** Snapshot retained when retrying, even after desktop preferences change. */
+  detection?: DetectionOptions;
   clips?: number;
   outDir?: string;
   error?: string;
@@ -884,7 +893,8 @@ export interface HotClipApi {
     /** 用户点题:重点找什么/明确排除什么(自然语言,注入选段判据)。 */
     brief?: DetectBrief | null,
     /** 全场画面扫描:视觉端点已配置时按 ~30s 一帧扫完整场,画面时刻线进选段证据(费时/云端计费,默认关)。 */
-    scan?: boolean
+    scan?: boolean,
+    maxClips?: number
   ) => Promise<DetectHighlightsResult>;
   /** Cut the selected highlights into mp4 files; resolves with the file list. */
   exportClips: (filePath: string, clips: HighlightCandidate[], options?: ExportOptions) => Promise<ExportedClip[]>;
@@ -946,7 +956,7 @@ export interface HotClipApi {
   /** 在系统文件管理器里打开一个目录。 */
   openFolder: (path: string) => void;
   /** 开始监听文件夹:新录播写完落稳后自动全托管切片。 */
-  watchStart: (dir: string, llm: LlmConfig, outDir?: string) => Promise<void>;
+  watchStart: (dir: string, llm: LlmConfig, outDir?: string, detection?: DetectionOptions) => Promise<void>;
   watchStop: () => Promise<void>;
   watchStatus: () => Promise<{ running: boolean; dir: string | null }>;
   /** Durable unattended-processing queue and history (newest first). */
@@ -966,7 +976,8 @@ export interface HotClipApi {
     llm: LlmConfig,
     outDir?: string,
     port?: number,
-    token?: string
+    token?: string,
+    detection?: DetectionOptions
   ) => Promise<{ port: number; dir: string }>;
   webhookStop: () => Promise<void>;
   webhookStatus: () => Promise<{ running: boolean; port: number | null; dir: string | null }>;

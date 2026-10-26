@@ -1,5 +1,41 @@
 import { describe, it, expect } from "vitest";
 import { parseCliArgs } from "../index";
+import { GENRE_PRESETS, GENRE_CUSTOM_MAX_CHARS } from "../../core/genre";
+
+describe("unattended selection controls", () => {
+  it("accepts every preset on both detection commands and keeps default inputs unchanged", () => {
+    for (const command of ["clip", "highlights"]) {
+      expect(parseCliArgs([command, "source.mp4"]).genre).toBeUndefined();
+      for (const genre of GENRE_PRESETS) {
+        expect(parseCliArgs([command, "--genre", genre.id, "source.mp4"]).genre?.id).toBe(genre.id);
+      }
+    }
+  });
+
+  it("validates genres, missing values and unsupported commands before processing", () => {
+    for (const tail of [[], ["--json"], ["typo"]]) {
+      expect(() => parseCliArgs(["clip", "source.mp4", "--genre", ...tail])).toThrow(/auto.*shopping.*game/);
+    }
+    expect(() => parseCliArgs(["clip", "source.mp4", "--genre-custom", "--json"])).toThrow(/文本/);
+    expect(() => parseCliArgs(["transcribe", "source.mp4", "--genre", "game"])).toThrow(/仅用于/);
+  });
+
+  it("keeps custom criteria independent of option order and bounds their length", () => {
+    for (const flags of [["--genre", "game", "--genre-custom", " 只选翻盘 "], ["--genre-custom", " 只选翻盘 ", "--genre", "game"]]) {
+      expect(parseCliArgs(["clip", "source.mp4", ...flags]).genre).toEqual({ id: "game", custom: "只选翻盘" });
+    }
+    expect(parseCliArgs(["clip", "source.mp4", "--genre-custom", " "]).genre).toEqual({ id: "auto", custom: undefined });
+    expect(parseCliArgs(["clip", "source.mp4", "--genre-custom", "字".repeat(2000)]).genre?.custom).toHaveLength(GENRE_CUSTOM_MAX_CHARS);
+  });
+
+  it("accepts the 1–2 minute preset with ten clips and rejects invalid lengths", () => {
+    expect(parseCliArgs(["clip", "source.mp4", "--clip-length", "extended", "--max-clips", "10"]))
+      .toMatchObject({ clipLength: "extended", maxClips: 10 });
+    for (const value of ["", "120", "--json", "toString"]) {
+      expect(() => parseCliArgs(["highlights", "source.mp4", "--clip-length", value])).toThrow(/short.*extended/);
+    }
+  });
+});
 
 describe("parseCliArgs (CLI 参数解析)", () => {
   it("accepts an explicit subtitle track for all transcript-consuming commands", () => {

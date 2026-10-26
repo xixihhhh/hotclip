@@ -9,6 +9,8 @@
  */
 
 import { describeSubtitleImportError } from "../shared/subtitle-import";
+import { GENRE_PRESETS } from "../core/genre";
+import { CLIP_LENGTH_RANGES } from "../shared/detection-options";
 
 /** MCP 协议版本(2024-11-05 基线,客户端普遍兼容)。 */
 export const MCP_PROTOCOL_VERSION = "2024-11-05";
@@ -29,6 +31,12 @@ export interface McpToolDef {
 /** 工具执行注入点:返回给 Agent 的文本(抛错→isError 响应)。 */
 export type ToolExecutor = (name: string, args: Record<string, unknown>) => Promise<string>;
 
+const selectionProperties = {
+  genre: { type: "string", enum: GENRE_PRESETS.map((g) => g.id), description: "直播品类,默认 auto;同时用于检测证据与导出跳剪节奏" },
+  genreCustom: { type: "string", description: "自定义爆点判据;非空时覆盖内置判据,最多 1200 字" },
+  clipLength: { type: "string", enum: Object.keys(CLIP_LENGTH_RANGES), description: "目标时长:short 10-30s / standard 8-40s / long 40-90s / extended 60-120s;默认 standard" },
+};
+
 export const MCP_TOOLS: McpToolDef[] = [
   {
     name: "clip_video",
@@ -43,6 +51,7 @@ export const MCP_TOOLS: McpToolDef[] = [
         restart: { type: "boolean", description: "重新转写，不复用本次素材的当前引擎分段进度；默认自动续跑。" },
         subtitlePath: { type: "string", description: "可选:与当前素材对齐的 UTF-8 SRT/WebVTT 单轨原文字幕绝对路径(最大 5 MB、无重叠)。跳过 ASR,保留原句时间;句内字词时间为估算,需复核。" },
         maxClips: { type: "number", description: "最多导出几条(1-12,默认 6)" },
+        ...selectionProperties,
         vertical: { type: "boolean", description: "竖屏 9:16 输出(默认 true)" },
         captions: { type: "boolean", description: "烧录动态字幕(默认 true)" },
         autoEnhance: { type: "boolean", description: "本地测量最终保留画面并克制修正明显偏暗/灰/过饱和素材(默认 false;不下载模型)" },
@@ -66,6 +75,7 @@ export const MCP_TOOLS: McpToolDef[] = [
         restart: { type: "boolean", description: "重新转写，不复用本次素材的当前引擎分段进度；默认自动续跑。" },
         subtitlePath: { type: "string", description: "可选:与当前素材对齐的 UTF-8 SRT/WebVTT 单轨原文字幕绝对路径(最大 5 MB、无重叠)。跳过 ASR,保留原句时间;句内字词时间为估算,需复核。" },
         maxClips: { type: "number", description: "最多几条候选(1-12,默认 6)" },
+        ...selectionProperties,
         referencePath: { type: "string", description: "对标爆款视频的本地路径(可选):实测其节奏画像,候选向对标节奏靠拢;分析失败按无参考继续" },
       },
       required: ["videoPath"],

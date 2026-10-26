@@ -28,7 +28,8 @@ import { adjustCandidateBoundary } from "../../../../shared/boundary";
 import { clipDurationSec, isStitched } from "../../../../shared/pieces";
 import { summarizeTimingQuality, wordsForClip } from "../../../../shared/transcript-quality";
 import { SectionLabel, Segmented, SwitchRow } from "../ui";
-import type { ClipLength, HighlightCandidate, Transcript } from "../../../../shared/api-types";
+import { DetectionLimits } from "../DetectionLimits";
+import type { HighlightCandidate, Transcript } from "../../../../shared/api-types";
 
 function formatClock(totalSeconds: number): string {
   const s = Math.floor(totalSeconds);
@@ -360,22 +361,6 @@ function ParamsTab({ onRedetect }: { onRedetect: () => void }): React.JSX.Elemen
         )}
       </div>
 
-      <div className="flex items-center justify-between gap-2">
-        <SectionLabel>{t("paramLength")}</SectionLabel>
-        <Segmented<ClipLength>
-          value={prefs.clipLength}
-          options={[
-            { value: "short", label: t("lengthShortSeg"), title: th("lengthHint") },
-            { value: "standard", label: t("lengthStandardSeg") },
-            { value: "long", label: t("lengthLongSeg") },
-          ]}
-          onChange={(v) => {
-            setPref({ clipLength: v });
-            dirty();
-          }}
-        />
-      </div>
-
       <div className="flex flex-col gap-1.5">
         <SectionLabel>{t("paramProducts")}</SectionLabel>
         <input
@@ -492,7 +477,8 @@ export function Inspector({
   onOpenReview: (id: number) => void;
 }): React.JSX.Element {
   const t = useT("workbench");
-  const { candidates, focusedId, paramsDirty } = useSession();
+  const { candidates, focusedId, paramsDirty, detecting, markParamsDirty } = useSession();
+  const { prefs, setPref } = useRenderPrefs();
   const [tab, setTab] = useState<"detail" | "params">("detail");
   const focused = candidates?.find((c) => c.id === focusedId) ?? null;
   // 同批排名:按分数从高到低,聚焦候选排第几(手动 0 分不参与)
@@ -501,6 +487,14 @@ export function Inspector({
 
   return (
     <div className="flex w-[300px] shrink-0 flex-col border-l border-line/70 bg-panel/40">
+      <div className="shrink-0 border-b border-line/60 p-3.5">
+        <DetectionLimits clipLength={prefs.clipLength} maxClips={prefs.maxClips}
+          disabled={detecting} onChange={(value) => { setPref(value); markParamsDirty(true); }} />
+        {paramsDirty && <button type="button" disabled={detecting} onClick={onRedetect}
+          className="btn-flame mt-2 w-full rounded-lg px-2 py-1.5 text-[12px] font-bold text-white disabled:opacity-40">
+          {t("redetect")}
+        </button>}
+      </div>
       <div className="flex shrink-0 border-b border-line/60">
         {(
           [

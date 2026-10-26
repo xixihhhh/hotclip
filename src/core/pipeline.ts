@@ -1,7 +1,9 @@
 import { QwenLocalEngine } from "./transcribe/qwen-local";
 import { ParaformerEngine } from "./transcribe/paraformer";
 import { FireRedEngine } from "./transcribe/firered";
-import type { SpeechRunOptions } from "../shared/api-types";
+import type { SpeechRunOptions, DetectionOptions } from "../shared/api-types";
+import { parseGenre } from "./genre";
+import { isClipLength, normalizeMaxClips } from "../shared/detection-options";
 /**
  * 自动切片公共管线(无 UI 依赖):转写(带缓存)→ 信号采集 → LLM 找爆点 →
  * 导出推荐切片。MCP Server 与录播监听(watch 文件夹)共用同一条路径,
@@ -29,7 +31,7 @@ import { probeMedia } from "./probe";
 import { planColorRender } from "./color";
 import type { AnalysisVideoOptions } from "./analysis-video";
 
-export interface AutoClipConfig {
+export interface AutoClipConfig extends DetectionOptions {
   modelsRoot: string;
   cacheDir: string;
   /** Explicit UTF-8 SRT/WebVTT transcript for this source; bypasses ASR/cache. */
@@ -46,7 +48,6 @@ export interface AutoClipConfig {
   fontsDir?: string;
   /** 热词词表(转写后自动应用;字幕/找爆点/文案全用修正后文本)。 */
   glossary?: GlossaryEntry[];
-  maxClips?: number;
   vertical?: boolean;
   captions?: boolean;
   /** Opt-in local signalstats-based picture correction; neutral footage is untouched. */
@@ -137,8 +138,9 @@ export async function analyzeReferenceVideo(
 export async function detectForPipeline(
   videoPath: string,
   transcript: Transcript,
-  cfg: Pick<AutoClipConfig, "modelsRoot" | "evidenceCacheDir" | "llm" | "maxClips" | "reference" | "reviewMemory" | "performanceMemory" | "signal">
+  cfg: Pick<AutoClipConfig, "modelsRoot" | "evidenceCacheDir" | "llm" | "maxClips" | "clipLength" | "genre" | "reference" | "reviewMemory" | "performanceMemory" | "signal">
 ): Promise<HighlightCandidate[]> {
+  const selection = validateDetectionOptions(cfg);
   if (transcript.segments.length === 0) throw new Error("转写结果为空(可能是无人声素材)");
   const media = await probeMedia(videoPath).catch(() => null);
   const analysis: AnalysisVideoOptions = media?.hasVideo
@@ -188,15 +190,32 @@ export async function detectForPipeline(
       : guided;
   const outcome = await detectHighlights(
     transcript, cfg.llm, cfg.signal, merged,
-    undefined, undefined, undefined, cfg.reference, cfg.reviewMemory,
-    undefined, undefined, cfg.performanceMemory
+    undefined, selection.clipLength, undefined, cfg.reference, cfg.reviewMemory,
+    selection.genre, undefined, cfg.performanceMemory, cfg.maxClips
   );
-  const max = Math.max(1, Math.min(12, Math.round(cfg.maxClips ?? 6)));
-  return outcome.candidates.slice(0, max);
+  return outcome.candidates.slice(0, selection.maxClips);
+}
+
+/** Validate before ASR/model work; also used by recording IPC entry points. */
+export function validateDetectionOptions(value: unknown = {}): DetectionOptions & { maxClips: number } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid detection options");
+  const options = value as DetectionOptions;
+  if (options.clipLength !== undefined && !isClipLength(options.clipLength)) {
+    throw new Error("clipLength: short | standard | long | extended");
+  }
+  if (options.genre !== undefined && (!options.genre || typeof options.genre !== "object" || Array.isArray(options.genre))) throw new Error("genre must be an object");
+  if (options.genre?.id !== undefined && typeof options.genre.id !== "string") throw new Error("genre.id must be a string");
+  if (options.genre?.custom !== undefined && typeof options.genre.custom !== "string") throw new Error("genre.custom must be a string");
+  return {
+    clipLength: options.clipLength,
+    maxClips: normalizeMaxClips(options.maxClips),
+    genre: parseGenre(options.genre?.id, options.genre?.custom),
+  };
 }
 
 /** 全托管一条龙:转写 → 找爆点 → 导出推荐条(竖屏/字幕/跳剪/响度默认全开)。 */
 export async function autoClip(videoPath: string, cfg: AutoClipConfig): Promise<AutoClipResult> {
+  const selection = validateDetectionOptions(cfg);
   cfg.signal?.throwIfAborted();
   cfg.onStage?.("transcribing");
   const transcript = await transcribeCached(videoPath, cfg.modelsRoot, cfg.cacheDir, cfg.glossary, cfg.signal, cfg.subtitlePath, cfg.asr);
@@ -255,6 +274,7 @@ export async function autoClip(videoPath: string, cfg: AutoClipConfig): Promise<
       fontsDir: cfg.fontsDir,
       renderCacheDir: cfg.renderCacheDir,
       evidenceCacheDir: cfg.evidenceCacheDir,
+      genreId: selection.genre?.id,
     },
     undefined,
     cfg.signal

@@ -379,6 +379,14 @@ export function genrePreset(id: string | undefined): GenrePreset {
   return GENRE_PRESETS.find((g) => g.id === id) ?? GENRE_PRESETS[0];
 }
 
+/** Explicit unattended inputs must not silently fall back to another genre. */
+export function parseGenre(id?: string, custom?: string): { id: GenreId; custom?: string } | undefined {
+  if (id === undefined && custom === undefined) return undefined;
+  const preset = GENRE_PRESETS.find((g) => g.id === (id ?? "auto"));
+  if (!preset) throw new Error(`--genre / genre: ${GENRE_PRESETS.map((g) => g.id).join(" | ")}`);
+  return { id: preset.id, custom: custom?.trim().slice(0, GENRE_CUSTOM_MAX_CHARS) || undefined };
+}
+
 /**
  * 旧 id → 新 id。分区表按平台真实分类重排过,已经存在本机的偏好不能因此失效。
  * 命中不了就交给 genrePreset 回落 auto。

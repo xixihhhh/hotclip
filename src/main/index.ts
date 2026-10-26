@@ -79,7 +79,9 @@ import { clearEvidenceIndex, evidenceSourceId, fingerprintEvidenceSource } from 
 import { collectSignalsEvidence, collectVisionEvidence } from "@core/media-evidence";
 import { applyGlossaryToTranscript } from "../shared/glossary";
 import { tagTranscribeError } from "../shared/transcribe-errors";
-import { autoClip, analyzeReferenceVideo } from "@core/pipeline";
+import { autoClip, analyzeReferenceVideo, validateDetectionOptions } from "@core/pipeline";
+import { isClipLength, normalizeMaxClips } from "../shared/detection-options";
+import type { DetectionOptions } from "../shared/api-types";
 import type { ReferenceProfile } from "@core/reference";
 import { exportClips, sanitizeFilename } from "@core/export";
 import { ExportTaskRunner, optionalExportStep } from "@core/export-task";
@@ -770,7 +772,7 @@ ipcMain.handle("hotclip:transcribe", async (event, filePath: unknown, engineId: 
 
 ipcMain.handle(
   "hotclip:detect-highlights",
-  async (_event, transcript: unknown, llm: unknown, filePath: unknown, diarize: unknown, prefilter: unknown, vision: unknown, length: unknown, products: unknown, referencePath: unknown, genre: unknown, brief: unknown, scan: unknown) => {
+  async (_event, transcript: unknown, llm: unknown, filePath: unknown, diarize: unknown, prefilter: unknown, vision: unknown, length: unknown, products: unknown, referencePath: unknown, genre: unknown, brief: unknown, scan: unknown, maxClips: unknown) => {
     let t = transcript as Transcript;
     const config = llm as LlmConfig;
     if (!t || !Array.isArray(t.segments)) throw new Error("detect-highlights requires a transcript");
@@ -914,8 +916,7 @@ ipcMain.handle(
       }
     }
     // 时长档:非法值回落标准档
-    const clipLength =
-      length === "short" || length === "long" || length === "standard" ? length : undefined;
+    const clipLength = isClipLength(length) ? length : undefined;
     // 商品词:白名单清洗(字符串数组,单词 ≤30 字,最多 20 个)
     const productWords = Array.isArray(products)
       ? products.filter((p): p is string => typeof p === "string" && p.trim().length > 0).map((p) => p.trim().slice(0, 30)).slice(0, 20)
@@ -941,7 +942,7 @@ ipcMain.handle(
             exclude: typeof b.exclude === "string" ? b.exclude.trim() : undefined,
           }
         : undefined;
-    const outcome = await detectHighlights(t, config, undefined, signals, localFilter, clipLength, productWords, reference, reviewMemory, genreArg, briefArg, performanceMemory);
+    const outcome = await detectHighlights(t, config, undefined, signals, localFilter, clipLength, productWords, reference, reviewMemory, genreArg, briefArg, performanceMemory, normalizeMaxClips(maxClips));
     // 候选段画面复核(v0.12):每条候选一张接触表让 VL 看画面,画面分回流
     // 排序、看点进 reason。fail-open:失败/超时沿用原候选。
     let candidates = outcome.candidates;
@@ -1269,8 +1270,10 @@ function makeRecordingProcessor(
   config: LlmConfig,
   outDir: unknown,
   emit: (e: Omit<WatchEvent, "at">) => void,
-  trigger: AutomationTask["trigger"]
+  trigger: AutomationTask["trigger"],
+  detection?: DetectionOptions
 ): (f: WatchedFile, existingId?: string) => Promise<void> {
+  const selection = validateDetectionOptions(detection);
   const fontsDir = app.isPackaged
     ? join(process.resourcesPath, "fonts")
     : join(app.getAppPath(), "resources", "fonts");
@@ -1307,6 +1310,7 @@ function makeRecordingProcessor(
         status: "queued",
         stage: "queued",
         attempts: 1,
+        detection: selection,
         createdAt: now,
         updatedAt: now,
       }));
@@ -1333,6 +1337,7 @@ function makeRecordingProcessor(
       }
       try {
         const outcome = await autoClip(f.path, {
+          ...selection,
           outDir:
             typeof outDir === "string" && outDir.trim()
               ? join(outDir.trim(), sanitizeFilename(basename(f.path, extname(f.path)), "video"))
@@ -1386,8 +1391,9 @@ function makeRecordingProcessor(
   };
 }
 
-ipcMain.handle("hotclip:watch-start", async (event, dir: unknown, llm: unknown, outDir: unknown) => {
+ipcMain.handle("hotclip:watch-start", async (event, dir: unknown, llm: unknown, outDir: unknown, detection: unknown) => {
   if (typeof dir !== "string" || !dir.trim()) throw new Error("watch requires a directory");
+  const selection = validateDetectionOptions(detection);
   const config = llm as LlmConfig;
   if (!config?.baseUrl || !config?.model) throw new Error("请先在设置里配置 LLM(baseUrl/model)");
   await webhookHandle?.close();
@@ -1401,7 +1407,7 @@ ipcMain.handle("hotclip:watch-start", async (event, dir: unknown, llm: unknown, 
   const emit = (e: Omit<WatchEvent, "at">): void => {
     if (!event.sender.isDestroyed()) event.sender.send("hotclip:watch-event", { ...e, at: Date.now() });
   };
-  const process = makeRecordingProcessor(seen, config, outDir, emit, "folder");
+  const process = makeRecordingProcessor(seen, config, outDir, emit, "folder", selection);
   const watcher = new FolderWatcher({
     listDir: async () => {
       const names = await readdir(dir);
@@ -1460,7 +1466,7 @@ ipcMain.handle("hotclip:automation-task-retry", async (event, id: unknown, llm: 
   const emit = (e: Omit<WatchEvent, "at">): void => {
     if (!event.sender.isDestroyed()) event.sender.send("hotclip:watch-event", { ...e, at: Date.now() });
   };
-  const process = makeRecordingProcessor(seen, config, outDir, emit, "retry");
+  const process = makeRecordingProcessor(seen, config, outDir, emit, "retry", task.detection);
   void process({ path: task.sourcePath, size: info.size, mtimeMs: info.mtimeMs }, id).catch(() => {});
   return true;
 });
@@ -1469,8 +1475,9 @@ ipcMain.handle("hotclip:automation-task-retry", async (event, id: unknown, llm: 
 // 只绑回环;回调给的路径必须落在用户指定的录播目录内(外部输入不可信)。
 ipcMain.handle(
   "hotclip:webhook-start",
-  async (event, dir: unknown, llm: unknown, outDir: unknown, port: unknown, token: unknown) => {
+  async (event, dir: unknown, llm: unknown, outDir: unknown, port: unknown, token: unknown, detection: unknown) => {
     if (typeof dir !== "string" || !dir.trim()) throw new Error("webhook 需要指定录播目录");
+    const selection = validateDetectionOptions(detection);
     const config = llm as LlmConfig;
     if (!config?.baseUrl || !config?.model) throw new Error("请先在设置里配置 LLM(baseUrl/model)");
     if (watchTimer) clearInterval(watchTimer);
@@ -1486,7 +1493,7 @@ ipcMain.handle(
     const emit = (e: Omit<WatchEvent, "at">): void => {
       if (!event.sender.isDestroyed()) event.sender.send("hotclip:watch-event", { ...e, at: Date.now() });
     };
-    const process = makeRecordingProcessor(seen, config, outDir, emit, "webhook");
+    const process = makeRecordingProcessor(seen, config, outDir, emit, "webhook", selection);
     const wanted = Number(port);
     webhookHandle = await startWebhookServer({
       port: Number.isFinite(wanted) && wanted > 0 && wanted < 65536 ? Math.round(wanted) : 17650,
