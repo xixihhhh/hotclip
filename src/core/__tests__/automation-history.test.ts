@@ -12,6 +12,15 @@ const task = (id: string, status: AutomationTask["status"] = "completed"): Autom
 });
 
 describe("automation history", () => {
+  it("retains selection settings across interruption and disk reload for retries", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "hotclip-tasks-"));
+    const detection = { clipLength: "extended" as const, maxClips: 10, genre: { id: "game", custom: "只选翻盘" } };
+    await saveAutomationTasks(dir, [{ ...task("1", "running"), detection }, task("2")]);
+    const loaded = await loadAutomationTasks(dir, true);
+    expect(loaded.find((t) => t.id === "1")).toMatchObject({ status: "interrupted", detection });
+    expect(loaded.find((t) => t.id === "2")?.detection).toBeUndefined();
+    await clearAutomationTasks(dir);
+  });
   it("roundtrips newest first and removes duplicate ids", async () => {
     const dir = await mkdtemp(join(tmpdir(), "hotclip-tasks-"));
     await saveAutomationTasks(dir, [task("1"), task("2"), task("1")]);

@@ -9,6 +9,20 @@ import {
 
 const noop: ToolExecutor = async () => "ok";
 
+it("exposes and validates genre and duration on both detection tools", async () => {
+  for (const name of ["clip_video", "detect_highlights"]) {
+    const tool = MCP_TOOLS.find((t) => t.name === name)!;
+    const args = { videoPath: "/v.mp4", genre: "game", genreCustom: "只选翻盘", clipLength: "extended", maxClips: 10 };
+    expect(validateToolArgs(tool, args)).toBeNull();
+    expect(validateToolArgs(tool, { ...args, genre: "typo" })).toMatch(/auto.*game/);
+    expect(validateToolArgs(tool, { ...args, genreCustom: 1 })).toContain("string");
+    expect(validateToolArgs(tool, { ...args, clipLength: "120" })).toContain("extended");
+    const result = await handleMcpMessage({ id: 1, method: "tools/call", params: { name, arguments: args } },
+      async (_name, received) => JSON.stringify(received), "test");
+    expect(result).toMatchObject({ result: { content: [{ text: JSON.stringify(args) }] } });
+  }
+});
+
 it("exposes and validates the same optional subtitle path on all three tools", async () => {
   for (const tool of MCP_TOOLS) {
     expect((tool.inputSchema.properties as Record<string, unknown>).subtitlePath).toMatchObject({ type: "string" });

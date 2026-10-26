@@ -18,6 +18,8 @@ import { userDataDir, modelsRoot, cacheDir, renderCacheDir, evidenceCacheDir, ll
 import { loadReviewMemory } from "../core/review-memory";
 import { loadPerformanceMemory } from "../core/performance-memory";
 import { handleMcpMessage, type JsonRpcMessage } from "./protocol";
+import { parseGenre } from "../core/genre";
+import { isClipLength } from "../shared/detection-options";
 
 function fmtClock(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -73,6 +75,8 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
       evidenceCacheDir: evidenceCacheDir(),
       llm,
       maxClips: clampClips(args.maxClips),
+      genre: parseGenre(typeof args.genre === "string" ? args.genre : undefined, typeof args.genreCustom === "string" ? args.genreCustom : undefined),
+      clipLength: isClipLength(args.clipLength) ? args.clipLength : undefined,
       reference: ref.profile,
       // 桌面审阅台积累的本机偏好,MCP 检测同享(只读)
       reviewMemory: await loadReviewMemory(userDataDir()),
@@ -109,6 +113,8 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
       evidenceCacheDir: evidenceCacheDir(),
       llm,
       maxClips: clampClips(args.maxClips),
+      genre: parseGenre(typeof args.genre === "string" ? args.genre : undefined, typeof args.genreCustom === "string" ? args.genreCustom : undefined),
+      clipLength: isClipLength(args.clipLength) ? args.clipLength : undefined,
       vertical: args.vertical !== false,
       captions: args.captions !== false,
       autoEnhance: args.autoEnhance === true,

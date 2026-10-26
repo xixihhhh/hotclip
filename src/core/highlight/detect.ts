@@ -29,6 +29,7 @@ import { clipDurationSec, MAX_PIECES, type ClipPiece } from "../../shared/pieces
 import { isLocalBaseUrl } from "../../shared/llm-preflight";
 import { LLM_LOCAL_TIMEOUT_MS, LLM_REMOTE_TIMEOUT_MS, LlmTransportError, llmRequestBudget, modelErrorDetail, requestLlmText, retryAfterMs, type LlmRequestBudget } from "../llm-transport";
 import { genrePreset, normalizeGenreId, type EvidenceClass } from "../genre";
+import { normalizeMaxClips } from "../../shared/detection-options";
 import {
   fuseMoments,
   shouldRunMoments,
@@ -44,6 +45,8 @@ import {
  */
 export function clipLengthBounds(length: ClipLength = "standard"): { lo: number; hi: number } {
   const r = CLIP_LENGTH_RANGES[length];
+  // The explicit 1–2 minute preset keeps the selected source duration in range.
+  if (length === "extended") return { lo: r.minSec, hi: r.maxSec };
   return { lo: Math.max(4, Math.round(r.minSec * 0.5)), hi: Math.round(r.maxSec * 1.5) };
 }
 
@@ -583,10 +586,12 @@ export async function detectHighlights(
   /** 用户点题:重点找什么/明确排除什么(v0.13,见 prompt.briefSection)。 */
   brief?: { focus?: string; exclude?: string },
   /** 用户导入的真实发布表现(本地记忆,只注入高/低表现摘要)。 */
-  performanceMemory?: PerformanceEntry[]
+  performanceMemory?: PerformanceEntry[],
+  maxClips?: number
 ): Promise<DetectOutcome> {
   if (transcript.segments.length === 0) return { candidates: [] };
   const zh = isChineseTranscript(transcript);
+  const limit = normalizeMaxClips(maxClips);
 
   // 主播口令打点(v0.13):「这段剪下来/clip that」是主播自证的爆点,纯文本
   // 扫描零成本,所有调用方(桌面/watch/MCP)自动获得。滞后标记的用法交给
@@ -616,7 +621,7 @@ export async function detectHighlights(
   const selections = await chatCompleteJson(
     llm,
     highlightSystemPrompt(promptTranscript, length, products ?? [], reference, reviewMemory, genre, brief, performanceMemory),
-    buildHighlightPrompt(promptTranscript, 6, signals),
+    buildHighlightPrompt(promptTranscript, limit, signals),
     parseSelections,
     signal
   );
@@ -661,13 +666,15 @@ export async function detectHighlights(
   const ratio = speechRatio(transcript);
   let momentKept: HighlightCandidate[] = [];
   if (signals && shouldRunMoments(evidence, ratio, textKept.length)) {
-    momentKept = await detectMoments(transcript, llm, signals, evidence, length, signal).catch((e) => {
+    momentKept = await detectMoments(transcript, llm, signals, evidence, length, signal, maxClips).catch((e) => {
       if (signal?.aborted) throw e;
       return [];
     });
   }
 
-  const kept = dropOverlaps([...textKept, ...momentKept]);
+  const kept = dropOverlaps([...textKept, ...momentKept].filter((candidate) =>
+    length !== "extended" || (clipDurationSec(candidate) >= lo && clipDurationSec(candidate) <= hi)
+  ));
   if (kept.length === 0) return { candidates: kept, funnel };
 
   // Stage 2: adversarial review — a stricter pass judges each clip's hook,
@@ -682,8 +689,14 @@ export async function detectHighlights(
   // 质量门规则层收尾:无论复评走不走/成不成,确定性硬伤检查都要跑
   // (只降档到 review、不 drop,fail-open 见 gate.ts)。
   // 实用密度在复评之后加分(复评会覆写 score),在归一化之前(要影响排序)。
+  const publishable = (c: HighlightCandidate): number => Number(c.recommended && (c.gate === undefined || c.gate === "publish"));
   const finish = (list: HighlightCandidate[]): HighlightCandidate[] =>
-    applyRuleGate(transcript, normalizeScores(applyUtilitySignal(list, zh)), zh);
+    applyRuleGate(transcript, normalizeScores(applyUtilitySignal(list, zh)), zh)
+      // Choose the strongest usable candidates before restoring timeline order.
+      // Taking the earliest N first can discard every publishable late highlight.
+      .sort((a, b) => publishable(b) - publishable(a) || b.score - a.score)
+      .slice(0, limit)
+      .sort((a, b) => a.startSec - b.startSec);
   const reviewable = kept.filter((c) => c.boundary !== "signal");
   if (reviewable.length === 0) return { candidates: finish(kept), funnel };
   try {
@@ -734,7 +747,8 @@ export async function detectMoments(
   signals: MediaSignals,
   evidence: EvidenceClass,
   length: ClipLength | undefined,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  maxClips?: number
 ): Promise<HighlightCandidate[]> {
   const range = CLIP_LENGTH_RANGES[length ?? "standard"];
   // words 类走到这里说明是"说话太少/文本通道没产出"触发的,按 reaction 权重兜底
@@ -761,7 +775,7 @@ export async function detectMoments(
         evidence: m.evidence,
         text: textInRange(transcript, m.startSec, m.endSec),
       })),
-      4,
+      maxClips === undefined ? 4 : normalizeMaxClips(maxClips),
       zh
     ),
     parseMomentPicks,

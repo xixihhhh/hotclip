@@ -21,6 +21,9 @@ import { runDoctor } from "../core/doctor";
 import { ensureModel } from "../core/models";
 import { loadReviewMemory } from "../core/review-memory";
 import { importPerformanceFile, loadPerformanceMemory, performanceReport } from "../core/performance-memory";
+import { parseGenre } from "../core/genre";
+import { isClipLength } from "../shared/detection-options";
+import type { DetectionOptions } from "../shared/api-types";
 
 const USAGE = `HotClip CLI —— 本地 AI 切片,素材不出电脑
 
@@ -45,6 +48,12 @@ const USAGE = `HotClip CLI —— 本地 AI 切片,素材不出电脑
       --auto-enhance: 本地测量保留画面,仅在明显偏暗/灰/过饱和时克制校正(默认关闭)
       --denoise: 基础固定滤镜降噪;--smart-denoise: 48kHz 本地模型增强人声,失败回退基础档
 
+  highlights / clip 共用选项:
+      --genre <id>           直播品类;默认 auto,非法值会列出全部可选项
+      --genre-custom <文本> 自定义判据,非空时覆盖所选品类的内置判据
+      --clip-length <档位>   short=10-30s / standard=8-40s / long=40-90s / extended=60-120s
+      --max-clips N          最多 1-12 条(默认 6);不足时保留实际候选,不凑数
+
   pnpm cli doctor [--download]
       环境自检:ffmpeg/模型安装状态/LLM 端点/磁盘/缓存,给出修复建议
       --download: 把默认管线要用的模型现在预下载好(断点续传,断网重跑接着下)
@@ -62,10 +71,9 @@ const USAGE = `HotClip CLI —— 本地 AI 切片,素材不出电脑
   HOTCLIP_LLM_API_KEY    云端接口的 key(本地 Ollama 可省)`;
 
 /** 极简参数解析:布尔开关 + 带值选项,首个非选项参数是视频路径。 */
-export interface CliArgs {
+export interface CliArgs extends DetectionOptions {
   command: string;
   videoPath: string;
-  maxClips?: number;
   vertical: boolean;
   captions: boolean;
   autoEnhance: boolean;
@@ -98,6 +106,18 @@ export function parseCliArgs(argv: string[]): CliArgs {
     else if (a === "--json") args.json = true;
     else if (a === "--download") args.download = true;
     else if (a === "--restart-transcription") args.restart = true;
+    else if (a === "--genre") {
+      const value = rest[++i];
+      args.genre = parseGenre(!value || value.startsWith("--") ? "" : value, args.genre?.custom);
+    } else if (a === "--genre-custom") {
+      const value = rest[++i];
+      if (value === undefined || value.startsWith("--")) throw new Error("--genre-custom 需要一段判据文本");
+      args.genre = parseGenre(args.genre?.id, value);
+    } else if (a === "--clip-length") {
+      const value = rest[++i];
+      if (!isClipLength(value)) throw new Error("--clip-length: short | standard | long | extended (60-120s)");
+      args.clipLength = value;
+    }
     else if (a === "--engine") {
       const value = rest[++i];
       if (!["sensevoice", "paraformer", "fireredasr", "qwen3"].includes(value)) throw new Error("--engine: sensevoice | paraformer | fireredasr | qwen3");
@@ -132,6 +152,7 @@ export function parseCliArgs(argv: string[]): CliArgs {
   // doctor/feedback-report 不吃路径;feedback 的位置参数是指标文件路径
   if (!args.videoPath && !["doctor", "feedback-report"].includes(args.command)) throw new Error(`缺少视频路径或数据文件路径\n\n${USAGE}`);
   if (args.subtitlePath && !["transcribe", "highlights", "clip"].includes(args.command)) throw new Error("--subtitles 仅用于 transcribe / highlights / clip");
+  if ((args.genre || args.clipLength) && !["highlights", "clip"].includes(args.command)) throw new Error("--genre / --genre-custom / --clip-length 仅用于 highlights / clip");
   return args;
 }
 
@@ -234,6 +255,8 @@ async function main(signal?: AbortSignal): Promise<void> {
       evidenceCacheDir: evidenceCacheDir(),
       llm,
       maxClips: args.maxClips,
+      genre: args.genre,
+      clipLength: args.clipLength,
       reference,
       // 桌面审阅台积累的本机偏好,CLI 检测同享(只读)
       reviewMemory: await loadReviewMemory(userDataDir()),
@@ -279,6 +302,8 @@ async function main(signal?: AbortSignal): Promise<void> {
       evidenceCacheDir: evidenceCacheDir(),
       llm,
       maxClips: args.maxClips,
+      genre: args.genre,
+      clipLength: args.clipLength,
       vertical: args.vertical,
       captions: args.captions,
       autoEnhance: args.autoEnhance,

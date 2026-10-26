@@ -6,12 +6,16 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LuFolderSearch, LuX, LuPlay, LuSquare, LuCircleCheck, LuCircleAlert, LuLoaderCircle, LuCopy, LuCheck, LuRotateCcw, LuTrash2 } from "react-icons/lu";
-import { useT } from "../i18n/store";
+import { useT, useLocaleStore } from "../i18n/store";
 import { getApi, isElectron } from "../api/provider";
 import { useLlmStore, isLlmReady } from "../stores/llm-store";
 import { useRenderPrefs } from "../stores/render-prefs-store";
 import type { AutomationTask, WatchEvent } from "../../../shared/api-types";
 import { ModalShell } from "./ui";
+import { DetectionLimits } from "./DetectionLimits";
+import { GENRE_PRESETS, GENRE_CUSTOM_MAX_CHARS, normalizeGenreId } from "../../../core/genre";
+import { detectionOptionsFromPrefs } from "../../../shared/detection-options";
+import { useSession } from "../stores/session-store";
 
 function fmtTime(at: number): string {
   const d = new Date(at);
@@ -20,6 +24,14 @@ function fmtTime(at: number): string {
 
 export function WatchFolderModal({ onClose }: { onClose: () => void }): React.JSX.Element {
   const t = useT("watch");
+  const tw = useT("workbench");
+  const th = useT("highlights");
+  const { locale } = useLocaleStore();
+  const { prefs, setPref } = useRenderPrefs();
+  const changeSelection = (value: Parameters<typeof setPref>[0]): void => {
+    setPref(value);
+    useSession.getState().markParamsDirty(true);
+  };
   const { config } = useLlmStore();
   const llmOk = !isElectron() || isLlmReady(config);
   const [dir, setDir] = useState<string | null>(null);
@@ -83,12 +95,14 @@ export function WatchFolderModal({ onClose }: { onClose: () => void }): React.JS
     }
     if (!dir) return;
     // 用户自选过导出位置的话,无人值守的成片也落那儿(与向导出片一处设置)
-    const outDir = useRenderPrefs.getState().prefs.outDir || undefined;
+    const prefs = useRenderPrefs.getState().prefs;
+    const outDir = prefs.outDir || undefined;
+    const selection = detectionOptionsFromPrefs(prefs);
     if (mode === "webhook") {
-      const started = await api.webhookStart(dir, config, outDir, Number(port) || 17650, token.trim() || undefined);
+      const started = await api.webhookStart(dir, config, outDir, Number(port) || 17650, token.trim() || undefined, selection);
       setPort(String(started.port));
     } else {
-      await api.watchStart(dir, config, outDir);
+      await api.watchStart(dir, config, outDir, selection);
     }
     setRunning(true);
   };
@@ -128,7 +142,7 @@ export function WatchFolderModal({ onClose }: { onClose: () => void }): React.JS
   return (
     <ModalShell onClose={onClose}>
       <section
-        className="card w-full max-w-2xl rounded-2xl p-6"
+        className="card max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl p-6"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label={t("title")}
@@ -187,6 +201,24 @@ export function WatchFolderModal({ onClose }: { onClose: () => void }): React.JS
           </button>
         </div>
         {!llmOk && <p className="mt-2 text-[11.5px] text-red-400">{t("needLlm")}</p>}
+
+        <div className="mt-3 space-y-2 rounded-xl border border-line p-3">
+          <label className="flex items-center justify-between gap-2 text-[12px]">
+            <span className="text-mut">{tw("paramGenre")}</span>
+            <select aria-label={tw("paramGenre")} disabled={running} value={normalizeGenreId(prefs.genreId)}
+              onChange={(e) => changeSelection({ genreId: e.target.value })}
+              className="min-w-0 rounded-lg border border-line bg-panel-2 px-2 py-1.5 disabled:opacity-50">
+              {GENRE_PRESETS.map((g) => <option key={g.id} value={g.id}>{locale === "zh" ? g.labelZh : g.labelEn}</option>)}
+            </select>
+          </label>
+          {(prefs.genreId === "custom" || prefs.genreCustom.trim()) && <textarea
+            aria-label={th("genreCustomHint")} placeholder={th("genrePlaceholder")} disabled={running}
+            maxLength={GENRE_CUSTOM_MAX_CHARS} value={prefs.genreCustom}
+            onChange={(e) => changeSelection({ genreCustom: e.target.value })}
+            className="w-full rounded-lg border border-line bg-panel-2 p-2 text-[12px] disabled:opacity-50" />}
+          <DetectionLimits clipLength={prefs.clipLength} maxClips={prefs.maxClips} disabled={running} onChange={changeSelection} />
+          <p className="text-[10.5px] leading-relaxed text-mut">{tw("watchSelectionHint")}</p>
+        </div>
 
         {mode === "webhook" && (
           <div className="mt-3 space-y-2.5 rounded-xl border border-line bg-panel-2 p-3">

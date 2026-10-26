@@ -275,12 +275,15 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 - **Long-video performance layer**: repeat exports with the same source, cuts and base effects restore an exact local base render; H.264 video is copied only for a continuous cut whose start is proven keyframe-aligned and whose pixels are unchanged. Audio still receives fades, denoise, loudness and sensitive-term muting, and any failure transparently falls back to accurate encoding. LRU storage is capped at 1GB and can be inspected or cleared separately
 - **Recording watch folder (24/7)**: point it at your OBS/recorder output dir; recordings are transcribed, mined and exported the moment they finish writing ("two rounds of stable size" — half-written files are never cut)
 - **Desktop health diagnostics**: one click checks FFmpeg/FFprobe, downloader integrity, eleven model roles, LLM connectivity/auth/routing, disk, transcript cache, render cache and the multimodal evidence index; missing core models can be prepared with cancel/resume, while the 1GB render cache and 64MB evidence index clear independently
+- **Selection controls**: the workbench keeps clip length and maximum count (1–12, default 6) visible above the inspector tabs. Select **1–2 min (60–120s)** for longer product demonstrations, then explicitly re-detect. Count is a ceiling; quality checks can produce fewer clips. Duration refers to source selections; removing pauses may shorten the exported video.
+- **Shared genre settings**: CLI `clip` / `highlights` accept `--genre <id>` (default `auto`) and `--genre-custom "criteria"` (overrides preset criteria). Invalid ids list supported presets. `--clip-length` accepts `short` (10–30s), `standard` (8–40s), `long` (40–90s), and `extended` (60–120s). MCP `clip_video` / `detect_highlights` expose `genre`, `genreCustom`, `clipLength`, and `maxClips`. Folder/webhook watchers snapshot these settings when started, and retries preserve the task’s settings.
 - **Headless CLI** (same outputs as the desktop app):
 
   ```bash
   pnpm cli transcribe vod.mp4                  # on-device word-level ASR (cached)
   pnpm cli highlights vod.mp4 --json           # AI highlight candidates, review first
   pnpm cli clip vod.mp4 --max-clips 10 --smart-denoise  # managed export + smart 48k dialogue
+  pnpm cli clip vod.mp4 --genre shopping --clip-length extended --max-clips 10  # 1–2 minute selections
   pnpm cli feedback bilibili.csv               # import real view/engagement outcomes
   pnpm cli feedback-report                     # inspect learned winners/laggards
   pnpm cli doctor --download                   # environment self-check + model pre-fetch

@@ -38,8 +38,8 @@ const api: HotClipApi = {
     ipcRenderer.on("hotclip:transcribe-progress", listener);
     return () => ipcRenderer.removeListener("hotclip:transcribe-progress", listener);
   },
-  detectHighlights: (transcript, llm, filePath, diarize, prefilter, vision, length, products, referencePath, genre, brief, scan) =>
-    ipcRenderer.invoke("hotclip:detect-highlights", transcript, llm, filePath, diarize, prefilter, vision, length, products, referencePath, genre, brief, scan),
+  detectHighlights: (transcript, llm, filePath, diarize, prefilter, vision, length, products, referencePath, genre, brief, scan, maxClips) =>
+    ipcRenderer.invoke("hotclip:detect-highlights", transcript, llm, filePath, diarize, prefilter, vision, length, products, referencePath, genre, brief, scan, maxClips),
   exportClips: (filePath, clips, options) => ipcRenderer.invoke("hotclip:export-clips", filePath, clips, options),
   onExportProgress: (cb) => {
     const listener = (_e: IpcRendererEvent, p: ExportProgressEvent): void => cb(p);
@@ -83,15 +83,15 @@ const api: HotClipApi = {
   modelsInfo: () => ipcRenderer.invoke("hotclip:models-info"),
   moveModelsDir: (dir) => ipcRenderer.invoke("hotclip:models-move", dir),
   openFolder: (path) => ipcRenderer.send("hotclip:open-folder", path),
-  watchStart: (dir, llm, outDir) => ipcRenderer.invoke("hotclip:watch-start", dir, llm, outDir),
+  watchStart: (dir, llm, outDir, detection) => ipcRenderer.invoke("hotclip:watch-start", dir, llm, outDir, detection),
   watchStop: () => ipcRenderer.invoke("hotclip:watch-stop"),
   watchStatus: () => ipcRenderer.invoke("hotclip:watch-status"),
   automationTasksGet: () => ipcRenderer.invoke("hotclip:automation-tasks-get"),
   automationTaskRetry: (id, llm, outDir) => ipcRenderer.invoke("hotclip:automation-task-retry", id, llm, outDir),
   automationTaskCancel: (id) => ipcRenderer.invoke("hotclip:automation-task-cancel", id),
   automationTasksClear: () => ipcRenderer.invoke("hotclip:automation-tasks-clear"),
-  webhookStart: (dir, llm, outDir, port, token) =>
-    ipcRenderer.invoke("hotclip:webhook-start", dir, llm, outDir, port, token),
+  webhookStart: (dir, llm, outDir, port, token, detection) =>
+    ipcRenderer.invoke("hotclip:webhook-start", dir, llm, outDir, port, token, detection),
   webhookStop: () => ipcRenderer.invoke("hotclip:webhook-stop"),
   webhookStatus: () => ipcRenderer.invoke("hotclip:webhook-status"),
   onWatchEvent: (cb) => {
