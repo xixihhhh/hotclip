@@ -335,6 +335,8 @@ LLM 只负责«挑哪段»并引用原文,时间戳由逐字转写**反向对齐
 
 ## 最近更新
 
+**[v0.33.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.33.0)**（2026-10-26）：时长与数量控件常驻，新增 1–2 分钟档和最多 1–12 条候选；CLI / MCP / 录播监听接通直播品类、自定义判据与导出节奏，重试保留任务设置。
+
 **[v0.32.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.32.0)**：修复 Windows 审阅台多个视频共用媒体流导致的永久黑屏和拖动失败；预览失败显示真实错误码；模型清单拉取后提供明确可点击的下拉选择，同时保留手动输入。
 
 **[v0.31.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.31.0)**：多人对谈逐句稿工作台支持按说话人筛选，搜索、相近台词和选段预览同步收窄范围。
