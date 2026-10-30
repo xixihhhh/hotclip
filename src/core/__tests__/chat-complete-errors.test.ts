@@ -3,7 +3,7 @@
  * 用户,只看到 fetch failed 是不知道下一步的——本地/云端要给不同的指引。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { chatComplete, MAX_TOKENS, RETRY_MAX_TOKENS, thinkingParams } from "../highlight/detect";
+import { chatComplete, MAX_TOKENS, RETRY_MAX_TOKENS, temperatureForModel, thinkingParams } from "../highlight/detect";
 
 const OLLAMA = { baseUrl: "http://localhost:11434/v1", apiKey: "", model: "qwen3:8b" };
 const CLOUD = { baseUrl: "https://api.atlascloud.ai/v1", apiKey: "sk-x", model: "qwen/qwen3.5-flash" };
@@ -133,6 +133,13 @@ describe("chatComplete 空响应处理(issue #8)", () => {
     expect(thinkingParams("qwen3.5-flash")).toEqual({ enable_thinking: false });
     expect(thinkingParams("Qwen/QwQ-32B")).toEqual({ enable_thinking: false });
     expect(thinkingParams("deepseek-v4-flash")).toEqual({});
+  });
+
+  it("Kimi models use the only accepted temperature while other models keep their defaults", () => {
+    expect(temperatureForModel("moonshotai/kimi-k2.5")).toBe(1);
+    expect(temperatureForModel("kimi-3.0", 0.2)).toBe(1);
+    expect(temperatureForModel("qwen3.5-flash")).toBe(0.6);
+    expect(temperatureForModel("qwen3-vl", 0.2)).toBe(0.2);
   });
 
   it("思考模型烧完预算(finish=length) → 换大预算重试并成功", async () => {
