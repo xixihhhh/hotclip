@@ -16,6 +16,7 @@ import type { AnalysisVideoOptions } from "../analysis-video";
 import type { MediaSignals, TimeRange } from "../signals";
 import { stripThinkBlocks } from "./prefilter";
 import { llmRequestBudget, modelErrorDetail, requestLlmText } from "../llm-transport";
+import { temperatureForModel } from "./detect";
 
 /** 全片抽帧上限——接触表批量研判后一次调用看九帧,27 帧=3 次调用。 */
 export const VISION_MAX_FRAMES = 27;
@@ -290,7 +291,7 @@ export const visionChatComplete: VisionChatFn = async (llm, system, userText, im
           ],
         },
       ],
-      temperature: 0.2,
+      temperature: temperatureForModel(llm.model, 0.2),
       max_tokens: 300,
     }),
   }, { signal, budget: llmRequestBudget(VISION_CALL_TIMEOUT_MS, 1) });

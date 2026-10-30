@@ -72,6 +72,11 @@ export function thinkingParams(model: string): Record<string, unknown> {
     : {};
 }
 
+/** Kimi 3 models only accept the default temperature value of 1. */
+export function temperatureForModel(model: string, fallback = 0.6): number {
+  return /(?:^|[/:-])kimi(?:[/:-]|$)/i.test(model) ? 1 : fallback;
+}
+
 /** 单次调用的输出预算。注意:思考型模型的推理 token 也计入这份预算。 */
 export const MAX_TOKENS = 4000;
 /** 空正文重试的放大预算:思考型模型把常规预算全烧在推理上时,给足空间再试一次。 */
@@ -110,7 +115,7 @@ async function chatAttempt(
           { role: "system", content: system },
           { role: "user", content: user },
         ],
-        temperature: 0.6,
+        temperature: temperatureForModel(llm.model),
         max_tokens: maxTokens,
         ...extraParams(llm.baseUrl),
         ...(includeThinkingParam ? thinkingParams(llm.model) : {}),
