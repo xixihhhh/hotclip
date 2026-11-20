@@ -39,7 +39,7 @@ export function ExportBar({
     recut: prefs.jumpCut || prefs.cleanFillers || prefs.cutRetakes,
     reopened: prefs.coldOpen || prefs.flashForward,
     titleOverlay: prefs.titleCard || prefs.openingHook,
-    autoZoom: prefs.autoZoom && prefs.vertical,
+    autoZoom: prefs.autoZoom && prefs.vertical && !prefs.gameCameraEnabled,
     bgm: Boolean(prefs.bgmPath),
     sfx: prefs.sfx,
     stitched: false,

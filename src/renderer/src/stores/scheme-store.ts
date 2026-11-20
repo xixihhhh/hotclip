@@ -9,11 +9,13 @@
 import { create } from "zustand";
 import { RENDER_PREF_DEFAULTS, type RenderPrefs } from "./render-prefs-store";
 
+import { DEFAULT_CAMERA, normalizeCameraRegion } from "../../../shared/game-camera";
+
 const STORAGE_KEY = "hotclip-schemes";
 
 /** 进方案快照的字段(白名单;新增开关默认不进,想进来显式加)。 */
 export const SCHEME_KEYS = [
-  "vertical", "alsoLandscape", "trimUi", "titleCard", "autoZoom", "autoEnhance",
+  "vertical", "gameCameraEnabled", "cameraRegion", "alsoLandscape", "trimUi", "titleCard", "autoZoom", "autoEnhance",
   "jumpCut", "keepBreath", "cleanFillers", "cutRetakes", "preciseAlign",
   "openingHook", "coldOpen", "flashForward",
   "normalizeLoudness", "denoise", "denoiseMode", "muteSensitive", "sfx",
@@ -36,7 +38,7 @@ export interface Scheme {
 function snap(overrides: Partial<SchemeSnapshot> = {}): SchemeSnapshot {
   const out = {} as Record<string, unknown>;
   for (const k of SCHEME_KEYS) out[k] = RENDER_PREF_DEFAULTS[k];
-  return { ...(out as SchemeSnapshot), ...overrides };
+  return { ...(out as SchemeSnapshot), ...overrides, cameraRegion: normalizeCameraRegion(overrides.cameraRegion) ?? DEFAULT_CAMERA };
 }
 
 /** 内置三档:出厂默认 / 带货矩阵全开 / 只要最快出素材。 */

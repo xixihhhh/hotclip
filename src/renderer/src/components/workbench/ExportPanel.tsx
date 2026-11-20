@@ -34,11 +34,13 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 }
 
 export function ExportPanel({
+  hasVideo,
   diarize,
   atlasReady,
   onClose,
   onOpenBrand,
 }: {
+  hasVideo: boolean;
   diarize: boolean;
   atlasReady: boolean;
   onClose: () => void;
@@ -54,6 +56,7 @@ export function ExportPanel({
   const [schemeName, setSchemeName] = useState("");
   const [bgmBusy, setBgmBusy] = useState(false);
 
+  const splitCamera = hasVideo && prefs.vertical && prefs.gameCameraEnabled;
   const schemes = [...BUILTIN_SCHEMES, ...userSchemes];
   const activeScheme = schemes.find((s) => matchesScheme(prefs, s));
 
@@ -135,13 +138,14 @@ export function ExportPanel({
               disabled={!prefs.vertical}
               onToggle={() => setPref({ alsoLandscape: !prefs.alsoLandscape })}
             />
-            <SwitchRow label={th("optTrimUi")} hint={th("optTrimUiHint")} on={prefs.trimUi} onToggle={() => setPref({ trimUi: !prefs.trimUi })} />
+            <SwitchRow label={t("gameCamera")} hint={t("gameCameraHint")} on={splitCamera} disabled={!hasVideo || !prefs.vertical} onToggle={() => setPref({ gameCameraEnabled: !prefs.gameCameraEnabled })} />
+            <SwitchRow label={th("optTrimUi")} hint={th("optTrimUiHint")} on={prefs.trimUi && !splitCamera} disabled={splitCamera} onToggle={() => setPref({ trimUi: !prefs.trimUi })} />
             <SwitchRow label={th("optTitleCard")} hint={th("optTitleCardHint")} on={prefs.titleCard} onToggle={() => setPref({ titleCard: !prefs.titleCard })} />
             <SwitchRow
               label={th("optAutoZoom")}
               hint={th("optAutoZoomHint")}
-              on={prefs.autoZoom && prefs.vertical}
-              disabled={!prefs.vertical}
+              on={prefs.autoZoom && prefs.vertical && !splitCamera}
+              disabled={!prefs.vertical || splitCamera}
               onToggle={() => setPref({ autoZoom: !prefs.autoZoom })}
             />
             <SwitchRow

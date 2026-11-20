@@ -9,6 +9,9 @@ import { LuPlay, LuPause, LuSkipBack, LuSkipForward } from "react-icons/lu";
 import { getApi } from "../../api/provider";
 import { useT } from "../../i18n/store";
 
+import { CAMERA_PANEL, CAMERA_WIDTH_MIN, cameraRect } from "../../../../shared/game-camera";
+import { useRenderPrefs } from "../../stores/render-prefs-store";
+
 export interface PreviewTransportCommand {
   id: number;
   action: "toggle" | "back5" | "forward5" | "audition";
@@ -27,6 +30,7 @@ function formatClock(totalSeconds: number): string {
 
 export function PreviewPane({
   filePath,
+  hasVideo,
   durationSec,
   seekSec,
   onTime,
@@ -36,6 +40,7 @@ export function PreviewPane({
   compact = false,
 }: {
   filePath: string | null;
+  hasVideo: boolean;
   durationSec: number;
   /** 外部请求跳播的时刻(时间轴/候选点击驱动;NaN = 无请求)。 */
   seekSec: number;
@@ -48,6 +53,10 @@ export function PreviewPane({
   const t = useT("workbench");
   const mainRef = useRef<HTMLVideoElement>(null);
   const auditionEnd = useRef<number | null>(null);
+  const { prefs, setPref } = useRenderPrefs();
+  const splitCamera = hasVideo && prefs.vertical && prefs.gameCameraEnabled;
+  const camera = prefs.cameraRegion;
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const cropRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
   const [now, setNow] = useState(0);
@@ -62,6 +71,39 @@ export function PreviewPane({
   // 而不是笼统的"此环境无法预览"——后者会让用户以为是环境/格式不支持。
   // 2 = MEDIA_ERR_NETWORK(流读取中断,协议层),4 = MEDIA_ERR_SRC_NOT_SUPPORTED。
   const [mainErrCode, setMainErrCode] = useState(0);
+
+  // Draw both panes from the same decoded frame to keep play, pause and seeks in sync.
+  useEffect(() => {
+    const video = mainRef.current;
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!splitCamera || !video || !canvas || !ctx) return;
+    const draw = (): void => {
+      const w = video.videoWidth;
+      const h = video.videoHeight;
+      if (!w || !h || video.readyState < 2) return;
+      const rect = cameraRect(camera, w, h);
+      const top = canvas.width * CAMERA_PANEL.height / CAMERA_PANEL.width;
+      const scale = Math.min(canvas.width / w, (canvas.height - top) / h);
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(video, rect.x, rect.y, rect.width, rect.height, 0, 0, canvas.width, top);
+      ctx.drawImage(video, (canvas.width - w * scale) / 2, top + (canvas.height - top - h * scale) / 2, w * scale, h * scale);
+    };
+    let frame = 0;
+    const next = (): void => {
+      draw();
+      frame = video.requestVideoFrameCallback(next);
+    };
+    next();
+    video.addEventListener("seeked", draw);
+    video.addEventListener("loadeddata", draw);
+    return () => {
+      video.cancelVideoFrameCallback(frame);
+      video.removeEventListener("seeked", draw);
+      video.removeEventListener("loadeddata", draw);
+    };
+  }, [camera, splitCamera, src, mainErrCode]);
 
   // 外部 seek 请求(时间轴点击/候选聚焦)
   useEffect(() => {
@@ -154,9 +196,11 @@ export function PreviewPane({
           </span>
         </div>
         {/* 竖屏 9:16 中心裁切:发光描边(主视觉海报的切片卡语言) */}
-        <div className="relative w-[133px] shrink-0 overflow-hidden rounded-xl border-[1.5px] border-ember/60 bg-black shadow-[0_0_22px_-6px_rgba(255,100,40,0.5)]">
-          {src ? (
-            <video ref={cropRef} src={cropSrc} muted className="h-full w-full object-cover" />
+        <div className={`relative shrink-0 overflow-hidden rounded-xl border-[1.5px] border-ember/60 bg-black shadow-[0_0_22px_-6px_rgba(255,100,40,0.5)] ${compact && splitCamera ? "w-[74px]" : "w-[133px]"}`}>
+          {src && splitCamera ? (
+            <canvas ref={canvasRef} width={270} height={480} aria-label={t("gameCamera")} className="h-full w-full object-contain" />
+          ) : src ? (
+            <video ref={cropRef} src={cropSrc} muted onLoadedMetadata={syncCrop} className="h-full w-full object-cover" />
           ) : (
             <div className="h-full bg-gradient-to-b from-panel-2 to-panel" />
           )}
@@ -165,6 +209,21 @@ export function PreviewPane({
           </span>
         </div>
       </div>
+      {hasVideo && prefs.vertical && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-mut">
+          <label className="inline-flex items-center gap-1.5">
+            <input type="checkbox" checked={prefs.gameCameraEnabled} onChange={(e) => setPref({ gameCameraEnabled: e.target.checked })} />
+            {t("gameCamera")}
+          </label>
+          {splitCamera && (["x", "y", "width"] as const).map((axis) => (
+            <label key={axis} className="inline-flex items-center gap-1">
+              {t(`camera_${axis}`)}
+              <input className="w-16 accent-[--color-ember]" type="range" min={axis === "width" ? CAMERA_WIDTH_MIN * 100 : 0} max={100}
+                value={Math.round(camera[axis] * 100)} onChange={(e) => setPref({ cameraRegion: { ...camera, [axis]: Number(e.target.value) / 100 } })} />
+            </label>
+          ))}
+        </div>
+      )}
       {/* 走带 */}
       <div className="flex items-center gap-2.5">
         <button

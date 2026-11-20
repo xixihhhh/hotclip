@@ -1108,6 +1108,7 @@ ipcMain.handle("hotclip:export-clips", async (event, filePath: unknown, clips: u
     outDir,
     {
       vertical: Boolean(opts.vertical),
+      gameCamera: opts.gameCamera,
       captionStyle: style,
       jumpCut,
       // 保留呼吸口(v0.14):跳剪的剪口留一口气;只在跳剪开着时有意义

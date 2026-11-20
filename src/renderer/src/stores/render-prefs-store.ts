@@ -9,10 +9,14 @@ import { validPlatformIds } from "../../../shared/platform-specs";
 import { isClipLength, normalizeMaxClips } from "../../../shared/detection-options";
 import { DEFAULT_SENSITIVE_WORDS, sanitizeSensitiveWords } from "../../../core/sensitive-words";
 
+import { DEFAULT_CAMERA, normalizeCameraRegion, type CameraRegion } from "../../../shared/game-camera";
+
 const STORAGE_KEY = "hotclip-render-prefs";
 
 export interface RenderPrefs {
   vertical: boolean;
+  gameCameraEnabled: boolean;
+  cameraRegion: CameraRegion;
   captionStyle: CaptionStyleChoice;
   jumpCut: boolean;
   /** 保留呼吸口:跳剪剪长停顿时每个剪口多留一口气,不无缝贴死。 */
@@ -88,6 +92,8 @@ export interface RenderPrefs {
 /** 与出厂默认一致:开箱即出竖屏卡拉OK跳剪片;花钱/额外文件的默认关。 */
 export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   vertical: true,
+  gameCameraEnabled: false,
+  cameraRegion: DEFAULT_CAMERA,
   captionStyle: "keyword",
   jumpCut: true,
   keepBreath: false, // 呼吸口改变跳剪节奏,默认保持历史紧凑感,由用户按素材开
@@ -153,6 +159,7 @@ function load(): RenderPrefs {
       out.packPlatforms = Array.isArray(out.packPlatforms)
         ? validPlatformIds(out.packPlatforms.filter((x): x is string => typeof x === "string"))
         : [...RENDER_PREF_DEFAULTS.packPlatforms];
+      out.cameraRegion = normalizeCameraRegion(out.cameraRegion) ?? DEFAULT_CAMERA;
       out.products = Array.isArray(out.products)
         ? out.products.filter((x): x is string => typeof x === "string" && x.trim().length > 0).slice(0, 20)
         : [];

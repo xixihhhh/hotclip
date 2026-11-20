@@ -492,6 +492,8 @@ export const QUALITY_CRF: Record<ExportQuality, number> = {
 
 /** Render options for the export step (UI toggles on the highlight list). */
 export interface ExportOptions {
+  /** Capture a manually positioned streamer camera above the full gameplay frame. */
+  gameCamera?: import("./game-camera").CameraRegion;
   /** Center-crop reframe to 9:16 vertical (1080×1920) — short-video ready. */
   vertical: boolean;
   /** Caption style to burn into the picture. */
