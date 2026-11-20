@@ -4,8 +4,9 @@
  * filter (libass). Everything here is a pure string builder — unit-testable
  * without ffmpeg; only the caller touches the filesystem.
  */
-import type { Transcript, TranscriptWord } from "../shared/api-types";
+import type { TitleStyle, Transcript, TranscriptWord } from "../shared/api-types";
 import { hexToAssColor, hexToAssInline, isValidHex } from "./brand";
+import { resolveTitleStyle } from "../shared/brand-style";
 
 export interface AssLayout {
   playResX: number;
@@ -393,7 +394,7 @@ export interface CaptionOptions extends CaptionReadabilityOptions {
   /** Timeline positions that must start a new line/chunk (jump-cut splices). */
   forcedBreaks?: number[];
   /** Burn the clip title into the top safe zone for the whole clip. */
-  titleCard?: { text: string; durationSec: number };
+  titleCard?: { text: string; durationSec: number; style?: TitleStyle };
   /**
    * Opening hook: the AI teaser (悬念句) burned big in the upper third for the
    * clip's first seconds — the 黄金3秒 text hook the teaser was written for.
@@ -435,7 +436,7 @@ export function transMarginV(layout: AssLayout): number {
   return Math.max(14, layout.marginV - Math.round(transFontSize(layout) * 1.7));
 }
 
-function assHeader(style: CaptionStyle, layout: AssLayout, fontName: string, highlightHex?: string): string[] {
+function assHeader(style: CaptionStyle, layout: AssLayout, fontName: string, highlightHex?: string, titleStyle?: TitleStyle): string[] {
   // 品牌高亮色覆盖默认火焰橙(卡拉OK点亮色 + 开场钩子文字色同源)
   const highlight = (highlightHex && hexToAssColor(highlightHex)) || EMBER_COLOR;
   // karaoke/hormozi: Primary = sung color, Secondary = not-yet-sung; others: plain white
@@ -455,6 +456,8 @@ function assHeader(style: CaptionStyle, layout: AssLayout, fontName: string, hig
   const shadow = style === "hormozi" ? 3 : style === "minimal" ? 1 : 0;
   const captionMarginV = style === "hormozi" ? Math.round(layout.playResY * 0.4) : layout.marginV;
   const titleSize = Math.round(layout.fontSize * 0.82);
+  const title = resolveTitleStyle(titleStyle, highlightHex);
+  const titleBorder = hexToAssColor(title.border, title.alpha);
   const hookSize = Math.round(layout.fontSize * 1.25);
   return [
     "[Script Info]",
@@ -467,8 +470,7 @@ function assHeader(style: CaptionStyle, layout: AssLayout, fontName: string, hig
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
     `Style: Caption,${fontName},${fontSize},${primary},${WHITE_COLOR},${OUTLINE_COLOR},&H7F000000,-1,0,0,0,100,100,0,0,1,${outline},${shadow},2,${layout.marginH},${layout.marginH},${captionMarginV},1`,
-    // title card: opaque-box style (BorderStyle=3) → soft dark plate behind text
-    `Style: Title,${fontName},${titleSize},${WHITE_COLOR},${WHITE_COLOR},&H73000000,&H73000000,-1,0,0,0,100,100,0,0,3,12,0,8,${layout.marginH},${layout.marginH},${titleMarginV(layout)},1`,
+    `Style: Title,${fontName},${titleSize},${hexToAssColor(title.text)},${WHITE_COLOR},${titleBorder},${titleBorder},-1,0,0,0,100,100,0,0,${title.box ? 3 : 1},${title.width},0,8,${layout.marginH},${layout.marginH},${titleMarginV(layout)},1`,
     // opening hook: ember text on a dark plate, big, upper-third (Alignment 8 + high MarginV)
     `Style: Hook,${fontName},${hookSize},${highlight},${WHITE_COLOR},&H73000000,&H73000000,-1,0,0,0,100,100,0,0,3,14,0,8,${layout.marginH},${layout.marginH},${hookMarginV(layout)},1`,
     // 双语译文轨:小号白字,主字幕块正下方(整句级,不参与卡拉OK)
@@ -748,7 +750,7 @@ export function buildCaptionAss(
     }
   }
 
-  return [...assHeader(style, layout, fontName, highlightHex), ...events, ""].join("\n");
+  return [...assHeader(style, layout, fontName, highlightHex, options.titleCard?.style), ...events, ""].join("\n");
 }
 
 /** Back-compat wrapper (karaoke style). */

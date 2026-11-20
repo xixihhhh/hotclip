@@ -83,6 +83,30 @@ describe("sanitizeBrand(IPC 边界消毒)", () => {
   });
 });
 
+describe("品牌顶部标题", () => {
+  const titleCard = { text: "标题", durationSec: 4 };
+
+  it("缺省使用历史底板样式；未知预设在 IPC 边界被忽略", () => {
+    const old = buildCaptionAss([], 0, VERTICAL_LAYOUT, "karaoke", { titleCard });
+    const classic = buildCaptionAss([], 0, VERTICAL_LAYOUT, "karaoke", { titleCard: { ...titleCard, style: "plate" } });
+    expect(classic).toBe(old);
+    expect(old).toContain("&H00FFFFFF,&H00FFFFFF,&H73000000,&H73000000,-1,0,0,0,100,100,0,0,3,12,0,8,");
+    expect(sanitizeBrand({ titleStyle: "future" })).toBeUndefined();
+  });
+
+  it.each([
+    ["outline", "#123456", "&H00FFFFFF", "&H00000000", "1,5"],
+    ["brandPlate", "#FFDD00", "&H00000000", "&H0000DDFF", "3,12"],
+    ["brandPlate", "#112233", "&H00FFFFFF", "&H00332211", "3,12"],
+  ] as const)("导出 %s 配 %s，保持位置与时长", (style, highlightHex, text, border, shape) => {
+    expect(sanitizeBrand({ titleStyle: style })).toEqual({ titleStyle: style });
+    const ass = buildCaptionAss([], 0, VERTICAL_LAYOUT, "karaoke", { titleCard: { ...titleCard, style }, highlightHex });
+    const line = ass.split("\n").find((l) => l.startsWith("Style: Title,"));
+    expect(line).toContain(`${text},&H00FFFFFF,${border},${border},-1,0,0,0,100,100,0,0,${shape},0,8,`);
+    expect(ass).toContain("Dialogue: 1,0:00:00.00,0:00:04.00,Title,,0,0,0,,标题");
+  });
+});
+
 describe("品牌色贯穿字幕构建", () => {
   const words = [
     { text: "你好", startSec: 0.2, endSec: 0.8 },

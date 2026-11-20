@@ -3,22 +3,14 @@
  * 参数消毒。UI 配一次,每条切片的 ASS 字幕/气泡字幕/水印全部复用。
  */
 import type { AssLayout } from "./subtitle";
-import { FONT_SCALE_CHOICES, type BrandStyle } from "../shared/api-types";
-
-/** 默认高亮色:火焰橙(与既有硬编码一致,未配置时输出不变)。 */
-export const DEFAULT_HIGHLIGHT_HEX = "#FF6E0D";
+import { FONT_SCALE_CHOICES, TITLE_STYLES, type BrandStyle } from "../shared/api-types";
+import { HEX_RE, isValidHex } from "../shared/brand-style";
+export { DEFAULT_HIGHLIGHT_HEX, isValidHex } from "../shared/brand-style";
 
 export { FONT_SCALE_CHOICES } from "../shared/api-types";
 
 /** 字幕位置三档 → 基准 marginV 的倍率(竖屏 560→420/560/700,横屏同比)。 */
 const POSITION_FACTOR = { low: 0.75, standard: 1, high: 1.25 } as const;
-
-const HEX_RE = /^#?([0-9a-fA-F]{6})$/;
-
-/** "#RRGGBB" 是否为合法颜色。 */
-export function isValidHex(hex: unknown): hex is string {
-  return typeof hex === "string" && HEX_RE.test(hex);
-}
 
 /**
  * "#RRGGBB" → ASS 样式表颜色 "&HAABBGGRR"(注意 BGR 序)。
@@ -89,6 +81,8 @@ export function sanitizeBrand(raw: unknown): BrandStyle | undefined {
   if (b.captionPosition === "low" || b.captionPosition === "standard" || b.captionPosition === "high") {
     out.captionPosition = b.captionPosition;
   }
+  const titleStyle = TITLE_STYLES.find((id) => id === b.titleStyle);
+  if (titleStyle) out.titleStyle = titleStyle;
   const wm = b.watermark as Record<string, unknown> | undefined;
   if (wm && typeof wm === "object" && typeof wm.path === "string" && wm.path.trim()) {
     const corner =

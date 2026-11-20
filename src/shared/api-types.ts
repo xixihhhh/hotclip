@@ -455,6 +455,9 @@ export interface BrandWatermark {
   opacity: number;
 }
 
+export const TITLE_STYLES = ["plate", "outline", "brandPlate"] as const;
+export type TitleStyle = (typeof TITLE_STYLES)[number];
+
 /**
  * 品牌样式预设:一次配置,每条切片复用——竞品把这个锁在付费墙后。
  * 全部可选;缺省字段走内置默认,输出与未配置时逐字节一致。
@@ -464,6 +467,8 @@ export interface BrandStyle {
   highlightColor?: string;
   /** 字号缩放(三档 0.68/1/1.18,自由数值也接受)。 */
   fontScale?: number;
+  /** Top title overlay; older presets use the translucent dark plate. */
+  titleStyle?: TitleStyle;
   /** 字幕高低位置(安全区内三档)。 */
   captionPosition?: "low" | "standard" | "high";
   /** logo 水印;不设则不烧。 */
