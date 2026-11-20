@@ -32,7 +32,8 @@ describe("parseProbeOutput", () => {
     expect(info.hasAudio).toBe(true);
     expect(info.width).toBe(1920);
     expect(info.height).toBe(1080);
-    expect(info.fps).toBeCloseTo(29.97, 2);
+    expect(info.fps).toBe(29.97);
+    expect(info.timelineFps).toBe(30000 / 1001);
     expect(info.videoCodec).toBe("h264");
     expect(info.videoStreamIndex).toBe(0);
     expect(info.audioCodec).toBe("aac");

@@ -17,8 +17,12 @@ export interface EdlClip {
 
 /** 秒 → SMPTE 非丢帧时间码 HH:MM:SS:FF。 */
 export function secToTimecode(sec: number, fps: number): string {
+  const rate = Number.isFinite(fps) && fps > 0 ? fps : 1;
+  return frameTimecode(Math.round(Math.max(0, sec) * rate), rate);
+}
+
+function frameTimecode(totalFrames: number, fps: number): string {
   const fpsInt = Math.max(1, Math.round(fps));
-  const totalFrames = Math.round(Math.max(0, sec) * fpsInt);
   const ff = totalFrames % fpsInt;
   const totalSec = Math.floor(totalFrames / fpsInt);
   const s = totalSec % 60;
@@ -33,26 +37,29 @@ export function secToTimecode(sec: number, fps: number): string {
  * 导入后就是"成片顺序"的时间线,每段都反链回源片对应位置。
  */
 export function buildEdl(opts: { title: string; sourceName: string; fps: number; clips: EdlClip[] }): string {
-  const { title, sourceName, fps, clips } = opts;
+  const { title, sourceName, clips } = opts;
+  const fps = Number.isFinite(opts.fps) && opts.fps > 0 ? opts.fps : 1;
   const lines: string[] = [`TITLE: ${title}`, "FCM: NON-DROP FRAME", ""];
   let event = 0;
-  let recordSec = 0;
+  let recordFrame = 0;
   for (const clip of clips) {
     for (const seg of clip.segments) {
-      const dur = seg.endSec - seg.startSec;
-      if (dur <= 0) continue;
+      const first = Math.max(0, Math.round(seg.startSec * fps));
+      const last = Math.round(seg.endSec * fps);
+      const frames = last - first;
+      if (!Number.isFinite(frames) || frames <= 0) continue;
       event += 1;
       const num = String(event).padStart(3, "0");
-      const srcIn = secToTimecode(seg.startSec, fps);
-      const srcOut = secToTimecode(seg.endSec, fps);
-      const recIn = secToTimecode(recordSec, fps);
-      const recOut = secToTimecode(recordSec + dur, fps);
+      const srcIn = frameTimecode(first, fps);
+      const srcOut = frameTimecode(last, fps);
+      const recIn = frameTimecode(recordFrame, fps);
+      const recOut = frameTimecode(recordFrame + frames, fps);
       // AX = 辅助卷号(现代软件按 FROM CLIP NAME 重链);B = 视频+音频一起切
       lines.push(`${num}  AX       B     C        ${srcIn} ${srcOut} ${recIn} ${recOut}`);
       lines.push(`* FROM CLIP NAME: ${sourceName}`);
       lines.push(`* COMMENT: ${clip.title}`);
       lines.push("");
-      recordSec += dur;
+      recordFrame += frames;
     }
   }
   return lines.join("\n");

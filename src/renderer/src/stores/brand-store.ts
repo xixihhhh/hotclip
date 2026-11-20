@@ -64,6 +64,7 @@ interface BrandState {
   addPreset: (name: string) => void;
   removePreset: (id: string) => void;
   renameActive: (name: string) => void;
+  activateSnapshot: (name: string, style: BrandStyle) => void;
 }
 
 let seq = 0;
@@ -110,6 +111,14 @@ export const useBrandStore = create<BrandState>((set, get) => ({
     const s = { presets, activeId };
     persist(s);
     set(s);
+  },
+  activateSnapshot: (name, style) => {
+    const presets = get().presets;
+    const same = presets.find((p) => JSON.stringify(p.style) === JSON.stringify(style));
+    const selected = same ?? { id: newId(), name, style };
+    const state = { activeId: selected.id, presets: same ? presets : [...presets, selected] };
+    persist(state);
+    set(state);
   },
   renameActive: (name) => {
     const { presets, activeId } = get();

@@ -21,6 +21,7 @@ import { buildPublishPacks, coverFilter, type PackSummary } from "./publish-pack
 import { buildSeriesPack, type SeriesPackSummary } from "./series-pack";
 import { buildSrt, srtLinesFromWords } from "./srt";
 import { buildEdl, type EdlClip } from "./edl";
+import { draftCuesFromAss, shiftDraftCues, trimDraftSegments, type DraftCue } from "./draft-cues";
 import { buildDraftContent, buildDraftMetaInfo } from "./jianying";
 import { generateAiCover, type CoverTier } from "./cover-ai";
 import { runAudiogram, audiogramSpec } from "./audiogram";
@@ -614,6 +615,7 @@ export async function exportClips(
     const piecesByClip = new Map<number, ClipPiece[]>();
     // 时间线导出:每条切片实际保留的源片区间(跳剪时一条多段)
     const edlClips: EdlClip[] = [];
+    const draftCues = new Map<EdlClip, DraftCue[]>();
     for (let i = 0; i < clips.length; i++) {
       let clip = clips[i];
       if (signal?.aborted) throw new Error("export cancelled");
@@ -815,6 +817,9 @@ export async function exportClips(
       const captionWords = plan ? plan.words : clip.words;
       const captionShift = plan ? 0 : clip.startSec;
 
+      let bodyCues: DraftCue[] = [];
+      let introCues: DraftCue[] = [];
+      let introSegment: { startSec: number; endSec: number } | undefined;
       const clipDuration = plan ? plan.durationSec : clip.endSec - clip.startSec;
       let subtitlePath: string | undefined;
       let subtitleHash: string | undefined;
@@ -860,6 +865,7 @@ export async function exportClips(
             speakerLabels: options.speakerLabels,
           }
         );
+        if (options.jianyingDraft) bodyCues = draftCuesFromAss(ass);
         subtitleHash = hashRenderInput(ass);
         await writeFile(subtitlePath, ass, "utf8");
       }
@@ -1119,6 +1125,13 @@ export async function exportClips(
             videoStreamIndex: info.videoStreamIndex,
             audioStreamIndex: info.audioStreamIndex,
           });
+          if (options.jianyingDraft) {
+            bodyCues.push(...payload.lines.map((line): DraftCue => ({
+              role: "Caption", startSec: line.startMs / 1000, endSec: line.endMs / 1000,
+              text: line.words.map((word) => word.text).join(""),
+              look: { color: "#FFFFFF", y: 1 - 2 * payload.baselineFrac, relativeSize: payload.fontSize / payload.height },
+            })));
+          }
           await rm(cutTarget, { force: true });
         } catch (e) {
           if (signal?.aborted) {
@@ -1186,6 +1199,7 @@ export async function exportClips(
                 aigcBadge: options.aigcLabel ? { durationSec: miniDur } : undefined,
                 speakerLabels: options.speakerLabels,
               });
+              if (options.jianyingDraft) introCues = draftCuesFromAss(miniAss);
               await writeFile(miniAssPath, miniAss, "utf8");
             }
             // 人脸跟随:迷你片自己算一版裁窗(keyframes 已相对段起点),失败回退中心裁
@@ -1216,7 +1230,10 @@ export async function exportClips(
             await rm(miniPath, { force: true }).catch(() => {});
             return false;
           });
-          if (ok) coldOpenSec = miniDur;
+          if (ok) {
+            coldOpenSec = miniDur;
+            introSegment = { startSec: coPlan.startSec, endSec: coPlan.endSec };
+          }
         }
       }
 
@@ -1477,10 +1494,17 @@ export async function exportClips(
       }
       // 变体与原版切点完全相同,EDL 里只记原版(重复三遍是噪声)
       if (!clip.variantOf) {
-        edlClips.push({
-          title: clip.title,
-          segments: plan ? plan.segments : [{ startSec: clip.startSec, endSec: clip.endSec }],
-        });
+        const segments = plan?.segments ?? [{ startSec: clip.startSec, endSec: clip.endSec }];
+        const edit = { title: clip.title, segments: trimDraftSegments(
+          introSegment ? [introSegment, ...segments] : segments, headTrimSec, finalDurationSec
+        ) };
+        edlClips.push(edit);
+        if (options.jianyingDraft) {
+          draftCues.set(edit, [
+            ...(introSegment ? shiftDraftCues(introCues, -headTrimSec, Math.min(coldOpenSec ?? 0, finalDurationSec)) : []),
+            ...shiftDraftCues(bodyCues, (coldOpenSec ?? 0) - headTrimSec, finalDurationSec),
+          ]);
+        }
       }
       // 剪掉多少的基准:拼接片按「各段之和」算(跨度里那几十分钟本来就不该
       // 进成片,拿它当分母会报出「剪掉了 97%」这种毫无意义的数)
@@ -1578,7 +1602,7 @@ export async function exportClips(
 
     // 时间线 EDL:切点(含跳剪内部剪)交给剪辑软件重链源片精修;失败不拖垮导出
     if (options.timeline && edlClips.length > 0) {
-      const fps = srcInfo && srcInfo.fps > 0 ? srcInfo.fps : 30;
+      const fps = srcInfo?.timelineFps || srcInfo?.fps || 30;
       const edl = buildEdl({
         title: `${basename(inputPath)} - HotClip`,
         sourceName: basename(inputPath),
@@ -1607,6 +1631,9 @@ export async function exportClips(
             height: srcInfo.height,
             fps,
             clip: ec,
+            cues: draftCues.get(ec),
+            brand: options.brand,
+            canvas: options.vertical ? { width: 1080, height: 1920 } : undefined,
           });
           await writeFile(join(folder, "draft_content.json"), JSON.stringify(content, null, 4), "utf8");
           await writeFile(join(folder, "draft_meta_info.json"), JSON.stringify(buildDraftMetaInfo(), null, 4), "utf8");

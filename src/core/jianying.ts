@@ -12,6 +12,9 @@
  * 纯函数(id 生成可注入以便单测),文件写入由 export.ts 负责。
  */
 import { randomUUID } from "crypto";
+import type { DraftCue, DraftRole } from "./draft-cues";
+import { resolveTitleStyle } from "../shared/brand-style";
+import type { BrandStyle } from "../shared/api-types";
 import type { EdlClip } from "./edl";
 
 /** 注入式 id 生成器(默认 uuid v4);hex 形态供轨道/片段/素材 id 用。 */
@@ -33,6 +36,9 @@ export interface DraftContentInput {
   fps: number;
   /** 该切片的保留区间(源片绝对秒,跳剪时一条多段,按序拼接)。 */
   clip: EdlClip;
+  cues?: DraftCue[];
+  canvas?: { width: number; height: number };
+  brand?: BrandStyle;
 }
 
 const SEC_US = 1_000_000;
@@ -118,10 +124,46 @@ export function buildDraftContent(input: DraftContentInput, newId: IdGen = defau
     width,
   };
 
+  const textMaterials: Record<string, unknown>[] = [];
+  const textTracks = new Map<DraftRole, Record<string, unknown>[]>();
+  const titleStyle = resolveTitleStyle(input.brand?.titleStyle, input.brand?.highlightColor);
+  for (const cue of input.cues ?? []) {
+    const start = Math.max(0, toUs(cue.startSec));
+    const end = Math.min(targetUs, toUs(cue.endSec));
+    if (end <= start || !cue.text.trim()) continue;
+    const id = hexOf(newId());
+    const isTitle = cue.role === "Title";
+    const color = cue.look?.color ?? (isTitle ? titleStyle.text : "#FFFFFF");
+    const rgbOf = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    const rgb = rgbOf(color);
+    const border = cue.look?.border;
+    const box = border?.box ? border : undefined;
+    const strokes = border && !border.box ? [{ content: { solid: { alpha: border.alpha, color: rgbOf(border.color) } }, width: border.relativeWidth }] : [];
+
+    const fill = { alpha: 1, content: { render_type: "solid", solid: { alpha: 1, color: rgb } } };
+    textMaterials.push({
+      id, type: "text", content: JSON.stringify({ text: cue.text, styles: [{
+        range: [0, Array.from(cue.text).length], size: cue.look ? cue.look.relativeSize * 200 : (isTitle ? 7 : 8) * (input.brand?.fontScale ?? 1),
+        bold: true, italic: false, underline: false, fill, strokes,
+      }] }),
+      typesetting: 0, alignment: 1, letter_spacing: 0, line_spacing: 0.02, line_feed: 1,
+      line_max_width: 0.9, force_apply_line_max_width: false, global_alpha: 1, check_flag: 7 | (box ? 16 : 0) | (strokes.length ? 8 : 0),
+      ...(box ? { background_color: box.color, background_alpha: box.alpha, background_style: 1, background_height: 0.14, background_width: 0.14, background_round_radius: 0, background_horizontal_offset: 0, background_vertical_offset: 0 } : {}),
+    });
+    const captionY = input.brand?.captionPosition === "low" ? -0.56 : input.brand?.captionPosition === "high" ? -0.27 : -0.42;
+    const y = cue.look?.y ?? { Title: 0.76, Caption: captionY, Hook: 0.38, Trans: captionY - 0.12, Aigc: 0.87 }[cue.role];
+    const list = textTracks.get(cue.role) ?? [];
+    list.push({ id: hexOf(newId()), material_id: id, render_index: cue.role === "Caption" ? 1 : 2,
+      target_timerange: { start, duration: end - start }, visible: true, extra_material_refs: [],
+      clip: { alpha: 1, rotation: 0, scale: { x: 1, y: 1 }, transform: { x: 0, y }, flip: { horizontal: false, vertical: false } },
+    });
+    textTracks.set(cue.role, list);
+  }
+
   // 骨架与 pyJianYingDraft 的 5.9 模板逐字段一致(materials 的空数组分类
   // 必须齐全,剪映按键取值,缺键会视为损坏草稿)
   return {
-    canvas_config: { height, ratio: "original", width },
+    canvas_config: { height: input.canvas?.height ?? height, ratio: "original", width: input.canvas?.width ?? width },
     color_space: 0,
     config: {
       adjust_max_index: 1,
@@ -173,7 +215,7 @@ export function buildDraftContent(input: DraftContentInput, newId: IdGen = defau
       material_colors: [], multi_language_refs: [], placeholders: [], plugin_effects: [],
       primary_color_wheels: [], realtime_denoises: [], shapes: [], smart_crops: [],
       smart_relights: [], sound_channel_mappings: [], speeds, stickers: [],
-      tail_leaders: [], text_templates: [], texts: [], time_marks: [], transitions: [],
+      tail_leaders: [], text_templates: [], texts: textMaterials, time_marks: [], transitions: [],
       video_effects: [], video_trackings: [], videos: [videoMaterial],
       vocal_beautifys: [], vocal_separations: [],
     },
@@ -196,6 +238,9 @@ export function buildDraftContent(input: DraftContentInput, newId: IdGen = defau
         segments,
         type: "video",
       },
+      ...Array.from(textTracks, ([name, segments]) => ({
+        id: hexOf(newId()), type: "text", attribute: 0, flag: 0, name, is_default_name: false, segments,
+      })),
     ],
     update_time: 0,
     version: 360000,

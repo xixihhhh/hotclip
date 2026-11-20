@@ -584,7 +584,7 @@ export async function detectHighlights(
   /** 直播品类判据(内置预设 id + 用户自定义文本,见 core/genre.ts)。 */
   genre?: { id?: string; custom?: string },
   /** 用户点题:重点找什么/明确排除什么(v0.13,见 prompt.briefSection)。 */
-  brief?: { focus?: string; exclude?: string },
+  brief?: import("../../shared/api-types").DetectBrief,
   /** 用户导入的真实发布表现(本地记忆,只注入高/低表现摘要)。 */
   performanceMemory?: PerformanceEntry[],
   maxClips?: number

@@ -1,3 +1,4 @@
+import { episodeStructure } from "../shared/episode-structure";
 import { runSpeechWorker } from "./run-speech-worker";
 import { qwenHealth } from "../core/transcribe/qwen-local";
 import type { SpeechRunOptions, AlignmentRequest, AlignmentPreview } from "../shared/api-types";
@@ -935,9 +936,11 @@ ipcMain.handle(
         : undefined;
     // 用户点题:白名单清洗(两段自由文本,截断由 core 侧 briefSection 兜)
     const b = brief as { focus?: unknown; exclude?: unknown } | null | undefined;
+    const episode = episodeStructure((brief as { episode?: unknown } | null)?.episode);
     const briefArg =
-      b && ((typeof b.focus === "string" && b.focus.trim()) || (typeof b.exclude === "string" && b.exclude.trim()))
+      b && (episode || (typeof b.focus === "string" && b.focus.trim()) || (typeof b.exclude === "string" && b.exclude.trim()))
         ? {
+            episode,
             focus: typeof b.focus === "string" ? b.focus.trim() : undefined,
             exclude: typeof b.exclude === "string" ? b.exclude.trim() : undefined,
           }

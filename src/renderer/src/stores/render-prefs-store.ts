@@ -11,9 +11,12 @@ import { DEFAULT_SENSITIVE_WORDS, sanitizeSensitiveWords } from "../../../core/s
 
 import { DEFAULT_CAMERA, normalizeCameraRegion, type CameraRegion } from "../../../shared/game-camera";
 
+import { episodeStructure, type EpisodeStructure } from "../../../shared/episode-structure";
+
 const STORAGE_KEY = "hotclip-render-prefs";
 
 export interface RenderPrefs {
+  episode: EpisodeStructure | null;
   vertical: boolean;
   gameCameraEnabled: boolean;
   cameraRegion: CameraRegion;
@@ -91,6 +94,7 @@ export interface RenderPrefs {
 
 /** 与出厂默认一致:开箱即出竖屏卡拉OK跳剪片;花钱/额外文件的默认关。 */
 export const RENDER_PREF_DEFAULTS: RenderPrefs = {
+  episode: null,
   vertical: true,
   gameCameraEnabled: false,
   cameraRegion: DEFAULT_CAMERA,
@@ -142,30 +146,43 @@ export const RENDER_PREF_DEFAULTS: RenderPrefs = {
   quality: "high", // 与升级前的成片一致,换档是用户的主动选择
 };
 
+export function normalizeRenderPrefs(p: Partial<RenderPrefs>): RenderPrefs {
+  // 逐字段校验:坏值回落默认,新增字段自动补齐
+  const out = { ...RENDER_PREF_DEFAULTS };
+  for (const key of Object.keys(RENDER_PREF_DEFAULTS) as Array<keyof RenderPrefs>) {
+    const v = p[key];
+    if (typeof v === typeof RENDER_PREF_DEFAULTS[key]) {
+      (out as Record<string, unknown>)[key] = v;
+    }
+  }
+  // 数组/枚举字段 typeof 校验不够严,逐个补严校验
+  out.packPlatforms = Array.isArray(out.packPlatforms)
+    ? validPlatformIds(out.packPlatforms.filter((x): x is string => typeof x === "string"))
+    : [...RENDER_PREF_DEFAULTS.packPlatforms];
+  out.cameraRegion = normalizeCameraRegion(out.cameraRegion) ?? DEFAULT_CAMERA;
+  out.products = Array.isArray(out.products)
+    ? out.products.filter((x): x is string => typeof x === "string" && x.trim().length > 0).slice(0, 20)
+    : [];
+  out.sensitiveWords = Array.isArray(out.sensitiveWords)
+    ? sanitizeSensitiveWords(out.sensitiveWords)
+    : [...RENDER_PREF_DEFAULTS.sensitiveWords];
+  if (![1, 2, 3].includes(out.variants)) out.variants = 1;
+  if (!isClipLength(out.clipLength)) out.clipLength = "standard";
+  out.maxClips = normalizeMaxClips(out.maxClips);
+  if (!["high", "standard", "compact"].includes(out.quality)) out.quality = "high";
+  if (!["keyword", "pop", "minimal", "hormozi", "bubble", "karaoke", "none"].includes(out.captionStyle)) out.captionStyle = "keyword";
+  if (!["off", "volume", "premium"].includes(out.aiCover)) out.aiCover = "off";
+  if (!["basic", "smart"].includes(out.denoiseMode)) out.denoiseMode = "basic";
+  out.episode = episodeStructure(out.episode) ?? null;
+  return out;
+}
+
 function load(): RenderPrefs {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const p = JSON.parse(raw) as Partial<RenderPrefs>;
-      // 逐字段校验:坏值回落默认,新增字段自动补齐
-      const out = { ...RENDER_PREF_DEFAULTS };
-      for (const key of Object.keys(RENDER_PREF_DEFAULTS) as Array<keyof RenderPrefs>) {
-        const v = p[key];
-        if (typeof v === typeof RENDER_PREF_DEFAULTS[key]) {
-          (out as Record<string, unknown>)[key] = v;
-        }
-      }
-      // 数组/枚举字段 typeof 校验不够严,逐个补严校验
-      out.packPlatforms = Array.isArray(out.packPlatforms)
-        ? validPlatformIds(out.packPlatforms.filter((x): x is string => typeof x === "string"))
-        : [...RENDER_PREF_DEFAULTS.packPlatforms];
-      out.cameraRegion = normalizeCameraRegion(out.cameraRegion) ?? DEFAULT_CAMERA;
-      out.products = Array.isArray(out.products)
-        ? out.products.filter((x): x is string => typeof x === "string" && x.trim().length > 0).slice(0, 20)
-        : [];
-      out.sensitiveWords = Array.isArray(out.sensitiveWords)
-        ? sanitizeSensitiveWords(out.sensitiveWords)
-        : [...RENDER_PREF_DEFAULTS.sensitiveWords];
+      const out = normalizeRenderPrefs(p);
       // 老版本的商品词存在独立的 localStorage key 里,迁移进偏好后不再回头读
       if (out.products.length === 0) {
         try {
@@ -175,13 +192,6 @@ function load(): RenderPrefs {
           /* 没有旧数据 */
         }
       }
-      if (![1, 2, 3].includes(out.variants)) out.variants = 1;
-      if (!isClipLength(out.clipLength)) out.clipLength = "standard";
-      out.maxClips = normalizeMaxClips(out.maxClips);
-      if (!["high", "standard", "compact"].includes(out.quality)) out.quality = "high";
-      if (!["keyword", "pop", "minimal", "hormozi", "bubble", "karaoke", "none"].includes(out.captionStyle)) out.captionStyle = "keyword";
-      if (!["off", "volume", "premium"].includes(out.aiCover)) out.aiCover = "off";
-      if (!["basic", "smart"].includes(out.denoiseMode)) out.denoiseMode = "basic";
       return out;
     }
   } catch {

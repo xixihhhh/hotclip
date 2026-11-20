@@ -24,6 +24,7 @@ import { LOCALE_LIST, REGISTRY } from "./i18n/messages";
 import { getApi } from "./api/provider";
 import { initialSessionCheckpoint, sessionCheckpointFromState, useSession, type ProbedFile } from "./stores/session-store";
 import { LogoMark, LogoWordmark } from "./components/Logo";
+import { EpisodeRecipes } from "./components/EpisodeRecipes";
 import { Workbench } from "./components/Workbench";
 import { SettingsView } from "./components/SettingsView";
 import { WatchFolderModal } from "./components/WatchFolderModal";
@@ -76,7 +77,7 @@ function PipeChip({ label, state, extra }: { label: string; state: "done" | "bus
 }
 
 /** 导入页:工作区的空态——拖放区 + 录播监听入口,营销话术退场。 */
-function ImportStage({ onImportFile }: { onImportFile: (file: ProbedFile) => Promise<void> }): React.JSX.Element {
+function ImportStage({ onImportFile, onNext }: { onImportFile: (file: ProbedFile) => Promise<void>; onNext: () => Promise<boolean> }): React.JSX.Element {
   const t = useT("home");
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -268,6 +269,7 @@ function ImportStage({ onImportFile }: { onImportFile: (file: ProbedFile) => Pro
 
       {error && <p role="alert" className="mt-5 text-sm text-red-400">{error}</p>}
       {showWatch && <WatchFolderModal onClose={() => setShowWatch(false)} />}
+      <div className="mt-3 w-full max-w-2xl"><EpisodeRecipes onNext={onNext} /></div>
     </main>
   );
 }
@@ -342,8 +344,7 @@ export default function App(): React.JSX.Element {
   }, [flushActiveProject, setActiveProjectId]);
 
   const importFileAsProject = useCallback(async (file: ProbedFile): Promise<void> => {
-    clearPendingSave();
-    if (activeProjectIdRef.current) await getApi().projectClose().catch(() => {});
+    if (activeProjectIdRef.current) await flushActiveProject();
     const checkpoint = initialSessionCheckpoint(file);
     const result = await getApi().projectCreate(checkpoint);
     if (!result?.checkpoint) throw new Error("project create failed");
@@ -352,7 +353,15 @@ export default function App(): React.JSX.Element {
     useSession.getState().restore(result.checkpoint);
     setCheckpointWarning(false);
     setShowProjects(false);
-  }, [clearPendingSave, replaceProject, setActiveProjectId]);
+  }, [flushActiveProject, replaceProject, setActiveProjectId]);
+
+  const nextEpisode = async (): Promise<boolean> => {
+    const filePath = await getApi().selectMedia();
+    if (!filePath) return false;
+    const info = await getApi().probeMedia(filePath);
+    await importFileAsProject({ path: filePath, ...info });
+    return true;
+  };
 
   const openSavedProject = useCallback(async (id: string): Promise<void> => {
     if (id === activeProjectIdRef.current && useSession.getState().file) {
@@ -572,7 +581,7 @@ export default function App(): React.JSX.Element {
       </header>
 
       {/* ---- 视图分派:设置中心 > 工作台 > 导入页 ---- */}
-      {settingsOpen ? <SettingsView /> : file ? <Workbench onCloseProject={() => void closeCurrentProject()} /> : <ImportStage onImportFile={importFileAsProject} />}
+      {settingsOpen ? <SettingsView /> : file ? <Workbench onNext={nextEpisode} onCloseProject={() => void closeCurrentProject()} /> : <ImportStage onNext={nextEpisode} onImportFile={importFileAsProject} />}
       {showProjects && (
         <ProjectLibraryModal
           projects={projects}

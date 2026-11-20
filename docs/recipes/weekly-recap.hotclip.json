@@ -1,0 +1,16 @@
+{
+  "format": "hotclip-episode",
+  "version": 1,
+  "name": "Weekly recap",
+  "settings": {
+    "captionStyle": "minimal",
+    "vertical": true,
+    "clipLength": "standard",
+    "maxClips": 2,
+    "episode": { "opening": 5, "body": 20, "ending": 5 },
+    "titleCard": true,
+    "jianyingDraft": true
+  },
+  "brand": { "highlightColor": "#22C55E", "titleStyle": "brandPlate" },
+  "assets": {}
+}
