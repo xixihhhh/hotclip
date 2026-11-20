@@ -4,6 +4,11 @@ export const LLM_LOCAL_TIMEOUT_MS = 300_000;
 export const LLM_RESPONSE_MAX_BYTES = 2 * 1024 * 1024;
 export const LLM_RETRY_WAIT_MAX_MS = 5_000;
 
+/** Kimi fixes temperature by model and thinking mode. Omit it to use the provider default. */
+export function chatTemperature(model: string, preferred: number): number | undefined {
+  return /(?:^|\/)kimi(?=$|[-.:_\s\d])/i.test(model) ? undefined : preferred;
+}
+
 export interface LlmRequestBudget { deadline: number; retriesRemaining: number }
 export function llmRequestBudget(timeoutMs: number, retries = 0): LlmRequestBudget {
   return { deadline: Date.now() + timeoutMs, retriesRemaining: retries };

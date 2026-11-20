@@ -4,6 +4,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { chatComplete, MAX_TOKENS, RETRY_MAX_TOKENS, thinkingParams } from "../highlight/detect";
+import { visionChatComplete } from "../highlight/vision";
 
 const OLLAMA = { baseUrl: "http://localhost:11434/v1", apiKey: "", model: "qwen3:8b" };
 const CLOUD = { baseUrl: "https://api.atlascloud.ai/v1", apiKey: "sk-x", model: "qwen/qwen3.5-flash" };
@@ -44,6 +45,30 @@ describe("chatComplete 连接失败指引", () => {
 function chatResponse(message: Record<string, unknown>, finishReason = "stop"): Response {
   return new Response(JSON.stringify({ choices: [{ finish_reason: finishReason, message }] }), { status: 200 });
 }
+
+describe("Kimi 固定采样温度 (issue #18)", () => {
+  it.each(["kimi-k3", "moonshotai/Kimi-K2.5"])("文本与视觉首请求交给 %s 选择合法默认值", async (model) => {
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      return "temperature" in body
+        ? new Response("invalid temperature: only 1 is allowed for this model", { status: 400 })
+        : chatResponse({ content: "ok" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const llm = { ...CLOUD, model };
+    await expect(chatComplete(llm, "s", "u")).resolves.toBe("ok");
+    await expect(visionChatComplete(llm, "s", "u", "ZmFrZQ==")).resolves.toBe("ok");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("保留其他模型的文本和视觉采样设置", async () => {
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => chatResponse({ content: "ok" }));
+    vi.stubGlobal("fetch", fetchMock);
+    await chatComplete(CLOUD, "s", "u");
+    await visionChatComplete(CLOUD, "s", "u", "ZmFrZQ==");
+    expect(fetchMock.mock.calls.map(([, init]) => JSON.parse(String(init.body)).temperature)).toEqual([0.6, 0.2]);
+  });
+});
 
 describe("chatComplete 请求恢复边界", () => {
   it("限流恢复和 Qwen 参数回退共用一次重试额度", async () => {
