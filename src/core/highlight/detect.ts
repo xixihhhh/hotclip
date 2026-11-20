@@ -27,7 +27,7 @@ import { applyRuleGate, type GateTier } from "./gate";
 import { utilityDensity, utilityBoost, UTILITY_SAVE_WORTHY } from "../../shared/utility-density";
 import { clipDurationSec, MAX_PIECES, type ClipPiece } from "../../shared/pieces";
 import { isLocalBaseUrl } from "../../shared/llm-preflight";
-import { LLM_LOCAL_TIMEOUT_MS, LLM_REMOTE_TIMEOUT_MS, LlmTransportError, llmRequestBudget, modelErrorDetail, requestLlmText, retryAfterMs, type LlmRequestBudget } from "../llm-transport";
+import { LLM_LOCAL_TIMEOUT_MS, LLM_REMOTE_TIMEOUT_MS, LlmTransportError, chatTemperature, llmRequestBudget, modelErrorDetail, requestLlmText, retryAfterMs, type LlmRequestBudget } from "../llm-transport";
 import { genrePreset, normalizeGenreId, type EvidenceClass } from "../genre";
 import { normalizeMaxClips } from "../../shared/detection-options";
 import {
@@ -110,7 +110,7 @@ async function chatAttempt(
           { role: "system", content: system },
           { role: "user", content: user },
         ],
-        temperature: 0.6,
+        temperature: chatTemperature(llm.model, 0.6),
         max_tokens: maxTokens,
         ...extraParams(llm.baseUrl),
         ...(includeThinkingParam ? thinkingParams(llm.model) : {}),
