@@ -33,11 +33,12 @@ export function useDetection(): { run: () => Promise<void> } {
         prefs.products,
         s.referencePath,
         { id: prefs.genreId, custom: prefs.genreCustom },
-        focus || exclude ? { focus: focus || undefined, exclude: exclude || undefined } : null,
+        focus || exclude || prefs.episode ? { focus: focus || undefined, exclude: exclude || undefined, episode: prefs.episode ?? undefined } : null,
         prefs.fullScan && vision.enabled,
         prefs.maxClips
       );
       const st = useSession.getState();
+      if (st.file !== s.file || st.transcript !== s.transcript) return;
       st.setCandidates(result.candidates);
       st.setStats({
         funnel: result.funnel ?? null,
@@ -56,9 +57,10 @@ export function useDetection(): { run: () => Promise<void> } {
       st.markParamsDirty(false);
     } catch (e) {
       // IPC 包装串只会淹没真正有用的那句话——先剥壳再展示(issue #6)
+      if (useSession.getState().file !== s.file) return;
       useSession.getState().setDetectError(stripIpcError(e instanceof Error ? e.message : String(e)));
     } finally {
-      useSession.getState().setDetecting(false);
+      if (useSession.getState().file === s.file) useSession.getState().setDetecting(false);
     }
   }, [config, prefilter, vision, prefs]);
 

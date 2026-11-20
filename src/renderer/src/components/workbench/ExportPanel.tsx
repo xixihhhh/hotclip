@@ -2,6 +2,7 @@
  * 出片方案面板:33 个开关按用途收进六组,循环档改分段控件,「打开文件/
  * 弹窗」不再伪装成开关;当前组合可存成命名方案,一键复用。
  */
+import { EpisodeRecipes } from "../EpisodeRecipes";
 import { useState } from "react";
 import { LuX, LuPalette, LuTrash2, LuLoaderCircle } from "react-icons/lu";
 import { useT, useLocaleStore } from "../../i18n/store";
@@ -34,12 +35,14 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 }
 
 export function ExportPanel({
+  onNext,
   hasVideo,
   diarize,
   atlasReady,
   onClose,
   onOpenBrand,
 }: {
+  onNext: () => Promise<boolean>;
   hasVideo: boolean;
   diarize: boolean;
   atlasReady: boolean;
@@ -128,6 +131,7 @@ export function ExportPanel({
           </button>
         </div>
 
+        <EpisodeRecipes onNext={onNext} canSave />
         <div className="mt-3.5 grid min-h-0 flex-1 grid-cols-1 gap-2.5 overflow-y-auto pr-1 sm:grid-cols-2">
           <Group title={t("groupPicture")}>
             <SwitchRow label={th("optVertical")} hint={th("optVerticalHint")} on={prefs.vertical} onToggle={() => setPref({ vertical: !prefs.vertical })} />

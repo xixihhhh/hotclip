@@ -140,7 +140,7 @@ export function highlightSystemPrompt(
   reference?: ReferenceProfile,
   reviewMemory?: ReviewRecord[],
   genre?: { id?: string; custom?: string },
-  brief?: { focus?: string; exclude?: string },
+  brief?: import("../../shared/api-types").DetectBrief,
   performanceMemory?: PerformanceEntry[]
 ): string {
   const zh = isChineseTranscript(transcript);
@@ -209,13 +209,18 @@ export const BRIEF_MAX_CHARS = 300;
  * 这是唯一一段真正的人工意图,优先级要压过所有自动判据——但排除不等于
  * 无中生有:重点内容在素材里真不存在时宁可少给,不许硬凑。
  */
-export function briefSection(brief: { focus?: string; exclude?: string } | undefined, zh: boolean): string {
+export function briefSection(brief: import("../../shared/api-types").DetectBrief | undefined, zh: boolean): string {
   const focus = brief?.focus?.trim().slice(0, BRIEF_MAX_CHARS) ?? "";
   const exclude = brief?.exclude?.trim().slice(0, BRIEF_MAX_CHARS) ?? "";
-  if (!focus && !exclude) return "";
+  const structure = brief?.episode;
+  if (!focus && !exclude && !structure) return "";
+  const structureLine = !structure ? [] : [zh
+    ? `栏目结构：从本期素材选开场约 ${structure.opening} 秒、主体约 ${structure.body} 秒、收尾约 ${structure.ending} 秒。优先用 parts 返回三个顺序段落，逐字匹配本期原话。宁可少选也不要拼凑。`
+    : `Episode structure: select an opening of about ${structure.opening}s, a body of ${structure.body}s and an ending of ${structure.ending}s from this source. Prefer three ordered parts with verbatim quotes; skip unsuitable material.`];
   if (zh) {
     const lines = [
       "\n\n【用户点题】用户对本场切片提了明确要求,优先级高于上面的通用判据:",
+      ...structureLine,
       ...(focus ? [`- 重点找:${focus}`] : []),
       ...(exclude ? [`- 明确排除:${exclude}(这类内容再精彩也不要选)`] : []),
       "点题只改变「找什么」,不改变质量标准——素材里真没有用户要的内容时,宁可少给或不给,绝不硬凑不相关的片段充数。",
@@ -224,6 +229,7 @@ export function briefSection(brief: { focus?: string; exclude?: string } | undef
   }
   const lines = [
     "\n\n[User brief] The user gave explicit instructions for this session — they override the general criteria above:",
+    ...structureLine,
     ...(focus ? [`- Focus on: ${focus}`] : []),
     ...(exclude ? [`- Explicitly exclude: ${exclude} (skip these even if they are strong)`] : []),
     "The brief changes WHAT to hunt, not the quality bar — if the requested content simply isn't in the footage, return fewer clips rather than padding with unrelated picks.",

@@ -119,7 +119,7 @@ describe("subtitle import to media export", () => {
     const outDir = join(root, "export");
     const [result] = await exportClips(source, [{
       id: 1, title: "Imported captions", startSec: 1, endSec: 7, manualBounds: true, pieces, words,
-    }], outDir, { vertical: false, captionStyle: "minimal", subtitleFile: true, timeline: true, qa: false });
+    }], outDir, { vertical: false, captionStyle: "minimal", subtitleFile: true, timeline: true, jianyingDraft: true, titleCard: true, qa: false });
     const media = await probeMedia(result.path);
     expect(media.durationSec).toBeCloseTo(4, 1);
     const srt = await readFile(result.path.replace(/\.mp4$/, ".srt"), "utf8");
@@ -134,6 +134,19 @@ describe("subtitle import to media export", () => {
       captionsBurned: true,
       subtitleQuality: { status: "warn", uncertainWords: words.length },
     });
+    const draft = JSON.parse(await readFile(join(outDir, "剪映草稿", "01-Imported captions", "draft_content.json"), "utf8"));
+    const tracks = draft.tracks as Array<{ name: string; segments: Array<{ material_id: string; target_timerange: { start: number; duration: number } }> }>;
+    const materials = new Map<string, string>(draft.materials.texts.map((m: { id: string; content: string }) => [m.id, JSON.parse(m.content).text]));
+    const captions = tracks.find((t) => t.name === "Caption")!.segments;
+    const title = tracks.find((t) => t.name === "Title")!.segments[0];
+    expect(materials.get(title.material_id)).toBe("Imported captions");
+    expect(title.target_timerange).toEqual({ start: 0, duration: 4_000_000 });
+    const captionText = captions.map((c) => materials.get(c.material_id)).join(" ");
+    expect(captionText).toContain("Keep this opening.");
+    expect(captionText).toContain("Keep this ending.");
+    expect(captionText).not.toContain("Remove");
+    expect(captions[0].target_timerange.start).toBe(0);
+    expect(Math.max(...captions.map((c) => c.target_timerange.start + c.target_timerange.duration))).toBe(4_000_000);
     expect(await readFile(join(outDir, "timeline.edl"), "utf8")).toContain("Imported captions");
   }, 30_000);
 });

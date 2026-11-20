@@ -21,6 +21,8 @@ export interface MediaInfo {
   height: number;
   /** Average frame rate, e.g. 29.97; 0 when unknown. */
   fps: number;
+  /** Full ffprobe rate for frame-accurate interchange; fps stays rounded for existing callers. */
+  timelineFps?: number;
   /** Container-level bit rate in bits/s; 0 when unknown. */
   bitRate: number;
   /** Selected video codec name (e.g. "h264"), empty when none. */
@@ -195,7 +197,7 @@ export function parseFrameRate(rational: string | undefined): number {
   if (den === undefined) return num > 0 ? num : 0;
   if (!Number.isFinite(den) || den === 0) return 0;
   const fps = num / den;
-  return fps > 0 ? Math.round(fps * 100) / 100 : 0;
+  return Number.isFinite(fps) && fps > 0 ? fps : 0;
 }
 
 /**
@@ -226,13 +228,15 @@ export function parseProbeOutput(raw: unknown): MediaInfo {
   const bitRate = Number(data.format?.bit_rate ?? 0);
   const pixelFormat = typeof video?.pix_fmt === "string" ? video.pix_fmt : "";
 
+  const timelineFps = parseFrameRate(video?.avg_frame_rate);
   return {
     durationSec: Number.isFinite(durationSec) && durationSec > 0 ? durationSec : 0,
     hasVideo: Boolean(video),
     hasAudio: Boolean(audio),
     width: Number.isFinite(video?.width) ? (video!.width as number) : 0,
     height: Number.isFinite(video?.height) ? (video!.height as number) : 0,
-    fps: parseFrameRate(video?.avg_frame_rate),
+    fps: Math.round(timelineFps * 100) / 100,
+    timelineFps,
     bitRate: Number.isFinite(bitRate) && bitRate > 0 ? bitRate : 0,
     videoCodec: video?.codec_name ?? "",
     videoStreamIndex: selectedVideo?.index ?? -1,

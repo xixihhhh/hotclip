@@ -188,6 +188,7 @@ export interface DetectionOptions {
 
 /** 用户点题(v0.13):自然语言告诉 AI 本场重点找什么/明确不要什么。 */
 export interface DetectBrief {
+  episode?: import("./episode-structure").EpisodeStructure;
   /** 重点找:「只要讲到售后的部分」「重点找他聊创业失败的段落」。 */
   focus?: string;
   /** 明确排除:「不要抽奖和念弹幕」「排除开头暖场」。 */

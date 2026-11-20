@@ -163,7 +163,7 @@ function StatsLine(): React.JSX.Element | null {
   );
 }
 
-export function Workbench({ onCloseProject }: { onCloseProject: () => void }): React.JSX.Element {
+export function Workbench({ onCloseProject, onNext }: { onCloseProject: () => void; onNext: () => Promise<boolean> }): React.JSX.Element {
   const t = useT("workbench");
   const th = useT("highlights");
   const session = useSession();
@@ -528,7 +528,7 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
 
       {/* ---- 弹窗 ---- */}
       {showExportPanel && (
-        <ExportPanel hasVideo={file.hasVideo} diarize={session.diarize} atlasReady={atlasReady} onClose={() => setShowExportPanel(false)} onOpenBrand={() => setShowBrand(true)} />
+        <ExportPanel onNext={async () => { const opened = await onNext(); if (opened) setShowExportPanel(false); return opened; }} hasVideo={file.hasVideo} diarize={session.diarize} atlasReady={atlasReady} onClose={() => setShowExportPanel(false)} onOpenBrand={() => setShowBrand(true)} />
       )}
       {showBrand && <BrandStyleModal onClose={() => setShowBrand(false)} />}
       {showWatch && <WatchFolderModal onClose={() => setShowWatch(false)} />}

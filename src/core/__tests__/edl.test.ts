@@ -69,3 +69,15 @@ describe("buildEdl", () => {
     expect(events[0].startsWith("001")).toBe(true);
   });
 });
+
+it("uses real frames for 29.97 non-drop timecode and accumulates record frames across cuts", () => {
+  const rate = 30000 / 1001;
+  expect(secToTimecode(3600, rate)).toBe("00:59:56:12");
+  const sourceFrame = (frame: number) => frame / rate;
+  const segments = Array.from({ length: 100 }, (_, i) => ({
+    startSec: sourceFrame(108000 + 2 * i + 0.49), endSec: sourceFrame(108000 + 2 * i + 1.51),
+  }));
+  const text = buildEdl({ title: "fps", sourceName: "ntsc.mp4", fps: rate, clips: [{ title: "one", segments }] });
+  expect(text).toContain("FCM: NON-DROP FRAME");
+  expect(text.split("\n").filter((l) => l.includes(" AX ")).at(-1)).toMatch(/00:00:06:18 00:00:06:20$/);
+});

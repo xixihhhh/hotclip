@@ -320,6 +320,8 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server â
 
 ## What's new
 
+**[v0.35.0](docs/releases/v0.35.0.md)** (2026-11-21): save portable next-episode recipes with brand, music, captions, layout and selection rules. Export editable Jianying title/caption tracks and frame-accurate 29.97 NDF EDLs. [Download a sample recipe](docs/recipes/weekly-recap.hotclip.json).
+
 **[v0.34.0](docs/releases/v0.34.0.md)** (2026-11-20): streamer/game split layout, three brand title presets, fixed-temperature Kimi support, and bounded recovery for malformed local visual analysis.
 
 **[v0.33.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.33.0)** (2026-10-26): always-visible duration/count controls, a 60â€“120 second preset, and up to 12 candidates; shared genre/custom criteria across CLI, MCP and recording automation, including export pacing and persistent retry settings.

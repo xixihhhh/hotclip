@@ -104,3 +104,10 @@ describe("复评三档(质量门 LLM 层)", () => {
     expect(p).toContain('"verdict": "publish"');
   });
 });
+
+
+it("uses the three duration targets with this episode's own selection brief", () => {
+  const brief = { focus: "scoreboard", episode: { opening: 3, body: 12, ending: 4 } };
+  expect(briefSection(brief, false)).toContain("opening of about 3s, a body of 12s and an ending of 4s from this source");
+  expect(briefSection(brief, true)).toContain("逐字匹配本期原话");
+});
