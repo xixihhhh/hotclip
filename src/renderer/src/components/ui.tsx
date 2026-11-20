@@ -8,11 +8,12 @@ import { createPortal } from "react-dom";
 import { useEffect } from "react";
 
 /** 布尔开关(品牌渐变 = 开)。 */
-export function Switch({ on, disabled, onToggle }: { on: boolean; disabled?: boolean; onToggle: () => void }): React.JSX.Element {
+export function Switch({ on, disabled, onToggle, label }: { on: boolean; disabled?: boolean; onToggle: () => void; label?: string }): React.JSX.Element {
   return (
     <button
       type="button"
       role="switch"
+      aria-label={label}
       aria-checked={on}
       disabled={disabled}
       onClick={onToggle}
@@ -46,7 +47,7 @@ export function SwitchRow({
         {label}
         {hint && <span className="ml-2 text-[10.5px] text-mut/70">{disabled && disabledHint ? disabledHint : hint}</span>}
       </span>
-      <Switch on={on} disabled={disabled} onToggle={onToggle} />
+      <Switch label={label} on={on} disabled={disabled} onToggle={onToggle} />
     </div>
   );
 }

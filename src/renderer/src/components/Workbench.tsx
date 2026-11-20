@@ -73,11 +73,11 @@ function LeftRail({ onOpenWatch }: { onOpenWatch: () => void }): React.JSX.Eleme
   }, []);
 
   return (
-    <div className="flex w-[196px] shrink-0 flex-col gap-3 border-r border-line/70 bg-panel/40 p-3">
+    <div className="source-rail">
       <div className="flex flex-col gap-1.5">
-        <div className="text-[10px] font-bold tracking-[1.5px] text-mut/60">{t("currentFile")}</div>
+        <h2 className="desk-pane-title">{t("currentFile")}</h2>
         {file && (
-          <div className="flex flex-col gap-1.5 rounded-xl border border-ember/30 bg-panel-2/60 p-2.5">
+          <div className="source-media-entry">
             <div className="flex items-center gap-2">
               {file.hasVideo ? <LuFileVideo className="h-4 w-4 shrink-0 text-ember" /> : <LuAudioLines className="h-4 w-4 shrink-0 text-ember" />}
               <span className="font-mono text-[10px] text-mut tabular-nums">{formatDuration(file.durationSec)}</span>
@@ -85,8 +85,13 @@ function LeftRail({ onOpenWatch }: { onOpenWatch: () => void }): React.JSX.Eleme
             <p className="text-[11.5px] leading-snug font-semibold break-all" title={file.path}>
               {displayName(file.path)}
             </p>
-            <div className="flex flex-wrap gap-1">
-              {transcript && <span className="rounded-full border border-line px-1.5 py-0.5 text-[9px] text-mut">{t("cachedTranscript")}</span>}
+            <dl className="source-specs">
+              {file.hasVideo && <><dt>{t("deskFrame")}</dt><dd>{file.width} × {file.height}</dd>
+                <dt>{t("deskRate")}</dt><dd>{file.fps} fps</dd></>}
+              {file.audioCodec && <><dt>{t("groupAudio")}</dt><dd>{file.audioCodec.toUpperCase()}</dd></>}
+            </dl>
+            <div className="source-status">
+              {transcript && <span>{t("cachedTranscript")}</span>}
               {stats.danmaku && (
                 <span className="rounded-full border border-pink-400/40 px-1.5 py-0.5 text-[9px] text-pink-400">
                   {t("danmakuFound", { n: stats.danmaku.count })}
@@ -102,7 +107,7 @@ function LeftRail({ onOpenWatch }: { onOpenWatch: () => void }): React.JSX.Eleme
         type="button"
         onClick={onOpenWatch}
         title={t("watchOpenHint")}
-        className="flex flex-col gap-1 rounded-xl border border-line/70 bg-panel-2/40 p-2.5 text-left transition-colors hover:border-mut"
+        className="flex flex-col gap-1 rounded border-y border-line py-2.5 text-left transition-colors hover:border-mut"
       >
         <span className="flex items-center gap-1.5">
           <span className={`h-1.5 w-1.5 rounded-full ${watchOn ? "bg-emerald-400" : "bg-mut/40"}`} />
@@ -333,8 +338,8 @@ export function Workbench({ onCloseProject, onNext }: { onCloseProject: () => vo
   if (!file) return <></>;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex min-h-0 flex-1">
+    <div className="editing-workspace flex min-h-0 flex-1 flex-col">
+      <div className="editing-panels flex min-h-0 flex-1">
         <LeftRail onOpenWatch={() => setShowWatch(true)} />
 
         {/* 中央 */}
@@ -380,7 +385,7 @@ export function Workbench({ onCloseProject, onNext }: { onCloseProject: () => vo
                 onSeek={seek}
               />}
               {/* 候选 / 逐句稿 页签 */}
-              <div className="flex shrink-0 items-center gap-1.5">
+              <div className="review-toolbar">
                 {(
                   [
                     ["candidates", t("tabCandidates")],
@@ -391,6 +396,7 @@ export function Workbench({ onCloseProject, onNext }: { onCloseProject: () => vo
                     key={key}
                     type="button"
                     onClick={() => setTab(key)}
+                    aria-pressed={tab === key} data-desk-tab=""
                     className={`rounded-lg px-3 py-1.5 text-[11.5px] font-bold transition-colors ${
                       tab === key ? "bg-ember/12 text-ember" : "text-mut hover:text-fg"
                     }`}

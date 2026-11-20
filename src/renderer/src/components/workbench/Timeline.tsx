@@ -21,14 +21,14 @@ function formatTick(sec: number): string {
 /** 曲线数组 → SVG 面积路径(0..1 值,viewBox 高 H)。 */
 function areaPath(values: number[], width: number, height: number): string {
   if (values.length === 0) return "";
-  const pts = values.map((v, i) => `${((i / (values.length - 1)) * width).toFixed(1)},${(height - v * height).toFixed(1)}`);
+  const pts = values.map((v, i) => `${((i / Math.max(1, values.length - 1)) * width).toFixed(1)},${(height - v * height).toFixed(1)}`);
   return `M0,${height} L${pts.join(" ")} L${width},${height} Z`;
 }
 
 /** 标尺刻度:按时长挑一个整齐的间隔(5min/10min/…),位置按真实比例摆。纯函数。 */
 export function tickMarks(durationSec: number): Array<{ sec: number; frac: number }> {
   if (!(durationSec > 0)) return [];
-  const steps = [30, 60, 300, 600, 1200, 1800, 3600];
+  const steps = [1, 2, 5, 10, 30, 60, 300, 600, 1200, 1800, 3600];
   const step = steps.find((s) => durationSec / s <= 9) ?? 7200;
   const out: Array<{ sec: number; frac: number }> = [];
   for (let s = 0; s <= durationSec; s += step) out.push({ sec: s, frac: s / durationSec });
@@ -139,13 +139,13 @@ export function Timeline({
                 dropped
                   ? "border-dashed border-red-400/30 bg-red-500/5 opacity-60"
                   : focused
-                    ? "border-[1.5px] border-ember bg-ember/15 shadow-[0_0_14px_-2px_rgba(255,110,40,0.55)]"
+                    ? "border border-ember bg-ember/8"
                     : "border-ember/50 bg-ember/8 hover:border-ember"
               }`}
             >
               <span
                 className={`absolute -top-0.5 left-0 -translate-y-full rounded px-1 text-[9px] font-extrabold ${
-                  dropped ? "bg-red-400/50 text-ink" : focused ? "flame-gradient text-white" : "bg-ember/80 text-ink"
+                  dropped ? "bg-red-400/50 text-ink" : focused ? "bg-ember text-ink" : "bg-ember/80 text-ink"
                 }`}
               >
                 {c.id}

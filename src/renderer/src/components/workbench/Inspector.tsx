@@ -486,7 +486,8 @@ export function Inspector({
   const rank = focused ? scored.findIndex((c) => c.id === focused.id) + 1 : 0;
 
   return (
-    <div className="flex w-[300px] shrink-0 flex-col border-l border-line/70 bg-panel/40">
+    <aside className="edit-inspector">
+      <h2 className="desk-pane-title">{t("deskInspector")}</h2>
       <div className="shrink-0 border-b border-line/60 p-3.5">
         <DetectionLimits clipLength={prefs.clipLength} maxClips={prefs.maxClips}
           disabled={detecting} onChange={(value) => { setPref(value); markParamsDirty(true); }} />
@@ -523,6 +524,6 @@ export function Inspector({
           <p className="mt-8 text-center text-[11.5px] leading-relaxed text-mut/70">{t("inspectorEmpty")}</p>
         )}
       </div>
-    </div>
+    </aside>
   );
 }
