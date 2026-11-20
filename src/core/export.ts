@@ -848,7 +848,7 @@ export async function exportClips(
             endSec: captionShift + clipDuration,
             keywords: clip.keywords,
             forcedBreaks: plan?.breaks,
-            titleCard: options.titleCard ? { text: clip.title, durationSec: clipDuration } : undefined,
+            titleCard: options.titleCard ? { text: clip.title, durationSec: clipDuration, style: options.brand?.titleStyle } : undefined,
             openingHook,
             highlightHex: options.brand?.highlightColor,
             translation: transLines.length > 0 ? transLines : undefined,
@@ -1174,7 +1174,7 @@ export async function exportClips(
                 : [];
               const miniAss = buildCaptionAss(miniWords, coPlan.startSec, layout, assStyle, {
                 keywords: clip.keywords,
-                titleCard: options.titleCard ? { text: clip.title, durationSec: miniDur } : undefined,
+                titleCard: options.titleCard ? { text: clip.title, durationSec: miniDur, style: options.brand?.titleStyle } : undefined,
                 openingHook: openingHook ? { text: openingHook.text, durationSec: Math.min(OPENING_HOOK_SEC, miniDur) } : undefined,
                 highlightHex: options.brand?.highlightColor,
                 aigcBadge: options.aigcLabel ? { durationSec: miniDur } : undefined,
@@ -1726,6 +1726,7 @@ export async function exportClips(
           ? {
               highlightColor: options.brand.highlightColor ?? null,
               fontScale: options.brand.fontScale ?? 1,
+              ...(options.brand.titleStyle ? { titleStyle: options.brand.titleStyle } : {}),
               captionPosition: options.brand.captionPosition ?? "standard",
               watermark: options.brand.watermark
                 ? { corner: options.brand.watermark.corner, opacity: options.brand.watermark.opacity }

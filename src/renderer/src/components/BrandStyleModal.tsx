@@ -8,8 +8,12 @@ import { LuPalette, LuX, LuPlus, LuTrash2, LuImage, LuCheck } from "react-icons/
 import { useT } from "../i18n/store";
 import { getApi } from "../api/provider";
 import { useBrandStore, activeBrandStyle, SWATCHES } from "../stores/brand-store";
-import { FONT_SCALE_CHOICES, type BrandStyle, type BrandWatermark } from "../../../shared/api-types";
+import { FONT_SCALE_CHOICES, TITLE_STYLES, type BrandStyle, type BrandWatermark } from "../../../shared/api-types";
+import { resolveTitleStyle } from "../../../shared/brand-style";
 import { ModalShell } from "./ui";
+
+/** Convert 1080-wide ASS script pixels to a percentage of the preview width. */
+const previewWidth = (pixels: number): string => `${pixels / 10.8}cqw`;
 
 /** 迷你预览里字幕基线位置(与管线三档 marginV 倍率一致换算)。 */
 const PREVIEW_BASELINE: Record<string, string> = { low: "78%", standard: "70.8%", high: "63.5%" };
@@ -29,6 +33,9 @@ export function BrandStyleModal({ onClose }: { onClose: () => void }): React.JSX
   const fontScale = style.fontScale ?? 1;
   const position = style.captionPosition ?? "standard";
   const wm = style.watermark;
+  const titleStyle = TITLE_STYLES.find((id) => id === style.titleStyle) ?? "plate";
+  const title = resolveTitleStyle(titleStyle, highlight);
+  const titleBorder = `${title.border}${(255 - parseInt(title.alpha, 16)).toString(16).padStart(2, "0")}`;
 
   const setWatermark = (patch: Partial<BrandWatermark> | null): void => {
     if (patch === null) {
@@ -142,6 +149,25 @@ export function BrandStyleModal({ onClose }: { onClose: () => void }): React.JSX
               </div>
             </section>
 
+            <section>
+              <h3 className="text-[12px] font-bold text-mut">{t("titleStyle")}</h3>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {TITLE_STYLES.map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={id === titleStyle}
+                    onClick={() => {
+                      if (id !== titleStyle) updateActiveStyle({ titleStyle: id === "plate" ? undefined : id });
+                    }}
+                    className={chip(id === titleStyle)}
+                  >
+                    {t(id)}
+                  </button>
+                ))}
+              </div>
+            </section>
+
             {/* 字号 */}
             <section>
               <h3 className="text-[12px] font-bold text-mut">{t("fontSize")}</h3>
@@ -247,9 +273,19 @@ export function BrandStyleModal({ onClose }: { onClose: () => void }): React.JSX
 
           {/* 右:9:16 迷你预览 */}
           <div className="w-36 shrink-0">
-            <div className="relative aspect-9/16 overflow-hidden rounded-xl border border-line bg-gradient-to-b from-panel-2 to-black/70">
+            <div className="@container relative aspect-9/16 overflow-hidden rounded-xl border border-line bg-gradient-to-b from-panel-2 to-black/70">
               {/* 标题贴片示意 */}
-              <div className="absolute top-[9%] left-1/2 w-[86%] -translate-x-1/2 rounded-sm bg-black/55 px-1 py-0.5 text-center text-[7px] font-bold text-white">
+              <div
+                className="absolute top-[10%] left-1/2 w-max max-w-[88%] -translate-x-1/2 text-center font-bold leading-tight"
+                style={{
+                  fontSize: previewWidth(78 * 0.82 * fontScale),
+                  color: title.text,
+                  backgroundColor: title.box ? titleBorder : undefined,
+                  padding: title.box ? previewWidth(title.width) : undefined,
+                  WebkitTextStroke: title.box ? undefined : `${previewWidth(2 * title.width)} ${titleBorder}`,
+                  paintOrder: "stroke fill",
+                }}
+              >
                 {t("previewTitle")}
               </div>
               {/* 字幕行:位置随档位,字号随缩放,高亮色实时生效 */}
