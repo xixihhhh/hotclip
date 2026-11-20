@@ -9,6 +9,7 @@
  *  - "copy": stream copy. Near-instant but cuts snap to keyframes (can be
  *    seconds off on livestream VODs with sparse keyframes) — preview only.
  */
+import { CAMERA_PANEL, type CameraRegion } from "../shared/game-camera";
 import { spawn } from "child_process";
 import { withAtomicOutput } from "./atomic-output";
 import { writeFile } from "fs/promises";
@@ -97,6 +98,7 @@ export interface CutOptions {
   trackPlan?: { cropXExpr: string; cropW: number; cropH: number; cropY: number };
   /** Reframe to 9:16 vertical (center crop → 1080×1920). Requires re-encode. */
   vertical?: boolean;
+  gameCamera?: CameraRegion;
   /**
    * 自动运镜:竖屏成片叠一层缓慢推拉(见 autozoom.ts)。需要源帧率——
    * zoompan 不传 fps 会把素材重采样到 25fps。字段齐全才生效。
@@ -263,7 +265,17 @@ export function buildVideoFilters(options: CutOptions): string[] {
     const keep = Math.max(0.2, 1 - ui.topFrac - ui.bottomFrac);
     filters.push(`crop=w=iw:h='floor(ih*${keep.toFixed(4)}/2)*2':x=0:y='floor(ih*${ui.topFrac.toFixed(4)}/2)*2'`);
   }
-  if (options.vertical) {
+  if (options.vertical && options.gameCamera) {
+    // Square pixels first: crop coordinates match the displayed frame even for anamorphic media.
+    const { width, height, gameHeight } = CAMERA_PANEL;
+    const region = options.gameCamera;
+    const cropWidth = `max(2,trunc(min(iw*${region.width},ih*${width}/${height})/2)*2)`;
+    filters.push(
+      "scale=w='max(2,round(iw*sar/2)*2)':h=ih,setsar=1,split[camIn][gameIn];" +
+      `[camIn]crop=w='${cropWidth}':h='max(2,trunc(ow*${height}/${width}/2)*2)':x='iw*${region.x}-ow/2':y='ih*${region.y}-oh/2',scale=${width}:${height},setsar=1[cam];` +
+      `[gameIn]scale=${width}:${gameHeight}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=${width}:${gameHeight}:(ow-iw)/2:(oh-ih)/2,setsar=1[game];[cam][game]vstack`
+    );
+  } else if (options.vertical) {
     // Center crop to exactly 9:16 (whichever axis binds), then normalize size.
     filters.push("crop=w='min(iw,ih*9/16)':h='min(ih,iw*16/9)'", ...toVertical);
   }

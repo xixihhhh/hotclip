@@ -357,6 +357,7 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
           ) : (
             <>
               <PreviewPane
+                hasVideo={file.hasVideo}
                 filePath={file.path}
                 durationSec={durationSec}
                 seekSec={seekSec}
@@ -527,7 +528,7 @@ export function Workbench({ onCloseProject }: { onCloseProject: () => void }): R
 
       {/* ---- 弹窗 ---- */}
       {showExportPanel && (
-        <ExportPanel diarize={session.diarize} atlasReady={atlasReady} onClose={() => setShowExportPanel(false)} onOpenBrand={() => setShowBrand(true)} />
+        <ExportPanel hasVideo={file.hasVideo} diarize={session.diarize} atlasReady={atlasReady} onClose={() => setShowExportPanel(false)} onOpenBrand={() => setShowBrand(true)} />
       )}
       {showBrand && <BrandStyleModal onClose={() => setShowBrand(false)} />}
       {showWatch && <WatchFolderModal onClose={() => setShowWatch(false)} />}

@@ -91,6 +91,8 @@ import {
 } from "./speech-enhancement";
 import { DPDFNET_SPEECH_ENHANCEMENT_MODEL } from "./models";
 
+import { normalizeCameraRegion, type CameraRegion } from "../shared/game-camera";
+
 export interface ExportClipSpec {
   id: number;
   title: string;
@@ -221,12 +223,12 @@ export function transformInputsFromRender(
   opts: Pick<ExportRenderOptions, "titleCard" | "autoZoom" | "brand">
 ): TransformInputs {
   return {
-    vertical: render.reframe === "face-track" || render.reframe === "center-crop",
+    vertical: render.reframe === "face-track" || render.reframe === "center-crop" || render.reframe === "game-camera",
     captions: render.captionsBurned,
     recut: (render.edit?.splices ?? 0) > 0 || render.fillersRemoved > 0 || render.retakesRemoved > 0,
     reopened: render.coldOpenSec !== null || render.flashForward,
     titleOverlay: Boolean(opts.titleCard) || render.openingHookBurned,
-    autoZoom: Boolean(opts.autoZoom),
+    autoZoom: Boolean(opts.autoZoom && render.reframe !== "game-camera"),
     bgm: render.bgmMixed,
     sfx: render.sfxCues > 0,
     stitched: render.stitchedPieces >= 2,
@@ -242,7 +244,7 @@ export interface ClipRenderOutcome {
   /** False when a web-overlay pass failed and the clip shipped without word captions. */
   captionsBurned: boolean;
   /** "face-track" when the crop followed a face, "center-crop" on fallback, "none" for horizontal, "audiogram" for audio-only sources. */
-  reframe: "face-track" | "center-crop" | "none" | "audiogram";
+  reframe: "game-camera" | "face-track" | "center-crop" | "none" | "audiogram";
   /** Per-shot comfort-composition receipt when face-aware reframing ran. */
   reframeComposition?: {
     totalShots: number;
@@ -312,6 +314,7 @@ export interface ClipRenderOutcome {
 export interface ExportRenderOptions {
   /** Center-crop reframe to 9:16 (1080×1920). */
   vertical?: boolean;
+  gameCamera?: CameraRegion;
   /** Caption style to burn in (clips must carry `words`); omit for none. */
   captionStyle?: CaptionStyle | WebCaptionStyle;
   /** Injected web-overlay renderer (Electron main); required for web styles. */
@@ -538,6 +541,7 @@ export async function exportClips(
     };
     const colorInspectionFailed = srcInfo === null;
     const audioOnly = srcInfo ? !srcInfo.hasVideo : false;
+    const gameCamera = options.vertical && !audioOnly ? normalizeCameraRegion(options.gameCamera) : undefined;
     const color = srcInfo?.hasVideo ? planColorRender(srcInfo) : null;
     const hdrDetected = isHdrSource(color);
     const allowSdrVisualEnhance = !hdrDetected && !colorInspectionFailed;
@@ -588,7 +592,7 @@ export async function exportClips(
 
     // one UI-chrome detection pass for the whole source (bands don't move)
     let uiCrop: UiCrop | undefined;
-    if (options.trimUi && clips.length > 0 && !audioOnly) {
+    if (options.trimUi && !gameCamera && clips.length > 0 && !audioOnly) {
       const spanEnd = Math.max(...clips.map((c) => c.endSec));
       uiCrop = await detectUiCrop(inputPath, spanEnd, srcInfo?.videoStreamIndex, color, signal).catch(() => {
         signal?.throwIfAborted();
@@ -864,7 +868,7 @@ export async function exportClips(
       let trackPlan;
       let reframeComposition: ClipRenderOutcome["reframeComposition"];
       let reframeCoverage: ClipQaReport["subjectCoverage"];
-      if (options.vertical && options.faceTrack && options.modelsRoot && !audioOnly) {
+      if (options.vertical && !gameCamera && options.faceTrack && options.modelsRoot && !audioOnly) {
         // 拼接片逐段各算一版:整段跨度可能有几十分钟,人脸检测按跨度跑纯属白烧。
         // 每段的关键帧相对本段起点,统一平移到「相对切片起点」再走同一条重映射。
         const cp = stitched
@@ -937,7 +941,7 @@ export async function exportClips(
       // 强调时刻 = 最响的几个峰值事件——「推近必须绑定真实事件」,纯呼吸
       // 之外镜头语言要和内容对上(autozoom.ts 本就支持,这里把信号接通)
       const autoZoom =
-        options.autoZoom && options.vertical && !audioOnly && srcInfo && srcInfo.fps > 0
+        options.autoZoom && options.vertical && !gameCamera && !audioOnly && srcInfo && srcInfo.fps > 0
           ? {
               durationSec: clipDuration,
               fps: srcInfo.fps,
@@ -960,6 +964,7 @@ export async function exportClips(
             ...sourceStreams,
             uiCrop,
             vertical: options.vertical,
+            gameCamera,
             autoZoom,
             visualEnhance,
             color: activeColor,
@@ -984,6 +989,7 @@ export async function exportClips(
               uiCrop,
               ...sourceStreams,
               vertical: options.vertical,
+              gameCamera,
               autoZoom,
               visualEnhance,
               color: activeColor,
@@ -1195,7 +1201,7 @@ export async function exportClips(
               : null;
             const miniCutOptions = miniTrack
               ? { ...sourceStreams, trackPlan: miniTrack, visualEnhance: miniVisualEnhance, color: activeColor, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: baseNormalizeLoudness, denoise: baseDenoise, muteRanges: options.muteTerms && clip.words ? mapSensitiveRanges(clip.words, options.muteTerms, [{ startSec: coPlan.startSec, endSec: coPlan.endSec }]) : undefined, watermark, crf: options.crf, encoder: videoEncoder }
-              : { ...sourceStreams, uiCrop, vertical: options.vertical, visualEnhance: miniVisualEnhance, color: activeColor, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: baseNormalizeLoudness, denoise: baseDenoise, muteRanges: options.muteTerms && clip.words ? mapSensitiveRanges(clip.words, options.muteTerms, [{ startSec: coPlan.startSec, endSec: coPlan.endSec }]) : undefined, watermark, crf: options.crf, encoder: videoEncoder };
+              : { ...sourceStreams, uiCrop, vertical: options.vertical, gameCamera, visualEnhance: miniVisualEnhance, color: activeColor, subtitlePath: miniAssPath, fontsDir: miniAssPath ? options.fontsDir : undefined, normalizeLoudness: baseNormalizeLoudness, denoise: baseDenoise, muteRanges: options.muteTerms && clip.words ? mapSensitiveRanges(clip.words, options.muteTerms, [{ startSec: coPlan.startSec, endSec: coPlan.endSec }]) : undefined, watermark, crf: options.crf, encoder: videoEncoder };
             await rename(outPath, bodyPath);
             await cutClip(inputPath, miniPath, coPlan.startSec, coPlan.endSec, miniCutOptions, signal);
             // 硬切拼接(通行做法);AIGC 隐式标识补到最终容器上
@@ -1482,7 +1488,7 @@ export async function exportClips(
       renderByClip.set(clip.id, {
         captionStyle: wantCaptions ? (webStyle ?? assStyle) : "none",
         captionsBurned: wantCaptions && !webRenderFailed,
-        reframe: audioOnly ? "audiogram" : options.vertical ? (trackPlan ? "face-track" : "center-crop") : "none",
+        reframe: audioOnly ? "audiogram" : gameCamera ? "game-camera" : options.vertical ? (trackPlan ? "face-track" : "center-crop") : "none",
         reframeComposition,
         edit: summarizeEdit(origDur, plan),
         fillersRemoved: fillerHits.length,
@@ -1695,14 +1701,15 @@ export async function exportClips(
       exportedAt: new Date().toISOString(),
       options: {
         vertical: Boolean(options.vertical),
+        ...(gameCamera ? { gameCamera } : {}),
         captionStyle: options.captionStyle ?? "none",
         jumpCut: Boolean(options.jumpCut),
         cleanFillers: Boolean(options.cleanFillers),
         cutRetakes: Boolean(options.cutRetakes),
-        autoZoom: Boolean(options.autoZoom),
+        autoZoom: Boolean(options.autoZoom && !gameCamera),
         sfx: Boolean(options.sfx),
         bgm: Boolean(options.bgmPath),
-        trimUi: Boolean(options.trimUi),
+        trimUi: Boolean(options.trimUi && !gameCamera),
         titleCard: Boolean(options.titleCard),
         openingHook: Boolean(options.openingHook),
         normalizeLoudness: Boolean(options.normalizeLoudness),
