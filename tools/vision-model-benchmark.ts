@@ -11,11 +11,9 @@
 import { resolve } from "path";
 import { composeContactSheetJpeg } from "../src/core/contact-sheet";
 import {
-  parseSheetVerdicts,
+  analyzeVisionSheet,
+  VISION_ENERGY_THRESHOLD,
   planFrameTimes,
-  sheetUserPrompt,
-  visionChatComplete,
-  visionSystemPrompt,
 } from "../src/core/highlight/vision";
 import { probeMedia } from "../src/core/probe";
 
@@ -51,17 +49,14 @@ async function main(): Promise<void> {
     for (const fixture of fixtures) {
       const started = Date.now();
       try {
-        const raw = await visionChatComplete(
-          { baseUrl, apiKey, model },
-          visionSystemPrompt(fixture.times.length),
-          sheetUserPrompt(fixture.times),
-          fixture.sheet,
-          AbortSignal.timeout(60_000)
+        const { cells, recovered } = await analyzeVisionSheet(
+          { baseUrl, apiKey, model }, fixture.times, fixture.sheet, AbortSignal.timeout(60_000)
         );
-        const cells = parseSheetVerdicts(raw, fixture.times.length);
         cases.push({
           video: fixture.video,
           structured: cells !== null,
+          recovered,
+          peakFrames: cells?.filter((cell) => cell.energy >= VISION_ENERGY_THRESHOLD).map((cell) => cell.i) ?? [],
           frames: cells?.length ?? 0,
           meanEnergy: cells && cells.length > 0
             ? Number((cells.reduce((sum, cell) => sum + cell.energy, 0) / cells.length).toFixed(3))
