@@ -320,6 +320,8 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server â
 
 ## What's new
 
+**[v0.35.2](docs/releases/v0.35.2.md)** (2026-11-21): a production workspace for media, episode recipes, source/output monitors, the timeline and export inspector. Supports system light/dark appearance and keyboard navigation. [See the workstation](docs/media/workspace-v0.35.2.webp).
+
 **[v0.35.1](docs/releases/v0.35.1.md)** (2026-11-21): start a recipe from the import screen. Bind music and watermarks individually and see both the requested and actual file names.
 
 **[v0.35.0](docs/releases/v0.35.0.md)** (2026-11-21): save portable next-episode recipes with brand, music, captions, layout and selection rules. Export editable Jianying title/caption tracks and frame-accurate 29.97 NDF EDLs. [Download a sample recipe](docs/recipes/weekly-recap.hotclip.json).

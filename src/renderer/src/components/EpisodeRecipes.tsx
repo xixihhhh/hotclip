@@ -1,3 +1,4 @@
+import { LuLayers, LuUpload, LuDownload, LuArrowRight } from "react-icons/lu";
 import { useEffect, useRef, useState } from "react";
 import { episodeStructure, type EpisodeStructure } from "../../../shared/episode-structure";
 import { useT } from "../i18n/store";
@@ -9,7 +10,7 @@ import { assetFilename, assetPath, bindRecipeAsset, missingRecipeAssets, require
 
 const FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ember";
 const BUTTON = FOCUS + " rounded-lg border border-line px-2.5 py-1 text-xs font-semibold hover:border-ember disabled:opacity-40";
-const INPUT = FOCUS + " rounded-md border border-line bg-panel-2 px-2 py-1 text-xs text-fg";
+
 
 export function EpisodeRecipes({ onNext, canSave = false }: { onNext: () => Promise<boolean>; canSave?: boolean }) {
   const t = useT("workbench");
@@ -115,38 +116,23 @@ export function EpisodeRecipes({ onNext, canSave = false }: { onNext: () => Prom
     setMessage(spans.length >= 3 ? t("recipeReadParts") : t("recipeEstimated"));
   }
 
-  return <details className="my-2 w-full shrink-0 rounded-xl border border-line px-3 py-2 text-left text-xs">
-    <summary className={FOCUS + " cursor-pointer rounded py-1 text-sm font-bold text-fg"}>{t(canSave ? "recipes" : "recipeHome")}</summary>
-    <fieldset disabled={busy} className="mt-2 space-y-2">
-      {canSave && <div className="space-y-2">
-        <label className="flex gap-2"><input type="checkbox" checked={useStructure} onChange={(e) => setUseStructure(e.target.checked)} />{t("recipeStructure")}</label>
-        {useStructure && <div className="flex flex-wrap items-center gap-2">
-          {(["opening", "body", "ending"] as const).map((key) => <label key={key} className="flex items-center gap-1">{t("recipe_" + key)}
-            <input className={INPUT + " w-14"} type="number" min="1" max="180" value={structure[key] || ""} onChange={(e) => setStructure({ ...structure, [key]: Number(e.target.value) })} /></label>)}
-          <button className={BUTTON} onClick={useCutLength}>{t("recipeFromCut")}</button>
-        </div>}
-        <div className="flex flex-wrap gap-2"><input className={INPUT} aria-label={t("recipeName")} placeholder={t("recipeName")} value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
-          <button className={BUTTON} onClick={() => void action(async () => saveCurrent())} disabled={!name.trim() || (useStructure && !episodeStructure(structure))}>{t("recipeSave")}</button>
-        </div>
-      </div>}
-      <div className="flex flex-wrap items-center gap-2">
-        {list.length > 0 && <select ref={selectRef} aria-label={t("recipes")} className={INPUT} value={selected} onChange={(e) => { select(e.target.value); setUnavailable([]); setFailed(false); setMessage(""); }}>
-          {list.map((entry) => <option key={entry.id} value={entry.id}>{entry.recipe.name}</option>)}
-        </select>}
-        {item && <>{canSave && <button className={BUTTON} onClick={() => void action(() => apply(false))}>{t("recipeApply")}</button>}
-          <button className={BUTTON} onClick={() => void action(() => apply(true))}>{t("recipeNext")}</button>
-          <button className={BUTTON} onClick={download}>{t("recipeExport")}</button>
-        </>}
-        <input ref={fileInput} type="file" accept=".json,application/json" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; void action(() => importFile(file)); }} />
-        <button className={BUTTON} onClick={() => fileInput.current?.click()}>{t("recipeImport")}</button>
-      </div>
+  return <section className={canSave ? "recipe-editor" : "recipe-home"}>
+    <h2><LuLayers aria-hidden="true" size={18} />{t(canSave ? "recipes" : "recipeHome")}</h2>
+    <fieldset disabled={busy}>
+      {item ? <div className="recipe-selection">
+        <label>{t("deskRecipeSelect")}
+          <select ref={selectRef} aria-label={t("recipes")} value={selected} onChange={(e) => {
+            select(e.target.value); setUnavailable([]); setFailed(false); setMessage("");
+          }}>{list.map((entry) => <option key={entry.id} value={entry.id}>{entry.recipe.name}</option>)}</select>
+        </label>
+      </div> : <p className="recipe-empty">{t("deskRecipeEmpty")}</p>}
       {item && RECIPE_ASSETS.map((kind) => {
         const expected = requiredAsset(item, kind);
         if (!expected) return null;
         const label = t(kind === "music" ? "recipeMusic" : "recipeLogo");
         const path = assetPath(item, kind);
         const missing = !path || unavailable.includes(kind);
-        return <div key={kind} className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-2">
+        return <div key={kind} className="recipe-asset-row">
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-fg">{label}</p>
             <p className="break-all text-mut">{t("recipeExpected", { name: expected })}</p>
@@ -160,7 +146,33 @@ export function EpisodeRecipes({ onNext, canSave = false }: { onNext: () => Prom
           </button>
         </div>;
       })}
-      {message && <p role={failed ? "alert" : "status"} className={failed ? "text-amber-400" : "text-fg"}>{message}</p>}
+      {item && <div className="recipe-run">
+        <button type="button" className="desk-primary" onClick={() => void action(() => apply(true))}>{t("recipeNext")}<LuArrowRight size={15} aria-hidden="true" /></button>
+        {canSave && <button type="button" className="desk-secondary" onClick={() => void action(() => apply(false))}>{t("recipeApply")}</button>}
+      </div>}
+      <div className="recipe-files">
+        <input ref={fileInput} type="file" accept=".json,application/json" className="hidden" onChange={(e) => {
+          const file = e.target.files?.[0]; e.target.value = ""; void action(() => importFile(file));
+        }} />
+        <button type="button" className={item ? "desk-quiet" : "desk-secondary"} onClick={() => fileInput.current?.click()}>
+          <LuUpload size={15} aria-hidden="true" />{t("recipeImport")}</button>
+        {item && <button type="button" className="desk-quiet" onClick={download}><LuDownload size={15} aria-hidden="true" />{t("recipeExport")}</button>}
+      </div>
+      {canSave && <details className="recipe-save" open={!item || undefined}>
+        <summary>{t("recipeSave")}</summary>
+        <div className="recipe-save-form">
+          <label className="recipe-check"><input type="checkbox" checked={useStructure} onChange={(e) => setUseStructure(e.target.checked)} />{t("recipeStructure")}</label>
+          {useStructure && <div className="recipe-times">
+            {(["opening","body","ending"] as const).map((key) => <label key={key}>{t("recipe_"+key)}<input type="number" min="1" max="180" value={structure[key] || ""}
+              onChange={(e) => setStructure({ ...structure, [key]: Number(e.target.value) })} /></label>)}
+            <button type="button" className="desk-quiet" onClick={useCutLength}>{t("recipeFromCut")}</button>
+          </div>}
+          <div className="scheme-tools"><input aria-label={t("recipeName")} placeholder={t("recipeName")} value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
+            <button type="button" className="desk-secondary" onClick={() => void action(async () => saveCurrent())}
+              disabled={!name.trim() || (useStructure && !episodeStructure(structure))}>{t("recipeSave")}</button></div>
+        </div>
+      </details>}
+      {message && <p role={failed ? "alert" : "status"} className={failed ? "desk-error" : "recipe-message"}>{message}</p>}
     </fieldset>
-  </details>;
+  </section>;
 }

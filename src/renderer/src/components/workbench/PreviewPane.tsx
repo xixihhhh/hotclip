@@ -156,7 +156,7 @@ export function PreviewPane({
     <div className="flex shrink-0 flex-col gap-2">
       <div className={`flex gap-2.5 ${compact ? "h-[132px]" : "h-[236px]"}`}>
         {/* 源画面 */}
-        <div className="relative min-w-0 flex-1 overflow-hidden rounded-xl border border-line/60 bg-black">
+        <div className="monitor-source relative min-w-0 flex-1 overflow-hidden bg-black">
           {/* [FIX] 读流失败时不能只是把 <video> 留在原地(它已经黑屏且不会自愈),
               要显式换成占位块,并报出 MediaError.code。 */}
           {src && mainErrCode === 0 ? (
@@ -191,12 +191,12 @@ export function PreviewPane({
               {mainErrCode > 0 ? t("previewReadFailed").replace("{code}", String(mainErrCode)) : t("noPreview")}
             </div>
           )}
-          <span className="pointer-events-none absolute top-2 left-2 rounded-md bg-black/55 px-2 py-0.5 text-[10px] text-fg/70">
+          <span className="monitor-name pointer-events-none absolute top-2 left-2">
             {t("sourcePreview")}
           </span>
         </div>
         {/* 竖屏 9:16 中心裁切:发光描边(主视觉海报的切片卡语言) */}
-        <div className={`relative shrink-0 overflow-hidden rounded-xl border-[1.5px] border-ember/60 bg-black shadow-[0_0_22px_-6px_rgba(255,100,40,0.5)] ${compact && splitCamera ? "w-[74px]" : "w-[133px]"}`}>
+        <div className={`monitor-output relative shrink-0 overflow-hidden bg-black ${compact && splitCamera ? "w-[74px]" : "w-[133px]"}`}>
           {src && splitCamera ? (
             <canvas ref={canvasRef} width={270} height={480} aria-label={t("gameCamera")} className="h-full w-full object-contain" />
           ) : src ? (
@@ -204,7 +204,7 @@ export function PreviewPane({
           ) : (
             <div className="h-full bg-gradient-to-b from-panel-2 to-panel" />
           )}
-          <span className="pointer-events-none absolute right-0 bottom-1.5 left-0 text-center text-[9px] text-fg/50">
+          <span className="monitor-name pointer-events-none absolute bottom-2 left-2">
             {t("verticalPreview")}
           </span>
         </div>
@@ -228,6 +228,7 @@ export function PreviewPane({
       <div className="flex items-center gap-2.5">
         <button
           type="button"
+          aria-label={t("deskPrevCut")}
           onClick={onPrevCandidate}
           className="flex h-7 w-7 items-center justify-center rounded-lg border border-line text-mut transition-colors hover:border-mut hover:text-fg"
         >
@@ -235,14 +236,16 @@ export function PreviewPane({
         </button>
         <button
           type="button"
+          aria-label={t(playing ? "deskPause" : "deskPlay")}
           onClick={togglePlay}
           disabled={!src}
-          className="flame-gradient flex h-8 w-8 items-center justify-center rounded-lg text-white disabled:opacity-40"
+          className="transport-play"
         >
           {playing ? <LuPause className="h-4 w-4" /> : <LuPlay className="h-4 w-4" />}
         </button>
         <button
           type="button"
+          aria-label={t("deskNextCut")}
           onClick={onNextCandidate}
           className="flex h-7 w-7 items-center justify-center rounded-lg border border-line text-mut transition-colors hover:border-mut hover:text-fg"
         >

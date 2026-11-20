@@ -3,15 +3,15 @@
  * 弹窗」不再伪装成开关;当前组合可存成命名方案,一键复用。
  */
 import { EpisodeRecipes } from "../EpisodeRecipes";
-import { useState } from "react";
-import { LuX, LuPalette, LuTrash2, LuLoaderCircle } from "react-icons/lu";
+import { useEffect, useRef, useState } from "react";
+import { LuX, LuPalette, LuTrash2, LuLoaderCircle, LuRectangleVertical, LuScissors, LuAudioLines, LuCaptions, LuUpload, LuPackage, LuLayers } from "react-icons/lu";
 import { useT, useLocaleStore } from "../../i18n/store";
 import { getApi } from "../../api/provider";
 import { useRenderPrefs } from "../../stores/render-prefs-store";
 import { useLlmStore } from "../../stores/llm-store";
 import { useSchemes, BUILTIN_SCHEMES, matchesScheme } from "../../stores/scheme-store";
 import { PLATFORM_SPECS } from "../../../../shared/platform-specs";
-import { ModalShell, SectionLabel, Segmented, SwitchRow } from "../ui";
+import { ModalShell, Segmented, SwitchRow } from "../ui";
 import type { CaptionStyleChoice } from "../../../../shared/api-types";
 
 const CAPTION_ORDER: CaptionStyleChoice[] = ["keyword", "pop", "bubble", "hormozi", "minimal", "karaoke", "none"];
@@ -25,13 +25,15 @@ const CAPTION_KEY: Record<CaptionStyleChoice, string> = {
   bubble: "captionBubble",
 };
 
-function Group({ title, children }: { title: string; children: React.ReactNode }): React.JSX.Element {
-  return (
-    <div className="flex flex-col gap-1 rounded-xl border border-line/60 bg-panel-2/40 px-3.5 py-3">
-      <SectionLabel>{title}</SectionLabel>
-      <div className="mt-1 flex flex-col gap-0.5">{children}</div>
-    </div>
-  );
+const PANELS = [
+  ["groupPicture", LuRectangleVertical], ["groupCut", LuScissors], ["groupAudio", LuAudioLines],
+  ["groupCaption", LuCaptions], ["groupPublish", LuUpload], ["groupDistribute", LuPackage], ["recipes", LuLayers],
+] as const;
+type Panel = typeof PANELS[number][0];
+
+function Group({ active, title, children }: { active: boolean; title: string; children: React.ReactNode }) {
+  if (!active) return null;
+  return <section className="export-group"><h3>{title}</h3>{children}</section>;
 }
 
 export function ExportPanel({
@@ -59,6 +61,14 @@ export function ExportPanel({
   const [schemeName, setSchemeName] = useState("");
   const [bgmBusy, setBgmBusy] = useState(false);
 
+  const [panel, setPanel] = useState<Panel>("groupPicture");
+  const consoleRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    consoleRef.current?.querySelector<HTMLButtonElement>('nav button[aria-current="page"]')?.focus();
+    return () => { if (trigger?.isConnected) trigger.focus(); };
+  }, []);
+
   const splitCamera = hasVideo && prefs.vertical && prefs.gameCameraEnabled;
   const schemes = [...BUILTIN_SCHEMES, ...userSchemes];
   const activeScheme = schemes.find((s) => matchesScheme(prefs, s));
@@ -72,68 +82,54 @@ export function ExportPanel({
   return (
     <ModalShell onClose={onClose}>
       <section
-        className="card flex max-h-[92vh] w-full max-w-3xl flex-col rounded-2xl p-5"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-label={t("exportPanelTitle")}
-      >
-        <div className="flex shrink-0 items-center gap-3">
-          <h2 className="text-[15px] font-extrabold">{t("exportPanelTitle")}</h2>
-          <p className="min-w-0 flex-1 truncate text-[11px] text-mut">{t("exportPanelDesc")}</p>
-          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-mut transition-colors hover:text-fg" aria-label="close">
-            <LuX className="h-4.5 w-4.5" />
-          </button>
-        </div>
-
-        {/* 方案行 */}
-        <div className="mt-3.5 flex shrink-0 flex-wrap items-center gap-1.5">
-          {schemes.map((s) => (
-            <span key={s.id} className="group relative">
-              <button
-                type="button"
-                onClick={() => setPref({ ...s.prefs })}
-                className={`rounded-lg border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-                  activeScheme?.id === s.id ? "border-ember/70 bg-ember/12 text-ember" : "border-line text-mut hover:border-mut hover:text-fg"
-                }`}
-              >
-                {s.name}
-              </button>
-              {!s.builtin && (
-                <button
-                  type="button"
-                  title={t("schemeDelete")}
-                  onClick={() => remove(s.id)}
-                  className="absolute -top-1.5 -right-1.5 hidden rounded-full bg-panel-2 p-0.5 text-mut group-hover:block hover:text-red-400"
-                >
-                  <LuTrash2 className="h-3 w-3" />
-                </button>
-              )}
-            </span>
-          ))}
-          {!activeScheme && <span className="chip rounded-lg px-2.5 py-1.5 text-[11px] text-ember">{t("schemeCustom")}</span>}
-          <span className="flex-1" />
-          <input
-            value={schemeName}
-            onChange={(e) => setSchemeName(e.target.value)}
-            placeholder={t("schemeSaveName")}
-            className="w-36 rounded-lg border border-line bg-panel-2 px-2.5 py-1.5 text-[11px] outline-none focus:border-ember/60"
-          />
-          <button
-            type="button"
-            disabled={!schemeName.trim()}
-            onClick={() => {
-              saveCurrent(schemeName.trim(), prefs);
-              setSchemeName("");
-            }}
-            className="rounded-lg border border-dashed border-line px-2.5 py-1.5 text-[11px] font-semibold text-mut transition-colors hover:border-mut hover:text-fg disabled:opacity-40"
-          >
-            {t("schemeSave")}
-          </button>
-        </div>
-
-        <EpisodeRecipes onNext={onNext} canSave />
-        <div className="mt-3.5 grid min-h-0 flex-1 grid-cols-1 gap-2.5 overflow-y-auto pr-1 sm:grid-cols-2">
-          <Group title={t("groupPicture")}>
+        className="export-console" ref={consoleRef}
+        onKeyDown={(event) => {
+          if (event.key !== "Tab") return;
+          const nodes = Array.from(event.currentTarget.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), select:not(:disabled), summary"))
+            .filter((node) => node.getClientRects().length > 0);
+          const first = nodes[0], last = nodes.at(-1);
+          if (event.shiftKey && event.target === first) { event.preventDefault(); last?.focus(); }
+          if (!event.shiftKey && event.target === last) { event.preventDefault(); first?.focus(); }
+        }}
+        onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t("exportPanelTitle")}>
+        <header className="console-header">
+          <h2>{t("exportPanelTitle")}</h2>
+          <button type="button" className="desk-icon" onClick={onClose} aria-label={t("deskClose")}><LuX size={18} /></button>
+        </header>
+        <div className="console-body">
+          <nav aria-label={t("deskSections")} className="console-nav" onKeyDown={(event) => {
+            const buttons = Array.from(event.currentTarget.querySelectorAll("button"));
+            const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+            const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[event.key];
+            if (current < 0 || (step === undefined && event.key !== "Home" && event.key !== "End")) return;
+            event.preventDefault();
+            const index = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (current + (step ?? 0) + buttons.length) % buttons.length;
+            buttons[index].focus(); buttons[index].click();
+          }}>{PANELS.map(([key, Icon]) =>
+            <button type="button" key={key} aria-current={panel === key ? "page" : undefined} onClick={() => setPanel(key)}>
+              <Icon aria-hidden="true" size={16}/>{t(key)}
+            </button>)}</nav>
+          <div className="console-scroller">
+            <div hidden={panel !== "recipes"}><EpisodeRecipes onNext={onNext} canSave /></div>
+            {panel !== "recipes" && <>
+              <div className="scheme-tools">
+                <label>{t("schemeLabel")}
+                  <select value={activeScheme?.id ?? ""} onChange={(e) => {
+                    const chosen = schemes.find((entry) => entry.id === e.target.value);
+                    if (chosen) setPref({ ...chosen.prefs });
+                  }}>
+                    {!activeScheme && <option value="">{t("schemeCustom")}</option>}
+                    {schemes.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
+                  </select>
+                </label>
+                {activeScheme && !activeScheme.builtin && <button type="button" className="desk-icon" title={t("schemeDelete")}
+                  aria-label={t("schemeDelete")} onClick={() => remove(activeScheme.id)}><LuTrash2 size={15}/></button>}
+                <input value={schemeName} aria-label={t("schemeSaveName")} placeholder={t("schemeSaveName")} onChange={(e) => setSchemeName(e.target.value)} />
+                <button type="button" className="desk-secondary" disabled={!schemeName.trim()} onClick={() => {
+                  saveCurrent(schemeName.trim(), prefs); setSchemeName("");
+                }}>{t("schemeSave")}</button>
+              </div>
+          <Group active={panel === "groupPicture"} title={t("groupPicture")}>
             <SwitchRow label={th("optVertical")} hint={th("optVerticalHint")} on={prefs.vertical} onToggle={() => setPref({ vertical: !prefs.vertical })} />
             <SwitchRow
               label={th("optAlsoLandscape")}
@@ -169,7 +165,7 @@ export function ExportPanel({
             </button>
           </Group>
 
-          <Group title={t("groupCut")}>
+          <Group active={panel === "groupCut"} title={t("groupCut")}>
             <SwitchRow label={th("optJumpCut")} hint={th("optJumpCutHint")} on={prefs.jumpCut} onToggle={() => setPref({ jumpCut: !prefs.jumpCut })} />
             <SwitchRow
               label={th("optBreath")}
@@ -186,7 +182,7 @@ export function ExportPanel({
             <SwitchRow label={th("optFlash")} hint={th("optFlashHint")} on={prefs.flashForward} onToggle={() => setPref({ flashForward: !prefs.flashForward })} />
           </Group>
 
-          <Group title={t("groupAudio")}>
+          <Group active={panel === "groupAudio"} title={t("groupAudio")}>
             <SwitchRow label={th("optLoudness")} hint={th("optLoudnessHint")} on={prefs.normalizeLoudness} onToggle={() => setPref({ normalizeLoudness: !prefs.normalizeLoudness })} />
             <SwitchRow label={th("optDenoise")} hint={th("optDenoiseHint")} on={prefs.denoise} onToggle={() => setPref({ denoise: !prefs.denoise })} />
             {prefs.denoise && (
@@ -250,7 +246,7 @@ export function ExportPanel({
             </div>
           </Group>
 
-          <Group title={t("groupCaption")}>
+          <Group active={panel === "groupCaption"} title={t("groupCaption")}>
             <div className="flex min-h-7.5 flex-wrap items-center gap-2.5">
               <span className="text-[12.5px] text-fg/90">{t("captionLabel")}</span>
               <Segmented<CaptionStyleChoice>
@@ -270,7 +266,7 @@ export function ExportPanel({
             <SwitchRow label={th("optSrt")} hint={th("optSrtHint")} on={prefs.subtitleFile} onToggle={() => setPref({ subtitleFile: !prefs.subtitleFile })} />
           </Group>
 
-          <Group title={t("groupPublish")}>
+          <Group active={panel === "groupPublish"} title={t("groupPublish")}>
             <SwitchRow label={th("optPublish")} hint={th("optPublishHint")} on={prefs.publishCopy} onToggle={() => setPref({ publishCopy: !prefs.publishCopy })} />
             <div className="flex min-h-7.5 items-center gap-2.5" title={th("optAiCoverHint")}>
               <span className={`min-w-0 flex-1 truncate text-[12.5px] ${atlasReady ? "text-fg/90" : "text-mut/60"}`}>{t("coverLabel")}</span>
@@ -292,7 +288,7 @@ export function ExportPanel({
             <SwitchRow label={th("optCompilation")} hint={th("optCompilationHint")} on={prefs.compilation} onToggle={() => setPref({ compilation: !prefs.compilation })} />
           </Group>
 
-          <Group title={t("groupDistribute")}>
+          <Group active={panel === "groupDistribute"} title={t("groupDistribute")}>
             <div className="flex min-h-7.5 items-center gap-2.5" title={th("optVariantsHint")}>
               <span className="min-w-0 flex-1 truncate text-[12.5px] text-fg/90">{t("variantsLabel")}</span>
               <Segmented<number>
@@ -332,6 +328,8 @@ export function ExportPanel({
               </div>
             )}
           </Group>
+            </>}
+          </div>
         </div>
       </section>
     </ModalShell>

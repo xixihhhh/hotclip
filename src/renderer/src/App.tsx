@@ -7,6 +7,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   LuCheck,
+  LuArrowUpRight,
+  LuFilm,
   LuCircleArrowUp,
   LuFileVideo,
   LuFolderSearch,
@@ -31,6 +33,7 @@ import { WatchFolderModal } from "./components/WatchFolderModal";
 import { ProjectLibraryModal } from "./components/ProjectLibraryModal";
 import type { ProjectSummary, UpdateInfo, UrlImportProgressEvent } from "../../shared/api-types";
 import "./app.css";
+import "./workstation.css";
 
 function displayName(path: string): string {
   const base = path.split(/[\\/]/).pop() ?? path;
@@ -53,32 +56,29 @@ function formatTransfer(bytes?: number): string {
   return `${Math.round(bytes / 1024)} KB`;
 }
 
-const FILE_CHIPS = ["MP4", "MKV", "MOV", "FLV", "MP3"];
+const SAMPLE_STILLS = [
+  new URL("./assets/media/sample-1.webp", import.meta.url).href,
+  new URL("./assets/media/sample-2.webp", import.meta.url).href,
+  new URL("./assets/media/sample-3.webp", import.meta.url).href,
+];
 
 /** 管线状态 chip:✓ 完成 / ● 进行中 / 空心 未开始。 */
 function PipeChip({ label, state, extra }: { label: string; state: "done" | "busy" | "idle"; extra?: string }): React.JSX.Element {
-  return (
-    <span
-      className={`flex h-6.5 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] whitespace-nowrap ${
-        state === "busy" ? "border-ember/50 bg-ember/10 text-ember" : "border-line bg-white/3 text-mut"
-      }`}
-    >
-      {state === "done" ? (
-        <LuCheck className="h-3 w-3 text-emerald-400" />
-      ) : state === "busy" ? (
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ember" />
-      ) : (
-        <span className="h-1.5 w-1.5 rounded-full border border-mut/50" />
-      )}
-      {label}
-      {extra && <span className="font-mono text-[10px] tabular-nums opacity-80">{extra}</span>}
-    </span>
-  );
+  return <span className="pipeline-step" data-state={state}>
+    {state === "done" ? <LuCheck aria-hidden="true" size={13} /> : <i aria-hidden="true" />}
+    {label}{extra && <span>{extra}</span>}
+  </span>;
 }
 
 /** 导入页:工作区的空态——拖放区 + 录播监听入口,营销话术退场。 */
-function ImportStage({ onImportFile, onNext }: { onImportFile: (file: ProbedFile) => Promise<void>; onNext: () => Promise<boolean> }): React.JSX.Element {
+function ImportStage({ onImportFile, onNext, projects, onOpen }: {
+  onImportFile: (file: ProbedFile) => Promise<void>;
+  onNext: () => Promise<boolean>;
+  projects: ProjectSummary[];
+  onOpen: (id: string) => Promise<void>;
+}): React.JSX.Element {
   const t = useT("home");
+  const tp = useT("projects");
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -146,12 +146,18 @@ function ImportStage({ onImportFile, onNext }: { onImportFile: (file: ProbedFile
         : t("urlStageResolve");
 
   return (
-    <main className="stage flex flex-1 flex-col items-center overflow-y-auto px-6 pt-[10vh] pb-12">
-      <h1 className="rise-in text-center text-3xl leading-tight font-extrabold tracking-tight">{t("importTitle")}</h1>
-      <p className="rise-in rise-in-1 mt-3 max-w-xl text-center text-[14px] leading-relaxed text-mut">{t("importDesc")}</p>
-
-      <div
-        className="drop-zone rise-in rise-in-2 mt-8 w-full max-w-2xl rounded-3xl p-3"
+    <main className="media-home">
+      <div className="media-home-inner">
+        <div className="desk-heading">
+          <h1>{t("deskTitle")}</h1>
+          <button type="button" className="desk-quiet" onClick={() => setShowWatch(true)}>
+            <LuFolderSearch aria-hidden="true" size={16} />{t("deskWatch")}
+          </button>
+        </div>
+        <div className="media-launch-grid">
+          <section className="media-source">
+            <h2><LuFilm aria-hidden="true" size={18} />{t("deskSource")}</h2>
+            <div className="media-drop"
         data-dragging={dragging}
         onDragOver={(e) => {
           e.preventDefault();
@@ -166,55 +172,19 @@ function ImportStage({ onImportFile, onNext }: { onImportFile: (file: ProbedFile
           if (dropped?.path) void probePath(dropped.path);
         }}
       >
-        <div className="drop-zone-inner flex flex-col items-center rounded-2xl px-8 py-10">
-          <div className="icon-tile float-y flex h-14 w-14 items-center justify-center rounded-2xl">
-            <LuFileVideo className="h-7 w-7" />
+          <div className="drop-copy">
+            <LuFileVideo className="drop-file" aria-hidden="true" />
+            <div><h3>{t("deskDrop")}</h3><p>MP4 · MKV · MOV · FLV · MP3</p></div>
           </div>
-          <button
-            type="button"
-            onClick={() => void pickFile()}
-            disabled={busy}
-            className="btn-flame mt-6 rounded-xl px-10 py-3 text-[15px] font-bold text-white disabled:opacity-50"
-          >
-            {busy ? <span className="shimmer">{t("probing")}</span> : t("importButton")}
+          <button type="button" onClick={() => void pickFile()} disabled={busy} className="desk-primary">
+            {busy ? t("probing") : t("importButton")}
           </button>
-          <p className="mt-3 text-[13px] text-mut/80">{t("importDrop")}</p>
-          <div className="mt-5 flex items-center gap-1.5">
-            {FILE_CHIPS.map((chip) => (
-              <span key={chip} className="chip rounded-md px-2 py-0.5 text-[10px] font-semibold tracking-wide">
-                {chip}
-              </span>
-            ))}
-          </div>
-          <p className="mt-4 flex items-center gap-1.5 text-xs text-mut">
-            <LuShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-            {t("importHint")}
-          </p>
         </div>
-      </div>
-
-      <div className="mt-3 w-full max-w-2xl"><EpisodeRecipes onNext={onNext} /></div>
-
-      <section className="rise-in rise-in-2 mt-5 w-full max-w-2xl rounded-2xl border border-line/80 bg-panel/55 p-4" aria-busy={urlBusy}>
-        <div className="flex items-center gap-2">
-          <LuLink aria-hidden="true" className="h-4 w-4 text-ember" />
-          <h2 className="text-[13px] font-bold text-fg">{t("urlTitle")}</h2>
-        </div>
-        <p className="mt-1 text-[11.5px] leading-relaxed text-mut">{t("urlDesc")}</p>
-        <div className="mt-3 flex gap-2">
-          <label htmlFor="media-url" className="sr-only">{t("urlLabel")}</label>
-          <input
-            id="media-url"
-            type="url"
-            value={url}
-            disabled={urlBusy || busy}
-            onChange={(e) => setUrl(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void importUrl();
-            }}
-            placeholder={t("urlPlaceholder")}
-            className="min-w-0 flex-1 rounded-lg border border-line bg-panel-2 px-3 py-2.5 text-[12.5px] text-fg outline-none transition-colors placeholder:text-mut/60 focus:border-ember/60 disabled:opacity-50"
-          />
+        <section className="desk-url" aria-busy={urlBusy}>
+          <label htmlFor="media-url"><LuLink aria-hidden="true" size={14} />{t("urlTitle")}</label>
+          <div className="url-controls">
+            <input id="media-url" type="url" value={url} disabled={urlBusy || busy} onChange={(e) => setUrl(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") void importUrl(); }} placeholder={t("urlPlaceholder")} />
           {urlBusy ? (
             <button
               type="button"
@@ -228,7 +198,7 @@ function ImportStage({ onImportFile, onNext }: { onImportFile: (file: ProbedFile
               type="button"
               onClick={() => void importUrl()}
               disabled={busy || !url.trim()}
-              className="btn-flame inline-flex min-h-10 items-center gap-2 rounded-lg px-4 text-[12px] font-bold text-white disabled:opacity-50"
+              className="desk-secondary"
             >
               <LuCircleArrowUp aria-hidden="true" className="h-4 w-4" />
               {t("urlButton")}
@@ -260,17 +230,27 @@ function ImportStage({ onImportFile, onNext }: { onImportFile: (file: ProbedFile
         )}
       </section>
 
-      <button
-        type="button"
-        onClick={() => setShowWatch(true)}
-        className="rise-in rise-in-2 mt-5 inline-flex items-center gap-1.5 rounded-lg border border-line px-4 py-2 text-[12.5px] font-semibold text-mut transition-colors hover:border-mut hover:text-fg"
-      >
-        <LuFolderSearch className="h-4 w-4" />
-        {t("watchEntry")}
-      </button>
-
-      {error && <p role="alert" className="mt-5 text-sm text-red-400">{error}</p>}
+        <p className="local-note"><LuShieldCheck size={14} aria-hidden="true" />{t("importHint")}</p>
+        </section>
+        <aside className="media-recipe"><EpisodeRecipes onNext={onNext} /></aside>
+      </div>
+      {error && <p role="alert" className="desk-error">{error}</p>}
+      {projects.length ? <section className="desk-library">
+        <h2>{t("deskRecent")}</h2>
+        {projects.slice(0, 4).map((project) => <button key={project.id} className="recent-project" type="button"
+          onClick={() => void onOpen(project.id).catch(() => setError(t("projectCreateFailed")))}>
+          <LuFolderOpen size={17} aria-hidden="true" /><strong>{project.name}</strong><span>{tp(project.status)}</span><LuArrowUpRight aria-hidden="true" size={15} />
+        </button>)}
+      </section> : <section className="desk-library">
+        <h2>{t("deskSamples")}</h2>
+        <div className="sample-bin">{SAMPLE_STILLS.map((src, i) => <button type="button" key={src} className="sample-item"
+          onClick={() => getApi().openUrl(`https://github.com/xixihhhh/hotclip/blob/main/docs/media/clip-${i + 1}.mp4`)}>
+          <img src={src} alt="" /><span><strong>{t(`deskSample${i + 1}`)}</strong><small>MP4 · 00:05</small></span>
+          <LuArrowUpRight size={15} aria-hidden="true" />
+        </button>)}</div>
+      </section>}
       {showWatch && <WatchFolderModal onClose={() => setShowWatch(false)} />}
+      </div>
     </main>
   );
 }
@@ -485,7 +465,7 @@ export default function App(): React.JSX.Element {
     <div className="relative flex h-full flex-col">
       {/* ---- 顶栏:品牌 + 项目 + 管线状态 ---- */}
       <header
-        className="z-10 flex h-12 shrink-0 items-center gap-3 border-b border-line/70 bg-panel/55 px-4 backdrop-blur-xl"
+        className="desk-topbar"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       >
         <div className="flex shrink-0 items-center gap-2">
@@ -515,7 +495,7 @@ export default function App(): React.JSX.Element {
         <div className="min-w-0 flex-1" />
         {/* 管线状态:替代三步条,只报状态不锁路径 */}
         {file && (
-          <nav className="flex shrink-0 items-center gap-1.5 overflow-hidden" style={noDrag}>
+          <nav className="pipeline-nav" style={noDrag}>
             <PipeChip label={t("pipeTranscribe")} state={transcript ? "done" : "busy"} />
             <PipeChip
               label={t("pipeDetect")}
@@ -542,7 +522,7 @@ export default function App(): React.JSX.Element {
               type="button"
               title={th("autoRunHint")}
               onClick={() => session.setAuto(true)}
-              className="btn-flame flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-white"
+              className={candidates?.some((clip) => session.selected.has(clip.id)) ? "desk-secondary" : "btn-flame flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-semibold"}
             >
               <LuWandSparkles className="h-3.5 w-3.5" />
               <span className="hidden xl:inline">{th("autoRun")}</span>
@@ -582,7 +562,7 @@ export default function App(): React.JSX.Element {
       </header>
 
       {/* ---- 视图分派:设置中心 > 工作台 > 导入页 ---- */}
-      {settingsOpen ? <SettingsView /> : file ? <Workbench onNext={nextEpisode} onCloseProject={() => void closeCurrentProject()} /> : <ImportStage onNext={nextEpisode} onImportFile={importFileAsProject} />}
+      {settingsOpen ? <SettingsView /> : file ? <Workbench onNext={nextEpisode} onCloseProject={() => void closeCurrentProject()} /> : <ImportStage projects={projects} onOpen={openSavedProject} onNext={nextEpisode} onImportFile={importFileAsProject} />}
       {showProjects && (
         <ProjectLibraryModal
           projects={projects}

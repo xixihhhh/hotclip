@@ -53,7 +53,7 @@ export function ExportBar({
   };
 
   return (
-    <div className="flex h-12 shrink-0 items-center gap-3 border-t border-line/70 bg-panel/70 px-4 backdrop-blur">
+    <div className="export-dock">
       <span className="shrink-0 text-[12px] font-semibold text-fg/90">{t("exportBarSelected", { n: picked.length, sec: totalSec })}</span>
       <span
         title={est.level === "warn" ? th("transformWarnHint", { miss: est.missingTop.map((k) => th(`tf_${k}`)).join("/") }) : th("transformHint")}
@@ -64,7 +64,7 @@ export function ExportBar({
         {th("transformChip", { n: est.score })}
       </span>
       {picked.length > 5 && <span className="hidden shrink-0 text-[10.5px] text-amber-400/90 lg:block">{th("overCapHint", { n: picked.length })}</span>}
-      <span className="min-w-0 flex-1" />
+      <span className="dock-space" />
       {/* 方案切换:选中即应用整组开关 */}
       <label className="flex shrink-0 items-center gap-1.5 text-[11px] text-mut">
         {t("schemeLabel")}
