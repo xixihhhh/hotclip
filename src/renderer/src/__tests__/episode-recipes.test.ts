@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import { bindRecipe, makeRecipe, parseRecipe, recipeSettings } from "../stores/episode-recipes";
+import { bindRecipeAsset, missingRecipeAssets, makeRecipe, parseRecipe, recipeSettings } from "../stores/episode-recipes";
 import { RENDER_PREF_DEFAULTS } from "../stores/render-prefs-store";
 import { snapshotOf } from "../stores/scheme-store";
 import { buildRenderToggles } from "../components/workbench/export-options";
@@ -28,10 +28,19 @@ it("exports only asset basenames, rebinds on a second machine, and rejects unsup
   expect(portable.assets).toEqual({ music: "upbeat.mp3", logo: { name: "mark.png", corner: "top-left", opacity: 0.6 } });
   const api = { probeMedia: vi.fn(), selectAudio: vi.fn(async () => "/new/bg.mp3"), selectImage: vi.fn(async () => "/new/logo.png") };
   const fresh = { ...saved, recipe: portable, musicPath: "", logoPath: "" };
-  const bound = await bindRecipe(fresh, api);
+  expect(await missingRecipeAssets(fresh, api)).toEqual(["music", "logo"]);
+  const music = await bindRecipeAsset(fresh, "music", api);
+  expect(music!.musicPath).toBe("/new/bg.mp3");
+  expect(api.selectImage).not.toHaveBeenCalled();
+  expect(await bindRecipeAsset(music!, "logo", { ...api, selectImage: async () => null })).toBeNull();
+  expect(await missingRecipeAssets(music!, api)).toEqual(["logo"]);
+  const bound = await bindRecipeAsset(music!, "logo", api);
   expect(recipeSettings(bound!)).toMatchObject({ prefs: { bgmPath: "/new/bg.mp3" }, brand: { watermark: { path: "/new/logo.png" } } });
-  expect(api.probeMedia).not.toHaveBeenCalled();
-  expect(await bindRecipe(fresh, { ...api, selectImage: async () => null })).toBeNull();
+  expect(await missingRecipeAssets(bound!, api)).toEqual([]);
+  expect(await missingRecipeAssets(bound!, { probeMedia: async (path) => {
+    if (path.endsWith(".mp3")) throw new Error("missing");
+  } })).toEqual(["music"]);
+  expect(api.selectAudio).toHaveBeenCalledTimes(1);
   expect(() => parseRecipe('{"version":2}')).toThrow();
   expect(() => parseRecipe(JSON.stringify({ ...portable, settings: { ...portable.settings, episode: { opening: -2 } } }))).toThrow();
 });

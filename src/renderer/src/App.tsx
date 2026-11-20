@@ -193,6 +193,8 @@ function ImportStage({ onImportFile, onNext }: { onImportFile: (file: ProbedFile
         </div>
       </div>
 
+      <div className="mt-3 w-full max-w-2xl"><EpisodeRecipes onNext={onNext} /></div>
+
       <section className="rise-in rise-in-2 mt-5 w-full max-w-2xl rounded-2xl border border-line/80 bg-panel/55 p-4" aria-busy={urlBusy}>
         <div className="flex items-center gap-2">
           <LuLink aria-hidden="true" className="h-4 w-4 text-ember" />
@@ -269,7 +271,6 @@ function ImportStage({ onImportFile, onNext }: { onImportFile: (file: ProbedFile
 
       {error && <p role="alert" className="mt-5 text-sm text-red-400">{error}</p>}
       {showWatch && <WatchFolderModal onClose={() => setShowWatch(false)} />}
-      <div className="mt-3 w-full max-w-2xl"><EpisodeRecipes onNext={onNext} /></div>
     </main>
   );
 }

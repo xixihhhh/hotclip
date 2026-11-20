@@ -15,7 +15,7 @@ export interface Recipe {
 export interface SavedRecipe { id: string; recipe: Recipe; musicPath: string; logoPath: string }
 export const RECIPE_LIMIT_BYTES = 256 * 1024;
 const KEY = "hotclip-episode-recipes-v1";
-const basename = (value: string): string => value.split(/[\\/]/).pop()?.trim().slice(0, 200) || "";
+export const assetFilename = (value: string): string => value.split(/[\\/]/).pop()?.trim().slice(0, 200) || "";
 
 export function makeRecipe(name: string, prefs: RenderPrefs, source?: BrandStyle): SavedRecipe {
   const { bgmPath, outDir: _outDir, ...settings } = normalizeRenderPrefs(prefs);
@@ -23,8 +23,8 @@ export function makeRecipe(name: string, prefs: RenderPrefs, source?: BrandStyle
   const recipe: Recipe = {
     format: "hotclip-episode", version: 1, name: name.trim().slice(0, 80), settings, brand,
     assets: {
-      ...(bgmPath ? { music: basename(bgmPath) } : {}),
-      ...(watermark ? { logo: { name: basename(watermark.path), corner: watermark.corner, opacity: watermark.opacity } } : {}),
+      ...(bgmPath ? { music: assetFilename(bgmPath) } : {}),
+      ...(watermark ? { logo: { name: assetFilename(watermark.path), corner: watermark.corner, opacity: watermark.opacity } } : {}),
     },
   };
   return { id: crypto.randomUUID(), recipe, musicPath: bgmPath, logoPath: watermark?.path ?? "" };
@@ -41,9 +41,9 @@ export function parseRecipe(raw: string): Recipe {
   const { watermark: _unused, ...brand } = sanitizeBrand(value.brand) ?? {};
   const logo = value.assets.logo;
   if ((value.assets.music !== undefined && typeof value.assets.music !== "string") ||
-      (logo !== undefined && (!logo || typeof logo.name !== "string" || !basename(logo.name)))) throw new Error("Invalid recipe");
-  const clean = makeRecipe(value.name, { ...prefs, outDir: "", bgmPath: basename(value.assets.music ?? "") }, {
-    ...brand, ...(logo ? { watermark: { path: basename(logo.name), corner: logo.corner, opacity: logo.opacity } } : {}),
+      (logo !== undefined && (!logo || typeof logo.name !== "string" || !assetFilename(logo.name)))) throw new Error("Invalid recipe");
+  const clean = makeRecipe(value.name, { ...prefs, outDir: "", bgmPath: assetFilename(value.assets.music ?? "") }, {
+    ...brand, ...(logo ? { watermark: { path: assetFilename(logo.name), corner: logo.corner, opacity: logo.opacity } } : {}),
   });
   return clean.recipe;
 }
@@ -66,23 +66,40 @@ export function persistRecipes(list: SavedRecipe[]): void {
   localStorage.setItem(KEY, JSON.stringify(list));
 }
 
-export async function bindRecipe(saved: SavedRecipe, api: {
+export type RecipeAsset = "music" | "logo";
+export const RECIPE_ASSETS: readonly RecipeAsset[] = ["music", "logo"];
+type AssetApi = {
   probeMedia: (path: string) => Promise<unknown>;
   selectAudio: () => Promise<string | null>;
   selectImage: () => Promise<string | null>;
-}, repick = false): Promise<SavedRecipe | null> {
-  async function bind(name: string | undefined, path: string, pick: () => Promise<string | null>) {
-    if (!name) return "";
-    if (path && !repick) {
-      try { await api.probeMedia(path); return path; } catch { /* a moved asset needs rebinding */ }
+};
+
+export function requiredAsset(saved: SavedRecipe, kind: RecipeAsset): string | undefined {
+  return kind === "music" ? saved.recipe.assets.music : saved.recipe.assets.logo?.name;
+}
+
+export function assetPath(saved: SavedRecipe, kind: RecipeAsset): string {
+  return kind === "music" ? saved.musicPath : saved.logoPath;
+}
+
+export async function missingRecipeAssets(saved: SavedRecipe, api: Pick<AssetApi, "probeMedia">): Promise<RecipeAsset[]> {
+  const missing: RecipeAsset[] = [];
+  for (const kind of RECIPE_ASSETS) {
+    if (!requiredAsset(saved, kind)) continue;
+    const path = assetPath(saved, kind);
+    if (path) {
+      try { await api.probeMedia(path); continue; } catch { /* a moved file needs a new binding */ }
     }
-    return pick();
+    missing.push(kind);
   }
-  const musicPath = await bind(saved.recipe.assets.music, saved.musicPath, () => api.selectAudio());
-  if (musicPath === null) return null;
-  const logoPath = await bind(saved.recipe.assets.logo?.name, saved.logoPath, () => api.selectImage());
-  if (logoPath === null) return null;
-  return { ...saved, musicPath, logoPath };
+  return missing;
+}
+
+export async function bindRecipeAsset(saved: SavedRecipe, kind: RecipeAsset, api: AssetApi): Promise<SavedRecipe | null> {
+  const path = await (kind === "music" ? api.selectAudio() : api.selectImage());
+  if (!path) return null;
+  await api.probeMedia(path);
+  return kind === "music" ? { ...saved, musicPath: path } : { ...saved, logoPath: path };
 }
 
 export function recipeSettings(saved: SavedRecipe) {
