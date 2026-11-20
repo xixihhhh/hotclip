@@ -10,6 +10,8 @@
  * 都不能拖垮检测,最差退回纯文本结果。
  * 纯函数(规划/解析/并段)可单测;拼图与 HTTP 通过注入点替换。
  */
+import { isLocalBaseUrl } from "../../shared/llm-preflight";
+import { ACTION_PROMPT, actionResponseFormat, parseActionCells } from "./vision-recovery";
 import type { LlmConfig } from "../../shared/api-types";
 import { chunkCells, composeContactSheetJpeg } from "../contact-sheet";
 import type { AnalysisVideoOptions } from "../analysis-video";
@@ -100,6 +102,7 @@ export interface VisionStats {
   fullScan?: boolean;
   /** 带画面描述回流的时刻数(画面时刻线)。 */
   notedMoments?: number;
+  recoveredSheets?: number;
 }
 
 export interface VisionOutcome {
@@ -115,7 +118,8 @@ export type VisionChatFn = (
   system: string,
   userText: string,
   imageBase64Jpeg: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  actionCellCount?: number
 ) => Promise<string>;
 
 /** 接触表拼图注入点(times → base64 jpeg;失败 null)。 */
@@ -191,8 +195,10 @@ export function parseSheetVerdicts(
   const seen = new Set<number>();
   const out: Array<{ i: number; energy: number; note: string; visibleText?: string[] }> = [];
   for (const c of cells) {
+    if (!c || typeof c !== "object") continue;
     const rec = c as { i?: unknown; energy?: unknown; note?: unknown; visibleText?: unknown };
     const i = Number(rec.i);
+    if (typeof rec.energy !== "number" && (typeof rec.energy !== "string" || !rec.energy.trim())) continue;
     const energy = Number(rec.energy);
     if (!Number.isInteger(i) || i < 1 || i > cellCount || seen.has(i)) continue;
     if (!Number.isFinite(energy)) continue;
@@ -272,8 +278,10 @@ export function sheetUserPrompt(times: number[]): string {
   return `逐格评估画面爆点能量。各格时刻:${times.map((t, i) => `${i + 1}=${clock(t)}`).join(" ")}`;
 }
 
+class EmptyVisionResponse extends Error {}
+
 /** 默认研判实现:OpenAI 兼容多模态 chat(Ollama /v1 同样支持 image_url)。 */
-export const visionChatComplete: VisionChatFn = async (llm, system, userText, imageBase64Jpeg, signal) => {
+export const visionChatComplete: VisionChatFn = async (llm, system, userText, imageBase64Jpeg, signal, actionCellCount) => {
   const url = `${llm.baseUrl.replace(/\/+$/, "")}/chat/completions`;
   const res = await requestLlmText(url, {
     method: "POST",
@@ -291,16 +299,54 @@ export const visionChatComplete: VisionChatFn = async (llm, system, userText, im
         },
       ],
       temperature: chatTemperature(llm.model, 0.2),
-      max_tokens: 300,
+      max_tokens: actionCellCount ? Math.max(300, actionCellCount * 60) : 300,
+      ...(actionCellCount ? { response_format: actionResponseFormat(actionCellCount) } : {}),
     }),
   }, { signal, budget: llmRequestBudget(VISION_CALL_TIMEOUT_MS, 1) });
   const text = res.text;
   if (!res.ok) throw new Error(`vision HTTP ${res.status}: ${modelErrorDetail(text, llm.apiKey, 200)}`);
   const data = JSON.parse(text) as { choices?: Array<{ message?: { content?: string } }> };
   const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error("vision empty response");
+  if (typeof content !== "string" || !content.trim()) throw new EmptyVisionResponse("vision empty response");
   return content;
 };
+
+/** Some small models award the same high score to a static title card throughout a sheet.
+ * Keep its OCR and timestamps, but a repeated explicit "no action" verdict is not a motion peak. */
+function repeatedStaticTitle(cells: NonNullable<ReturnType<typeof parseSheetVerdicts>>, count: number): boolean {
+  if (count < 3 || cells.length !== count) return false;
+  const first = cells[0];
+  if (!first.visibleText?.length) return false;
+  const staticOnly = /^(?:(?:重复标题|字幕重复|静态文字|静态画面|无明显动作|无动作|无变化|静止画面|static text|static title|unchanged text|no movement|no action)[，,。.;；、\s]*)+$/i;
+  if (!staticOnly.test(first.note.trim())) return false;
+  const text = JSON.stringify(first.visibleText);
+  return cells.every((cell) => cell.energy >= VISION_ENERGY_THRESHOLD && cell.note === first.note && JSON.stringify(cell.visibleText) === text);
+}
+
+/** Keep the normal request intact. Retry only a successful but unusable local model reply. */
+export async function analyzeVisionSheet(
+  llm: LlmConfig, times: number[], sheet: string, signal: AbortSignal, chat = visionChatComplete
+): Promise<{ cells: ReturnType<typeof parseSheetVerdicts>; recovered: boolean }> {
+  const count = times.length;
+  const prompt = sheetUserPrompt(times);
+  try {
+    const raw = await chat(llm, visionSystemPrompt(count), prompt, sheet, signal);
+    const cells = parseSheetVerdicts(raw, count);
+    if (cells) {
+      if (isLocalBaseUrl(llm.baseUrl) && repeatedStaticTitle(cells, count)) {
+        return { cells: cells.map((cell) => ({ ...cell, energy: 3 })), recovered: false };
+      }
+      return { cells, recovered: false };
+    }
+  } catch (error) {
+    if (!(error instanceof EmptyVisionResponse)) throw error;
+  }
+  signal.throwIfAborted();
+  if (!isLocalBaseUrl(llm.baseUrl)) return { cells: null, recovered: false };
+  const content = await chat(llm, ACTION_PROMPT, `按格子顺序返回${count}格。`, sheet, signal, count);
+  const cells = parseActionCells(content, count);
+  return { cells, recovered: cells !== null };
+}
 
 /**
  * 采集视觉爆点信号(接触表批量:九帧一张九宫格,一次调用出九个分)。
@@ -339,6 +385,7 @@ export async function collectVisionSignal(opts: {
   const llm: LlmConfig = { baseUrl: config.baseUrl, apiKey: config.apiKey || "ollama", model: config.model };
   const deadline = Date.now() + budgetMs;
   const scored: Array<{ t: number; energy: number; note: string; visibleText?: string[] }> = [];
+  let recoveredSheets = 0;
   for (const group of chunkCells(times)) {
     if (signal?.aborted) throw new Error("aborted");
     if (Date.now() > deadline) break; // 预算耗尽,带着已得结果收工
@@ -347,8 +394,8 @@ export async function collectVisionSignal(opts: {
     try {
       const timeout = AbortSignal.timeout(Math.max(1, Math.min(VISION_CALL_TIMEOUT_MS, deadline - Date.now())));
       const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
-      const content = await chat(llm, visionSystemPrompt(group.length), sheetUserPrompt(group), sheet, combined);
-      const verdicts = parseSheetVerdicts(content, group.length);
+      const { cells: verdicts, recovered } = await analyzeVisionSheet(llm, group, sheet, combined, chat);
+      if (recovered) recoveredSheets++;
       if (verdicts) {
         for (const v of verdicts) scored.push({
           t: group[v.i - 1],
@@ -373,6 +420,7 @@ export async function collectVisionSignal(opts: {
       framesTotal: times.length,
       framesScored: scored.length,
       peakCount: visualPeaks.length,
+      ...(recoveredSheets ? { recoveredSheets } : {}),
       ...(scan ? { fullScan: true, notedMoments: visualNotes.length } : {}),
     },
   };

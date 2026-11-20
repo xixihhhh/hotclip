@@ -313,11 +313,14 @@ One-click hands-off mode + 24/7 watch folder + headless CLI + local MCP server �
 
 - **clips.json processing receipt**: what the pipeline did to each clip (caption style, reframe mode, jump-cut ratio, speech-evidence coverage/protected gaps, alignment coverage, caption lint, cover-selection mode/score, fillers removed and source colour decision, including an unconverted-HDR flag) — fully auditable, pipeline-ready
 - **Golden quality evaluation**: `pnpm quality:eval [fixture.json]` reports CER/WER, median/P95 word-boundary error and highlight recall@3/@5 locally, so model and threshold changes can be compared on the same evidence
+- **Local vision recovery**: An empty or malformed sheet reply from a loopback endpoint gets one action-only retry within the existing deadline. A recovered visual peak requires a transition from low activity to a strong action in the same sheet. The retry supplies no OCR and adds no remote requests.
 - **Local vision-model comparison**: `HOTCLIP_VISION_MODELS=qwen3-vl:4b,qwen3.5:4b pnpm quality:eval:vision` runs the same demo clips through HotClip's exact contact sheets and structured parser, reporting success rate, latency and visual evidence. Ollama manages the models; HotClip does not bundle multi-gigabyte weights
 - **Bring your own AI (or none)**: free local models by default; plug in [Atlas Cloud](https://www.atlascloud.ai), fal.ai or any OpenAI-compatible endpoint — or local Ollama for a fully offline pipeline
 </details>
 
 ## What's new
+
+**[v0.34.0](docs/releases/v0.34.0.md)** (2026-11-20): streamer/game split layout, three brand title presets, fixed-temperature Kimi support, and bounded recovery for malformed local visual analysis.
 
 **[v0.33.0](https://github.com/xixihhhh/hotclip/releases/tag/v0.33.0)** (2026-10-26): always-visible duration/count controls, a 60–120 second preset, and up to 12 candidates; shared genre/custom criteria across CLI, MCP and recording automation, including export pacing and persistent retry settings.
 
